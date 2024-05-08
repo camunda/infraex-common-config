@@ -9,6 +9,7 @@
     ":semanticCommits",
   ],
   schedule: ["every weekend"],
+  ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false,
   prHourlyLimit: 6,
   prConcurrentLimit: 20,
