@@ -148,6 +148,7 @@
     {
       matchFileNames: ["**/.tool-versions", "**/*.tf"],
       matchPackageNames: [
+        "eksctl-io/eksctl",
         "hashicorp/terraform",
         "helm/helm",
         "koalaman/shellcheck",
