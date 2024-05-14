@@ -101,7 +101,7 @@
     // but it's fine to have candidate packages to test before move them to minor section.
     {
       matchUpdateTypes: ["patch"],
-      matchPackagePatterns: [
+      matchDepPatterns: [
         "^terraform$",
         "aquasecurity/tfsec",
         "pre-commit",
