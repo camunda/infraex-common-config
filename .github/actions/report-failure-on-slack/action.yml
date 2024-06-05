@@ -22,7 +22,6 @@ runs:
   steps:
     - name: Import Secrets
       id: secrets
-      if: failure()
       uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
       with:
         url: ${{ inputs.vault_addr }}
@@ -35,7 +34,6 @@ runs:
 
     - name: Notify in Slack in case of failure
       id: slack-notification
-      if: failure()
       uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
       with:
         channel-id: ${{ inputs.slack_channel_id }}
