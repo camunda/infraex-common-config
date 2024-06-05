@@ -1,0 +1,58 @@
+name: 'Report Failure and Notify Slack'
+description: 'Imports secrets and sends a Slack notification in case of failure'
+inputs:
+  vault_addr:
+    description: 'Vault address'
+    required: true
+  vault_role_id:
+    description: 'Vault role ID'
+    required: true
+  vault_secret_id:
+    description: 'Vault secret ID'
+    required: true
+  slack_channel_id:
+    description: 'Slack channel ID'
+    default: 'C05S0M7KG6A' # infex-internal
+  slack_mention_people:
+    description: "People to mention in the alert message"
+    default: "@infraex-medic"
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Import Secrets
+      id: secrets
+      if: failure()
+      uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
+      with:
+        url: ${{ inputs.vault_addr }}
+        method: approle
+        roleId: ${{ inputs.vault_role_id }}
+        secretId: ${{ inputs.vault_secret_id }}
+        exportEnv: false
+        secrets: |
+          secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+    - name: Notify in Slack in case of failure
+      id: slack-notification
+      if: failure()
+      uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+      with:
+        channel-id: ${{ inputs.slack_channel_id }}
+        payload: |
+          {
+            "unfurl_links": false,
+            "unfurl_media": false,
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> scheduled workflow: ${{ github.workflow }} failed! \n :link: Please check: ${{ env.WORKFLOW_URL }} \n (cc ${{ inputs.slack_mention_people }})"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_BOT_TOKEN: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+        WORKFLOW_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
