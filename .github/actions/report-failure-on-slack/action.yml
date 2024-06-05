@@ -41,6 +41,7 @@ runs:
           {
             "unfurl_links": false,
             "unfurl_media": false,
+            "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
             "blocks": [
               {
                 "type": "section",
