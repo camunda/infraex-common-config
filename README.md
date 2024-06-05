@@ -14,3 +14,14 @@ Create a file `.github/renovate.json5`:
   extends: ["github>camunda/infraex-common-config:default.json5"],
 }
 ```
+
+### Test Regions of Cloud Providers
+
+Test regions are designated for Continuous Integration (CI) tests and are deleted nightly as part of routine maintenance. Please ensure that you utilize these regions for CI tests.
+
+#### AWS Regions
+
+| Region     | Identifier |
+|------------|------------|
+| EU (London)| eu-west-2  |
+| EU (Paris) | eu-west-3  |
