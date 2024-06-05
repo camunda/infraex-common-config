@@ -30,7 +30,7 @@ jobs:
 
       - name: Report Failure and Notify Slack
         if: failure()
-        uses: camunda/infraex-common-config@main
+        uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@main
         with:
           vault_addr: ${{ secrets.VAULT_ADDR }}
           vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
