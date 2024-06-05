@@ -29,7 +29,7 @@ jobs:
       # Other steps of your workflow
 
       - name: Report Failure and Notify Slack
-        if: failure()
+        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@main
         with:
           vault_addr: ${{ secrets.VAULT_ADDR }}
