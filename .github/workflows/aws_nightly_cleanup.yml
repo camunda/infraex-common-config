@@ -91,13 +91,13 @@
 
     notify-on-failure:
       runs-on: ubuntu-latest
-      if: always() && needs.aws-nightly-cleanup.result == 'failure'
+      if: failure()
       needs:
         - aws-nightly-cleanup
       steps:
         - name: Notify in Slack in case of failure
           id: slack-notification
-          if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+          if: github.event_name == 'schedule'
           uses: ./.github/actions/report-failure-on-slack
           with:
             vault_addr: ${{ secrets.VAULT_ADDR }}
