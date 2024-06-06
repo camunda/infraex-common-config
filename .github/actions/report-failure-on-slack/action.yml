@@ -12,7 +12,7 @@ inputs:
     required: true
   slack_channel_id:
     description: 'Slack channel ID'
-    default: 'C05S0M7KG6A' # infex-internal
+    default: 'C076N4G1162' # infraex-alerts
   slack_mention_people:
     description: "People to mention in the alert message"
     default: "@infraex-medic"
