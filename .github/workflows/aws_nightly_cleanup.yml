@@ -25,10 +25,10 @@
       env:
         AWS_REGION: ${{ matrix.aws_test_regions }}
       steps:
+        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
+
         - name: Simulate error
           run: exit 1
-
-        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
 
         - name: Import Secrets
           id: secrets
