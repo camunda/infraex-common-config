@@ -27,9 +27,6 @@
       steps:
         - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
 
-        - name: Simulate error
-          run: exit 1
-
         - name: Import Secrets
           id: secrets
           uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
@@ -98,10 +95,9 @@
       needs:
         - aws-nightly-cleanup
       steps:
-        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
-
         - name: Notify in Slack in case of failure
           id: slack-notification
+          if: github.event_name == 'schedule'
           uses: ./.github/actions/report-failure-on-slack
           with:
             vault_addr: ${{ secrets.VAULT_ADDR }}
