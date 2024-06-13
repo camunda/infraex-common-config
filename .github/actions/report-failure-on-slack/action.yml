@@ -28,6 +28,20 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Generate token for GitHub
+      id: generate-github-token
+      if: ${{ inputs.disable_silence_check == 'false' }}
+      uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@c9230b32c5af82329db40f325758d2141e5f5da9  # main
+      with:
+        github-app-id-vault-key: GITHUB_APP_ID
+        github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+        github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+        github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+        vault-auth-method: approle
+        vault-auth-role-id: ${{ inputs.vault_role_id }}
+        vault-auth-secret-id: ${{ inputs.vault_secret_id }}
+        vault-url: ${{ inputs.vault_addr }}
+
     - name: Check for Silence Issue
       id: silence-check
       if: ${{ inputs.disable_silence_check == 'false' }}
@@ -36,7 +50,7 @@ runs:
         ISSUE_TITLE="silence: ${{ github.workflow }}"
         gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url | jq -e 'if length > 0 then true else false end'
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
     - name: Import Secrets
       id: secrets
