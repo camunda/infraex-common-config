@@ -50,14 +50,17 @@ runs:
       run: |
         ISSUE_TITLE="silence: ${{ github.workflow }}"
         ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
-        echo "$ISSUE_SEARCH" | jq -e '
-          if length > 0 then
-            "Issue found: \(.[] | .title) - \(.[] | .url). Skipping notification. Close this issue to re-enable notifications." |
-            if length > 0 then . else empty end
-          else
-            "No silence issue found"
-          end
-        ' > /dev/null
+        ISSUE_COUNT=$(echo "$ISSUE_SEARCH" | jq '. | length')
+
+        if [ "$ISSUE_COUNT" -gt 0 ]; then
+          ISSUE_TITLE=$(echo "$ISSUE_SEARCH" | jq -r '.[0].title')
+          ISSUE_URL=$(echo "$ISSUE_SEARCH" | jq -r '.[0].url')
+          echo "Issue found: $ISSUE_TITLE - $ISSUE_URL. Skipping notification. Close this issue to re-enable notifications."
+          exit 0
+        else
+          echo "No silence issue found, triggering the slack alert."
+          exit 1
+        fi
       env:
         GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
