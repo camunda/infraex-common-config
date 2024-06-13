@@ -25,6 +25,9 @@
       env:
         AWS_REGION: ${{ matrix.aws_test_regions }}
       steps:
+        - name: Simulate error
+          run: exit 1
+
         - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
 
         - name: Import Secrets
@@ -97,7 +100,6 @@
       steps:
         - name: Notify in Slack in case of failure
           id: slack-notification
-          if: github.event_name == 'schedule'
           uses: ./.github/actions/report-failure-on-slack
           with:
             vault_addr: ${{ secrets.VAULT_ADDR }}
