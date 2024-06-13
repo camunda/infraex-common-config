@@ -49,7 +49,15 @@ runs:
       continue-on-error: true
       run: |
         ISSUE_TITLE="silence: ${{ github.workflow }}"
-        gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url | jq -e 'if length > 0 then true else false end'
+        ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
+        echo "$ISSUE_SEARCH" | jq -e '
+          if length > 0 then
+            "Issue found: \(.[] | .title) - \(.[] | .url). Skipping notification. Close this issue to re-enable notifications." |
+            if length > 0 then . else empty end
+          else
+            "No silence issue found"
+          end
+        ' > /dev/null
       env:
         GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
