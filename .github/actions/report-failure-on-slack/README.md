@@ -9,7 +9,8 @@ It helps automate incident reporting and ensures timely notifications to the rel
 - **vault_role_id**: (required) The role ID used for authentication with Vault.
 - **vault_secret_id**: (required) The secret ID used for authentication with Vault.
 - **slack_channel_id**: (optional) The Slack channel ID where the notification will be sent. Default is 'C076N4G1162' (#infraex-alerts).
-- **slack_mention_people**: (optional) The Slack people to mention of the notification. Default is '@infraex-medic'.
+- **slack_mention_people**: (optional) The Slack people to mention in the notification. Default is '@infraex-medic'.
+- **disable_silence_check**: (optional) Disable silence check. By default, alerts can be disabled by creating an issue in the repository with the label `alert-management` and with the title: `silence: name of your workflow`. Default is 'false'.
 
 ## Usage
 
@@ -36,4 +37,6 @@ jobs:
           vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
           vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
           slack_channel_id: 'your-slack-channel-id' # Optional
+          slack_mention_people: '@your-mention' # Optional
+          disable_silence_check: 'false' # Optional
 ```

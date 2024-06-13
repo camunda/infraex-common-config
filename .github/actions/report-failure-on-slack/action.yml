@@ -16,12 +16,57 @@ inputs:
   slack_mention_people:
     description: "People to mention in the alert message"
     default: "@infraex-medic"
+  disable_silence_check:
+    description: |
+      Disable silence check.
+      By default, alerts can be disabled by creating an issue in the repository
+      with the label alert-management and with the title:
+      silence: name of your workflow
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
   steps:
+    - name: Generate token for GitHub
+      id: generate-github-token
+      if: ${{ inputs.disable_silence_check == 'false' }}
+      uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@c9230b32c5af82329db40f325758d2141e5f5da9  # main
+      with:
+        github-app-id-vault-key: GITHUB_APP_ID
+        github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+        github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+        github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+        vault-auth-method: approle
+        vault-auth-role-id: ${{ inputs.vault_role_id }}
+        vault-auth-secret-id: ${{ inputs.vault_secret_id }}
+        vault-url: ${{ inputs.vault_addr }}
+
+    - name: Check for Silence Issue
+      id: silence-check
+      if: ${{ inputs.disable_silence_check == 'false' }}
+      shell: bash
+      continue-on-error: true
+      run: |
+        ISSUE_TITLE="silence: ${{ github.workflow }}"
+        ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
+        ISSUE_COUNT=$(echo "$ISSUE_SEARCH" | jq '. | length')
+
+        if [ "$ISSUE_COUNT" -gt 0 ]; then
+          ISSUE_TITLE=$(echo "$ISSUE_SEARCH" | jq -r '.[0].title')
+          ISSUE_URL=$(echo "$ISSUE_SEARCH" | jq -r '.[0].url')
+          echo "Issue found: $ISSUE_TITLE - $ISSUE_URL . Skipping notification. Close this issue to re-enable notifications."
+          exit 0
+        else
+          echo "No silence issue found, triggering the slack alert."
+          exit 1
+        fi
+      env:
+        GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+
     - name: Import Secrets
       id: secrets
+      if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
       uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
       with:
         url: ${{ inputs.vault_addr }}
@@ -34,6 +79,7 @@ runs:
 
     - name: Notify in Slack in case of failure
       id: slack-notification
+      if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
       uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
       with:
         channel-id: ${{ inputs.slack_channel_id }}
