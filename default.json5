@@ -39,6 +39,14 @@
   },
   packageRules: [
     {
+      "matchUpdateTypes": [
+        "pin",
+        "digest"
+      ],
+      "enabled": true,
+      groupName: "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
+    },
+    {
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
     },
