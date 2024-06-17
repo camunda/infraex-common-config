@@ -10,7 +10,7 @@
   ],
   schedule: ["every weekend"],
   ignorePaths: [], // overwrites default to track also test paths
-  platformAutomerge: false,
+  platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
   prHourlyLimit: 6,
   prConcurrentLimit: 20,
   commitBodyTable: true,
@@ -21,30 +21,30 @@
   ],
   major: {
     enabled: true,
-    addLabels: ["upgrade:major"],
+    addLabels: ["upgrade:major"], // Each major component should have a dedicated PR.
   },
   minor: {
     enabled: true,
     addLabels: ["upgrade:minor"],
+    groupName: "minor-grouped", // Group all minor updates in a single branch to save CI computing.
   },
   patch: {
     enabled: true,
     addLabels: ["upgrade:patch"],
+    groupName: "patch-grouped", // Group all patch updates in a single branch to save CI computing.
   },
   vulnerabilityAlerts: {
-    addLabels: ["security"],
-    enabled: true
+    addLabels: ["security"], // Security alerts should be handled manually to assess the consequences.
+    enabled: true,
   },
   packageRules: [
     {
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
-      groupName: "Camunda Platform",
     },
     {
       matchDatasources: ["go"],
       addLabels: ["group:go"],
-      groupName: "Go",
     },
     // limit the PR creation for the Renovate pre-commit hook (it's released very frequently)
     {
@@ -61,18 +61,11 @@
       matchManagers: ["github-actions"],
       addLabels: ["group:github-actions", "component:ci"],
     },
-    {
-      matchUpdateTypes: ["minor", "patch"],
-      matchManagers: ["github-actions"],
-      addLabels: ["automerge"],
-      automerge: true,
-    },
     // Terraform AWS modules
     {
       matchDatasources: ["terraform-module"],
       matchPackagePatterns: ["terraform-aws-modules.*"],
       addLabels: ["group:terraform"],
-      groupName: "Terraform AWS modules",
       schedule: [
         "every 2 weeks on Saturday and Sunday",
       ],
@@ -84,63 +77,6 @@
       schedule: [
         "every 2 weeks on Saturday and Sunday",
       ]
-    },
-    // Terraform patch provider updates
-    {
-      matchUpdateTypes: ["patch"],
-      matchDatasources: ["terraform-provider"],
-      addLabels: ["group:terraform", "automerge"],
-      groupName: "Terraform providers",
-      automerge: true,
-      schedule: [
-        "every 2 weeks on Saturday and Sunday",
-      ]
-    },
-    // Patches
-    // Those are tested packages, and we know that they follow the semver convention,
-    // but it's fine to have candidate packages to test before move them to minor section.
-    {
-      matchUpdateTypes: ["patch"],
-      matchDepPatterns: [
-        "^terraform$",
-        "aquasecurity/tfsec",
-        "pre-commit",
-        "terraform-aws-modules/.+",
-        "terraform-docs",
-        "terraform-linters/tflint",
-      ],
-      addLabels: ["automerge"],
-      automerge: true,
-    },
-    // Minor versions
-    // Those are tested packages, and we know that they follow the semver convention,
-    // but it's fine to have candidate packages to test before move them to minor section.
-    {
-      matchUpdateTypes: ["minor"],
-      matchPackagePatterns: [
-        "pre-commit",
-        "terraform-docs",
-        "terraform-linters/tflint",
-      ],
-      addLabels: ["automerge"],
-      automerge: true,
-    },
-    // Create PRs and automerge mentioned components afterward
-    // Those are tested packages
-    {
-      matchUpdateTypes: ["major"],
-      matchPackagePatterns: [
-        "pre-commit/.+",
-      ],
-      addLabels: ["automerge"],
-      automerge: true,
-    },
-    {
-      matchUpdateTypes: ["major", "minor", "patch"],
-      matchManagers: ["pre-commit"],
-      groupName: "pre-commit hooks",
-      addLabels: ["automerge"],
-      automerge: true
     },
     // For known GitHub repositories that use GitHub tags/releases of format
     // "v1.2.3" and where the asdf plugin ignores the "v" prefix, we also tell
