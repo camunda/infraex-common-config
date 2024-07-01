@@ -5,13 +5,17 @@
     schedule:
       - cron: '0 5 * * *'
     workflow_dispatch:
+      inputs:
+        cleanup_older_than:
+          description: "Minimum age of the ressources to cleanup"
+          default: "12h"
     pull_request:
       paths:
         - .github/workflows/aws_nightly_cleanup.yml
 
   env:
     AWS_PROFILE: "infex"
-    CLEANUP_OLDER_THAN: "12h"
+    CLEANUP_OLDER_THAN: "${{ github.event.inputs.cleanup_older_than || '12h' }}"
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.36.0
 
