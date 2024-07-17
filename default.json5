@@ -39,9 +39,22 @@
   },
   packageRules: [
     {
+      "groupName": "minor-grouped",
+      "matchPackagePatterns": [
+        "*"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ]
+    },
+    {
       "matchUpdateTypes": [
         "pin",
-        "digest"
+        "digest",
+        "patch"
+      ],
+      "matchPackagePatterns": [
+        "*"
       ],
       "enabled": true,
       groupName: "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
