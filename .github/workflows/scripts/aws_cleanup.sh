@@ -92,3 +92,17 @@ do
     echo "Deleting VPC Peering Connection: $peering_connection_id"
     aws ec2 delete-vpc-peering-connection --region "$region" --vpc-peering-connection-id "$peering_connection_id"
 done
+
+echo "Deleting nightly S3 Buckets"
+bucket_ids=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'nightly')].Name" --output text)
+
+read -r -a buckets <<< "$bucket_ids"
+
+for bucket in "${buckets[@]}"
+do
+    echo "Deleting contents of bucket: $bucket"
+    aws s3 rm "s3://$bucket" --recursive
+
+    echo "Deleting bucket: $bucket"
+    aws s3api delete-bucket --bucket "$bucket"
+done
