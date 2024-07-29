@@ -40,14 +40,16 @@
   packageRules: [
     {
       "groupName": "minor-grouped",
-      "matchPackagePatterns": [
-        "*"
-      ],
       "matchUpdateTypes": [
         "minor"
+      ],
+      "matchPackagePatterns": [
+        "*"
       ]
     },
     {
+      "groupName": "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
+      "enabled": true,
       "matchUpdateTypes": [
         "pin",
         "digest",
@@ -56,8 +58,6 @@
       "matchPackagePatterns": [
         "*"
       ],
-      "enabled": true,
-      groupName: "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
     },
     {
       matchPackageNames: ["camunda-platform"],
