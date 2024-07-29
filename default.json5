@@ -40,24 +40,24 @@
   packageRules: [
     {
       "groupName": "minor-grouped",
-      "matchPackagePatterns": [
-        "*"
-      ],
       "matchUpdateTypes": [
         "minor"
+      ],
+      "matchPackageNames": [
+        "*"
       ]
     },
     {
+      "groupName": "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
+      "enabled": true,
       "matchUpdateTypes": [
         "pin",
         "digest",
         "patch"
       ],
-      "matchPackagePatterns": [
+      "matchPackageNames": [
         "*"
       ],
-      "enabled": true,
-      groupName: "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
     },
     {
       matchPackageNames: ["camunda-platform"],
@@ -85,7 +85,7 @@
     // Terraform AWS modules
     {
       matchDatasources: ["terraform-module"],
-      matchPackagePatterns: ["terraform-aws-modules.*"],
+      matchPackageNames: ["terraform-aws-modules.*"],
       addLabels: ["group:terraform"],
       schedule: [
         "every 2 weeks on Saturday and Sunday",
