@@ -19,7 +19,7 @@
     AWS_PROFILE: "infex"
     CLEANUP_OLDER_THAN: "${{ github.event.inputs.cleanup_older_than || '12h' }}"
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.37.1
+    CLOUD_NUKE_VERSION: v0.37.2
 
   jobs:
     aws-nightly-cleanup:
