@@ -115,6 +115,12 @@
       extractVersion: "^v(?<version>.*)$",
     },
   ],
+  "customDatasources": {
+    "rosa-camunda": {
+      "defaultRegistryUrlTemplate": "https://camunda.github.io/camunda-tf-rosa/rosa_versions.txt",
+      "format": "plain",
+    },
+  },
   customManagers: [
    {
       customType: "regex",
