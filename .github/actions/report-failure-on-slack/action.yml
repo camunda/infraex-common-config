@@ -80,7 +80,7 @@ runs:
     - name: Notify in Slack in case of failure
       id: slack-notification
       if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-      uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+      uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # v1.27.0
       with:
         channel-id: ${{ inputs.slack_channel_id }}
         payload: |
