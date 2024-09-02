@@ -2,18 +2,16 @@
   name: AWS Nightly Cleanup of test regions
 
   on:
-    # Temporarily disabled due to the Multi-Region SaaS evaluation
-    # https://github.com/camunda/team-infrastructure-experience/issues/331
-    # schedule:
-      # - cron: '0 5 * * *'
+    schedule:
+      - cron: '0 5 * * *'
     workflow_dispatch:
       inputs:
         cleanup_older_than:
           description: "Minimum age of the ressources to cleanup"
           default: "12h"
-    # pull_request:
-    #   paths:
-    #     - .github/workflows/aws_nightly_cleanup.yml
+    pull_request:
+      paths:
+        - .github/workflows/aws_nightly_cleanup.yml
 
   env:
     AWS_PROFILE: "infex"
