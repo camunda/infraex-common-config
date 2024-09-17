@@ -1,4 +1,4 @@
-name: Approve and Auto-Merge Pull Request
+name: Renovate approve and Auto-Merge Pull Request
 
 on:
   pull_request:
@@ -38,11 +38,31 @@ jobs:
         vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
         vault-url: ${{ secrets.VAULT_ADDR }}
 
+    - name: Check PR Author
+      id: check-author
+      run: |
+        pr_author=$(gh pr view ${{ github.event.pull_request.number }} --json author --jq '.author.login')
+        if [ "$pr_author" = "renovate-bot" ]; then
+          echo "This PR was created by renovate-bot. Skipping approval and auto-merge."
+          echo "skip=true" | tee -a "$GITHUB_ENV"
+        else
+          echo "This PR was created by $pr_author."
+          echo "skip=false" | tee -a "$GITHUB_ENV"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Approve Pull Request and auto-merge
       if: env.skip == 'false'
       run: |
-        gh pr review ${{ github.event.pull_request.number }} --approve
-        gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes."
-        gh pr merge ${{ github.event.pull_request.number }} --auto
+        pr_author="$(gh pr view ${{ github.event.pull_request.number }} --json author --jq '.author.login')"
+
+        if [ "$pr_author" = "renovate-bot" ]; then
+          gh pr review ${{ github.event.pull_request.number }} --approve
+          gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes."
+          gh pr merge ${{ github.event.pull_request.number }} --auto
+        else
+          echo "This PR was not created by renovate, skipping auto approval."
+        fi
       env:
         GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
