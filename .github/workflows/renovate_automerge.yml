@@ -1,0 +1,48 @@
+name: Approve and Auto-Merge Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+jobs:
+  approve-and-auto-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Check for Major Change
+      id: check-major
+      run: |
+        branch_name="$(git rev-parse --abbrev-ref HEAD)"
+        if echo "$branch_name" | grep -q -i 'major'; then
+          echo "This PR is related to major changes. Skipping approval and auto-merge."
+          echo "skip=true" | tee -a "$GITHUB_ENV"
+        else
+          echo "This PR does not involve major changes."
+          echo "skip=false" | tee -a "$GITHUB_ENV"
+        fi
+
+    - name: Generate token for GitHub
+      if: env.skip == 'false'
+      id: generate-github-token
+      uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+      with:
+        github-app-id-vault-key: GITHUB_APP_ID
+        github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+        github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+        github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+        vault-auth-method: approle
+        vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+        vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+        vault-url: ${{ secrets.VAULT_ADDR }}
+
+    - name: Approve Pull Request and auto-merge
+      if: env.skip == 'false'
+      run: |
+        gh pr review ${{ github.event.pull_request.number }} --approve
+        gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes."
+        gh pr merge ${{ github.event.pull_request.number }} --auto
+      env:
+        GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
