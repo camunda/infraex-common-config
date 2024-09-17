@@ -12,17 +12,33 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
       - name: Install tooling using asdf
         uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
+
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         name: Validate renovate5.json
         with:
           extra_args: --all-files --verbose
+
       - name: Prepare for pre-commit
         run: |
           cp default.json5 .github/renovate.json5  # renovate-config-validator hook can only validate files that are called renovate.json5
           git add .github/renovate.json5
+
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         name: Validate default5.json
         with:
           extra_args: --all-files --verbose
+
+      - name: Revert default.json5 changes
+        run: |
+          git restore --staged .github/renovate.json5
+          git restore .github/renovate.json5
+
+      - name: Commit Changes If Actor Matches (renovate)
+        uses: ./.github/actions/commit-on-match
+        with:
+          vault_auth_role_id: ${{ secrets.VAULT_ROLE_ID }}
+          vault_auth_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+          vault_url: ${{ secrets.VAULT_ADDR }}
