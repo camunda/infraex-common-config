@@ -13,6 +13,8 @@ REPO_URL=$(git config --get remote.origin.url)
 REPO_URL_CLEAN=$(echo "$REPO_URL" | sed 's/.git$//')
 OWNER_PROJECT=$(echo "$REPO_URL_CLEAN" | awk -F'[:/]' '{print $(NF-1)"/"$NF}')
 DOC_ACTION_VERSION=${DOC_ACTION_VERSION:-main}
+# directory where your actions are located, use "." if it's top directory
+TOP_ACTION_DIR=".github/actions"
 
 # Run a single Docker container to handle the README.md updates
 docker run --rm \
@@ -20,20 +22,33 @@ docker run --rm \
     -e GROUP_ID="$GROUP_ID" \
     -e DOC_ACTION_VERSION="$DOC_ACTION_VERSION" \
     -e OWNER_PROJECT="$OWNER_PROJECT" \
+    -e TOP_ACTION_DIR="$TOP_ACTION_DIR" \
     -v "$PWD":/workspace \
     -w /workspace \
     node:22 \
     bash -c '
         set -euxo pipefail
         npm install -g action-docs
-        find .github/actions -name "*.yml" -o -name "*.yaml" | while read -r action_file; do
+        find "$TOP_ACTION_DIR" -name "*.yml" -o -name "*.yaml" | while read -r action_file; do
             action_dir=$(dirname "$action_file")
             action_dir_top=$(basename "$action_dir")
             echo "Updating README.md in $action_dir"
             action-docs -t 1 --no-banner -n -s "$action_file" > "$action_dir/README.md.tmp"
+
             # Ensure that only a single empty line is left at the end of the file
             sed -e :a -e "/^\n*\$/{\$d;N;};/\n\$/ba" "$action_dir/README.md.tmp" > "$action_dir/README.md"
-            sed -i "s|\*\*\*PROJECT\*\*\*@\*\*\*VERSION\*\*\*|$OWNER_PROJECT/$action_dir_top@$DOC_ACTION_VERSION|g" "$action_dir/README.md"
+
+            # Add TOP_ACTION_DIR to the path if it is not "."
+            if [ "$TOP_ACTION_DIR" != "." ]; then
+                PROJECT_PATH="$OWNER_PROJECT/$TOP_ACTION_DIR/$action_dir_top@$DOC_ACTION_VERSION"
+            else
+                PROJECT_PATH="$OWNER_PROJECT/$action_dir_top@$DOC_ACTION_VERSION"
+            fi
+
+            # Replace the placeholder in README.md
+            sed -i "s|\*\*\*PROJECT\*\*\*@\*\*\*VERSION\*\*\*|$PROJECT_PATH|g" "$action_dir/README.md"
+
+
             chown "$USER_ID:$GROUP_ID" "$action_dir/README.md"
             rm -f "$action_dir/README.md.tmp"
         done
