@@ -13,8 +13,19 @@ jobs:
         steps:
             # This step is required as we want to use the bot for the checkout,
             # this way, the auto-fix step will commit using this user
+
+            - name: Set renovate_pr environment variable
+              # TODO: replace by 'renovate[bot]'
+              run: |
+                if [[ "${{ github.actor }}" == "leiicamundi" && "${{ github.event_name }}" == "pull_request" ]]; then
+                  echo "renovate_pr=true" | tee -a "$GITHUB_ENV"
+                else
+                  echo "renovate_pr=false" | tee -a "$GITHUB_ENV"
+                fi
+
             - name: Generate token for GitHub
               id: generate-github-token
+              if: env.renovate_pr == 'true'
               uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
@@ -22,13 +33,20 @@ jobs:
                   github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
                   github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
                   vault-auth-method: approle
-                  vault_auth_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_auth_secret_id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault_url: ${{ secrets.VAULT_ADDR }}
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
 
             - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+              if: env.renovate_pr == 'true'
+              # see https://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
                   token: ${{ steps.generate-github-token.outputs.token }}
+                  repository: ${{ github.event.pull_request.head.repo.full_name }}
+                  ref: ${{ github.event.pull_request.head.ref }}
+
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+              if: env.renovate_pr == 'false'
 
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
@@ -54,9 +72,9 @@ jobs:
                   git restore --staged .github/renovate.json5
                   git restore .github/renovate.json5
 
-            - name: Rerun pre-commit to autofix files
+            - name: Rerun pre-commit to autofix files (renovate[bot])
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-              if: always() && steps.pre_commit_check_first_run.outcome != 'success'
+              if: always() && env.renovate_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
@@ -66,10 +84,7 @@ jobs:
               # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
               # If the issue persists, it means pre-commit was unable to resolve it.
               # We want to apply automatic fixes made by pre-commit.
-              # TODO: revert leiicamundi before merge
-              # if: always() && github.event_name == 'pull_request' && github.actor == 'renovate[bot]' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-              if: always() && github.event_name == 'pull_request' && github.actor == 'leiicamundi' && steps.pre_commit_check_first_run.outcome != 'success'
-                  && steps.pre_commit_check_second_run.outcome == 'success'
-              uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842 # v5
+              if: always() && env.renovate_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome == 'success'
+              uses: EndBug/add-and-commit@v9
               with:
-                  commit_message: 'chore: update files from pre-commit run'
+                message: 'chore: update files from pre-commit run'
