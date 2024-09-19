@@ -49,7 +49,9 @@ jobs:
               # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
               # If the issue persists, it means pre-commit was unable to resolve it.
               # We want to apply automatic fixes made by pre-commit.
-              if: always() && github.event_name == 'pull_request' && github.actor == 'renovate[bot]' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+              # TODO: revert leiicamundi before merge
+              # if: always() && github.event_name == 'pull_request' && github.actor == 'renovate[bot]' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+              if: always() && github.event_name == 'pull_request' && github.actor == 'leiicamundi' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
               uses: ./.github/actions/commit-changes
               with:
