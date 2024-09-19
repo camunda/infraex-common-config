@@ -1,7 +1,7 @@
 ---
 name: lint-global
 
-  # This workflow is reused accross our repositories and enables auto-fix for a given actor
+# This workflow is reused accross our repositories and enables auto-fix for a given actor
 
 on:
     workflow_call:
@@ -17,8 +17,8 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
-                # This step is required as we want to use the bot for the checkout,
-                # this way, the auto-fix step will commit using this user
+            # This step is required as we want to use the bot for the checkout,
+            # this way, the auto-fix step will commit using this user
             - name: Set autofix_pr environment variable
               run: |
                   if [[ "${{ github.actor }}" == "${{ inputs.autofix-actor }}" && "${{ github.event_name }}" == "pull_request" ]]; then
@@ -44,7 +44,7 @@ jobs:
 
             - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332     # v4
               if: env.autofix_pr == 'true'
-                # see https://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
+              # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
                   token: ${{ steps.generate-github-token.outputs.token }}
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -69,10 +69,10 @@ jobs:
                   extra_args: --all-files --verbose
 
             - name: Commit Changes made by pre-commit fix
-                # This workflow checks the files after the first pre-commit run.
-                # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
-                # If the issue persists, it means pre-commit was unable to resolve it.
-                # We want to apply automatic fixes made by pre-commit.
+              # This workflow checks the files after the first pre-commit run.
+              # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
+              # If the issue persists, it means pre-commit was unable to resolve it.
+              # We want to apply automatic fixes made by pre-commit.
               if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
               uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5     # v9
