@@ -2,6 +2,11 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
+    - repo: https://github.com/camunda/infraex-common-config
+      rev: 1.0.1 # use tags until renovate supports sha: https://github.com/renovatebot/renovate/issues/22567
+      hooks:
+          - id: update-action-readmes-docker
+
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v4.6.0
       hooks:
