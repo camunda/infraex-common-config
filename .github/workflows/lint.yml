@@ -9,9 +9,26 @@ on:
 jobs:
     pre-commit:
         runs-on: ubuntu-latest
-        timeout-minutes: 5
+        timeout-minutes: 10
         steps:
+            # This step is required as we want to use the bot for the checkout,
+            # this way, the auto-fix step will commit using this user
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault_auth_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_auth_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_url: ${{ secrets.VAULT_ADDR }}
+
             - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+              with:
+                  token: ${{ steps.generate-github-token.outputs.token }}
 
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
@@ -53,9 +70,6 @@ jobs:
               # if: always() && github.event_name == 'pull_request' && github.actor == 'renovate[bot]' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
               if: always() && github.event_name == 'pull_request' && github.actor == 'leiicamundi' && steps.pre_commit_check_first_run.outcome != 'success'
                   && steps.pre_commit_check_second_run.outcome == 'success'
-              uses: ./.github/actions/commit-changes
+              uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842 # v5
               with:
                   commit_message: 'chore: update files from pre-commit run'
-                  vault_auth_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_auth_secret_id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault_url: ${{ secrets.VAULT_ADDR }}
