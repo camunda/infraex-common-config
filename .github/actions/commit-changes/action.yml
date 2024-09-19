@@ -61,4 +61,5 @@ runs:
           with:
               commit_message: ${{ inputs.commit_message }}
           env:
+              GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
