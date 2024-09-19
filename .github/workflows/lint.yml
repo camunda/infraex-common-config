@@ -11,13 +11,12 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
-            # This step is required as we want to use the bot for the checkout,
-            # this way, the auto-fix step will commit using this user
 
+              # This step is required as we want to use the bot for the checkout,
+              # this way, the auto-fix step will commit using this user
             - name: Set renovate_pr environment variable
-              # TODO: replace by 'renovate[bot]'
               run: |
-                  if [[ "${{ github.actor }}" == "leiicamundi" && "${{ github.event_name }}" == "pull_request" ]]; then
+                  if [[ "${{ github.actor }}" == "renovate[bot]" && "${{ github.event_name }}" == "pull_request" ]]; then
                     echo "renovate_pr=true" | tee -a "$GITHUB_ENV"
                   else
                     echo "renovate_pr=false" | tee -a "$GITHUB_ENV"
@@ -26,7 +25,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.renovate_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f   # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -37,7 +36,7 @@ jobs:
                   vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
 
-            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332   # v4
               if: env.renovate_pr == 'true'
               # see https://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
@@ -45,13 +44,13 @@ jobs:
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
                   ref: ${{ github.event.pull_request.head.ref }}
 
-            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332   # v4
               if: env.renovate_pr == 'false'
 
             - name: Install tooling using asdf
-              uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
+              uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6   # v3
 
-            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd   # v3.0.1
               name: Validate renovate5.json
               with:
                   extra_args: --all-files --verbose
@@ -61,7 +60,7 @@ jobs:
                   cp default.json5 .github/renovate.json5  # renovate-config-validator hook can only validate files that are called renovate.json5
                   git add .github/renovate.json5
 
-            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd   # v3.0.1
               name: Validate default5.json
               id: pre_commit_check_first_run
               with:
@@ -72,20 +71,20 @@ jobs:
                   git restore --staged .github/renovate.json5
                   git restore .github/renovate.json5
 
-            - name: Rerun pre-commit to autofix files (renovate[bot])
-              uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+            - name: Rerun pre-commit to autofix files if pre-commit failed (renovate[bot])
+              uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd   # v3.0.1
               if: always() && env.renovate_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
 
-            - name: Commit Changes If Actor Matches (renovate[bot])
+            - name: Commit Changes made by pre-commit fix (renovate[bot])
               # This workflow checks the files after the first pre-commit run.
               # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
               # If the issue persists, it means pre-commit was unable to resolve it.
               # We want to apply automatic fixes made by pre-commit.
               if: always() && env.renovate_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
-              uses: EndBug/add-and-commit@v9
+              uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5   # v9
               with:
                   message: 'chore: update files from pre-commit run'
