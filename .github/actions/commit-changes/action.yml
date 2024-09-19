@@ -1,14 +1,11 @@
 ---
-name: Commit Changes If Actor Matches
+name: Commit Changes
 
 description: |
-    Checks if the pull request is from a specific actor, generates a GitHub token,
-    and commits changes if the actor matches.
+    Generates a GitHub token and commits changes.
+    This action use https://github.com/stefanzweifel/git-auto-commit-action.
 
 inputs:
-    actor:
-        description: The GitHub actor to check (e.g., renovate).
-        required: true
     commit_message:
         description: The commit message to use.
         required: true
@@ -46,19 +43,7 @@ inputs:
 runs:
     using: composite
     steps:
-        - name: Check if PR is from specified actor
-          id: check-actor
-          run: |
-              if [[ "${{ github.actor }}" == "${{ inputs.actor }}" ]]; then
-                echo "PR is from ${inputs.actor}"
-                echo "should_commit=true" >> $GITHUB_ENV
-              else
-                echo "PR is not from ${inputs.actor}"
-                echo "should_commit=false" >> $GITHUB_ENV
-              fi
-
         - name: Generate token for GitHub
-          if: env.should_commit == 'true'
           id: generate-github-token
           uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
           with:
@@ -72,7 +57,6 @@ runs:
               vault-url: ${{ inputs.vault_url }}
 
         - name: Commit changes
-          if: env.should_commit == 'true'
           uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842 # v5
           with:
               commit_message: ${{ inputs.commit_message }}

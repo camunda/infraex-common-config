@@ -1,16 +1,15 @@
-# Commit Changes If Actor Matches
+# Commit Changes
 
 ## Description
 
-Checks if the pull request is from a specific actor, generates a GitHub token,
-and commits changes if the actor matches.
+Generates a GitHub token and commits changes.
+This action use https://github.com/stefanzweifel/git-auto-commit-action.
 
 
 ## Inputs
 
 | name | description | required | default |
 | --- | --- | --- | --- |
-| `actor` | <p>The GitHub actor to check (e.g., renovate).</p> | `true` | `""` |
 | `commit_message` | <p>The commit message to use.</p> | `true` | `chore: update files from gha` |
 | `github_app_id_vault_key` | <p>Vault key for GitHub App ID.</p> | `false` | `GITHUB_APP_ID` |
 | `github_app_id_vault_path` | <p>Vault path for GitHub App ID.</p> | `false` | `secret/data/products/infrastructure-experience/ci/common` |
@@ -29,14 +28,8 @@ This action is a `composite` action.
 ## Usage
 
 ```yaml
-- uses: camunda/infraex-common-config/.github/actions/commit-on-match@main
+- uses: camunda/infraex-common-config/.github/actions/commit-changes@main
   with:
-    actor:
-    # The GitHub actor to check (e.g., renovate).
-    #
-    # Required: true
-    # Default: ""
-
     commit_message:
     # The commit message to use.
     #

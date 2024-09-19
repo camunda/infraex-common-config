@@ -18,6 +18,7 @@ jobs:
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               name: Validate renovate5.json
+              id: pre_commit_check_first_run
               with:
                   extra_args: --all-files --verbose
 
@@ -28,6 +29,9 @@ jobs:
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               name: Validate default5.json
+              # for other repositories, you may want to trigger a second pre_commit only if the first one fails
+              # if: steps.pre_commit_check_first_run.outcome != 'success'
+              id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
 
@@ -36,12 +40,17 @@ jobs:
                   git restore --staged .github/renovate.json5
                   git restore .github/renovate.json5
 
-# TODO: on purpose break the pre-commit and ensure that the commit on change works on the second run, if not don't commit
+# TODO: on purpose break the pre-commit
 
             - name: Commit Changes If Actor Matches (renovate)
+              # This workflow checks the files after the first pre-commit run.
+              # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
+              # If the issue persists, it means pre-commit was unable to resolve it.
+              # We want to apply automatic fixes made by pre-commit.
+              if: github.event_name == 'pull_request' && github.actor == 'renovate' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+                  == 'success'
               uses: ./.github/actions/commit-on-match
               with:
-                  actor: renovate
                   commit_message: 'chore: update files from pre-commit run'
                   vault_auth_role_id: ${{ secrets.VAULT_ROLE_ID }}
                   vault_auth_secret_id: ${{ secrets.VAULT_SECRET_ID }}
