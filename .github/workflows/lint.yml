@@ -37,12 +37,12 @@ jobs:
                   git restore --staged .github/renovate.json5
                   git restore .github/renovate.json5
 
-            - name: Rerun pre-commit to autofix files 
+            - name: Rerun pre-commit to autofix files
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               if: always() && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:
-                extra_args: --all-files --verbose
+                  extra_args: --all-files --verbose
 
             - name: Commit Changes If Actor Matches (renovate[bot])
               # This workflow checks the files after the first pre-commit run.
@@ -51,8 +51,8 @@ jobs:
               # We want to apply automatic fixes made by pre-commit.
               # TODO: revert leiicamundi before merge
               # if: always() && github.event_name == 'pull_request' && github.actor == 'renovate[bot]' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-              if: always() && github.event_name == 'pull_request' && github.actor == 'leiicamundi' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-                  == 'success'
+              if: always() && github.event_name == 'pull_request' && github.actor == 'leiicamundi' && steps.pre_commit_check_first_run.outcome != 'success'
+                  && steps.pre_commit_check_second_run.outcome == 'success'
               uses: ./.github/actions/commit-changes
               with:
                   commit_message: 'chore: update files from pre-commit run'
