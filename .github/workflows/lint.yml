@@ -17,11 +17,11 @@ jobs:
             - name: Set renovate_pr environment variable
               # TODO: replace by 'renovate[bot]'
               run: |
-                if [[ "${{ github.actor }}" == "leiicamundi" && "${{ github.event_name }}" == "pull_request" ]]; then
-                  echo "renovate_pr=true" | tee -a "$GITHUB_ENV"
-                else
-                  echo "renovate_pr=false" | tee -a "$GITHUB_ENV"
-                fi
+                  if [[ "${{ github.actor }}" == "leiicamundi" && "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "renovate_pr=true" | tee -a "$GITHUB_ENV"
+                  else
+                    echo "renovate_pr=false" | tee -a "$GITHUB_ENV"
+                  fi
 
             - name: Generate token for GitHub
               id: generate-github-token
@@ -84,7 +84,8 @@ jobs:
               # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
               # If the issue persists, it means pre-commit was unable to resolve it.
               # We want to apply automatic fixes made by pre-commit.
-              if: always() && env.renovate_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome == 'success'
+              if: always() && env.renovate_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+                  == 'success'
               uses: EndBug/add-and-commit@v9
               with:
-                message: 'chore: update files from pre-commit run'
+                  message: 'chore: update files from pre-commit run'
