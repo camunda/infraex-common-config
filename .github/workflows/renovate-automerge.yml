@@ -1,0 +1,11 @@
+---
+name: Renovate Auto Merge
+
+on:
+    pull_request:
+        types: [opened, reopened, ready_for_review]
+
+jobs:
+    lint:
+        uses: ./.github/workflows/automerge-global.yml
+        secrets: inherit

@@ -1,0 +1,72 @@
+---
+name: Approve and Auto-Merge Pull Request
+
+# This re-usable workflow helps to approve and enable automerge of pull requests if it's made by an author.
+
+on:
+    workflow_call:
+        inputs:
+            author-name:
+                type: string
+                default: renovate[bot]
+
+jobs:
+    approve-and-auto-merge:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+
+            - name: Check author and type of change
+              id: check-major
+              run: |
+                  : # we don't rely on github.actor as it's the latest person to schedule/trigger the workflow.
+                  pr_author="$(gh pr view ${{ github.event.pull_request.number }} --json author --jq '.author.login')"
+
+                  if [ "$pr_author" = "${{ inputs.author-name }}" ]; then
+                    echo "skip=false" | tee -a "$GITHUB_ENV"
+                  else
+                    echo "This PR was not created by ${{ inputs.author-name }}, skipping auto approval."
+                    echo "skip=true" | tee -a "$GITHUB_ENV"
+                    exit 0
+                  fi
+
+                  : # prevent major changes from auto merge
+                  branch_name="$(git rev-parse --abbrev-ref HEAD)"
+                  if echo "$branch_name" | grep -q -i 'major'; then
+                    echo "This PR is related to major changes. Skipping approval and auto-merge."
+                    echo "skip=true" | tee -a "$GITHUB_ENV"
+                  else
+                    echo "This PR does not involve major changes."
+                    echo "skip=false" | tee -a "$GITHUB_ENV"
+                  fi
+              env:
+                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+
+            - name: Approve Pull Request and auto-merge
+              if: env.skip == 'false'
+              run: |
+                  echo "Waiting 30s to ensure that the pipeline train is running"
+                  sleep 30s
+
+                  : # Approve the PR and add a comment with workflow reference
+                  workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  gh pr review ${{ github.event.pull_request.number }} --approve
+                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
+                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+              env:
+                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
