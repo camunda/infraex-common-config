@@ -54,6 +54,8 @@ jobs:
                     echo "This PR does not involve major changes."
                     echo "skip=false" | tee -a "$GITHUB_ENV"
                   fi
+              env:
+                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
             - name: Wait to ensure that the pipeline train is running
               if: env.skip == 'false'
