@@ -9,8 +9,6 @@ on:
 jobs:
     lint:
         uses: ./.github/workflows/lint-global.yml
-        with:
-            autofix-actor: leiicamundi # TODO: revert this!
         secrets: inherit
 
     pre-commit-renovatejsonfile:
