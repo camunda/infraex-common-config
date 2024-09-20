@@ -67,6 +67,6 @@ jobs:
                   workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   gh pr review ${{ github.event.pull_request.number }} --approve
                   gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
-                  gh pr merge ${{ github.event.pull_request.number }} --auto
+                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
