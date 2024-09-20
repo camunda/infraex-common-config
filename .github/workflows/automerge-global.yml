@@ -34,7 +34,7 @@ jobs:
             - name: Check author and type of change
               id: check-major
               run: |
-                  # we don't rely on github.actor as it's the latest person to schedule/trigger the workflow.
+                  : # we don't rely on github.actor as it's the latest person to schedule/trigger the workflow.
                   pr_author="$(gh pr view ${{ github.event.pull_request.number }} --json author --jq '.author.login')"
 
                   if [ "$pr_author" = "${{ inputs.author-name }}" ]; then
@@ -45,7 +45,7 @@ jobs:
                     exit 0
                   fi
 
-                  # prevent major changes from auto merge
+                  : # prevent major changes from auto merge
                   branch_name="$(git rev-parse --abbrev-ref HEAD)"
                   if echo "$branch_name" | grep -q -i 'major'; then
                     echo "This PR is related to major changes. Skipping approval and auto-merge."
@@ -57,20 +57,16 @@ jobs:
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
-            - name: Wait to ensure that the pipeline train is running
-              if: env.skip == 'false'
-              run: sleep 30s
-
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
               run: |
-                  # Get the Workflow URL
-                  workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  echo "Waiting 30s to ensure that the pipeline train is running"
+                  sleep 30s
 
-                  # Approve the PR and add a comment with workflow reference
+                  : # Approve the PR and add a comment with workflow reference
+                  workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   gh pr review ${{ github.event.pull_request.number }} --approve
-                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. \n\ n _Workflow run:_ [See details](${workflow_url})"
-                  # TODO: revert this comment
-                  # gh pr merge ${{ github.event.pull_request.number }} --auto
+                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
+                  gh pr merge ${{ github.event.pull_request.number }} --auto
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
