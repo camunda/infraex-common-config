@@ -8,6 +8,4 @@ on:
 jobs:
     lint:
         uses: ./.github/workflows/automerge-global.yml
-        with:
-            author-name: leiicamundi
         secrets: inherit
