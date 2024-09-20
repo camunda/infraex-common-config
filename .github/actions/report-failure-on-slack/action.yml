@@ -31,78 +31,78 @@ inputs:
         default: 'false'
 
 runs:
-    using: composite
-    steps:
-        - name: Generate token for GitHub
-          id: generate-github-token
-          if: ${{ inputs.disable_silence_check == 'false' }}
-          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # main
-          with:
-              github-app-id-vault-key: GITHUB_APP_ID
-              github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-              github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-              github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-              vault-auth-method: approle
-              vault-auth-role-id: ${{ inputs.vault_role_id }}
-              vault-auth-secret-id: ${{ inputs.vault_secret_id }}
-              vault-url: ${{ inputs.vault_addr }}
+  using: composite
+  steps:
+      - name: Generate token for GitHub
+        id: generate-github-token
+        if: ${{ inputs.disable_silence_check == 'false' }}
+        uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f5bbd25c97507d6d2a884eebecaa804a6e34b15f # main
+        with:
+            github-app-id-vault-key: GITHUB_APP_ID
+            github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+            github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+            github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+            vault-auth-method: approle
+            vault-auth-role-id: ${{ inputs.vault_role_id }}
+            vault-auth-secret-id: ${{ inputs.vault_secret_id }}
+            vault-url: ${{ inputs.vault_addr }}
 
-        - name: Check for Silence Issue
-          id: silence-check
-          if: ${{ inputs.disable_silence_check == 'false' }}
-          shell: bash
-          continue-on-error: true
-          run: |
-              ISSUE_TITLE="silence: ${{ github.workflow }}"
-              ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
-              ISSUE_COUNT=$(echo "$ISSUE_SEARCH" | jq '. | length')
+      - name: Check for Silence Issue
+        id: silence-check
+        if: ${{ inputs.disable_silence_check == 'false' }}
+        shell: bash
+        continue-on-error: true
+        run: |
+            ISSUE_TITLE="silence: ${{ github.workflow }}"
+            ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
+            ISSUE_COUNT=$(echo "$ISSUE_SEARCH" | jq '. | length')
 
-              if [ "$ISSUE_COUNT" -gt 0 ]; then
-                ISSUE_TITLE=$(echo "$ISSUE_SEARCH" | jq -r '.[0].title')
-                ISSUE_URL=$(echo "$ISSUE_SEARCH" | jq -r '.[0].url')
-                echo "Issue found: $ISSUE_TITLE - $ISSUE_URL . Skipping notification. Close this issue to re-enable notifications."
-                exit 0
-              else
-                echo "No silence issue found, triggering the slack alert."
-                exit 1
-              fi
-          env:
-              GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+            if [ "$ISSUE_COUNT" -gt 0 ]; then
+              ISSUE_TITLE=$(echo "$ISSUE_SEARCH" | jq -r '.[0].title')
+              ISSUE_URL=$(echo "$ISSUE_SEARCH" | jq -r '.[0].url')
+              echo "Issue found: $ISSUE_TITLE - $ISSUE_URL . Skipping notification. Close this issue to re-enable notifications."
+              exit 0
+            else
+              echo "No silence issue found, triggering the slack alert."
+              exit 1
+            fi
+        env:
+            GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
-        - name: Import Secrets
-          id: secrets
-          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
-          with:
-              url: ${{ inputs.vault_addr }}
-              method: approle
-              roleId: ${{ inputs.vault_role_id }}
-              secretId: ${{ inputs.vault_secret_id }}
-              exportEnv: false
-              secrets: |
-                  secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+      - name: Import Secrets
+        id: secrets
+        if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
+        uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
+        with:
+            url: ${{ inputs.vault_addr }}
+            method: approle
+            roleId: ${{ inputs.vault_role_id }}
+            secretId: ${{ inputs.vault_secret_id }}
+            exportEnv: false
+            secrets: |
+                secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
-        - name: Notify in Slack in case of failure
-          id: slack-notification
-          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # v1.27.0
-          with:
-              channel-id: ${{ inputs.slack_channel_id }}
-              payload: |
-                  {
-                    "unfurl_links": false,
-                    "unfurl_media": false,
-                    "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
-                    "blocks": [
-                      {
-                        "type": "section",
-                        "text": {
-                          "type": "mrkdwn",
-                          "text": ":automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> scheduled workflow: ${{ github.workflow }} failed! \n :link: Please check: ${{ env.WORKFLOW_URL }} \n (cc ${{ inputs.slack_mention_people }})"
-                        }
+      - name: Notify in Slack in case of failure
+        id: slack-notification
+        if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
+        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # v1.27.0
+        with:
+            channel-id: ${{ inputs.slack_channel_id }}
+            payload: |
+                {
+                  "unfurl_links": false,
+                  "unfurl_media": false,
+                  "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": ":automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> scheduled workflow: ${{ github.workflow }} failed! \n :link: Please check: ${{ env.WORKFLOW_URL }} \n (cc ${{ inputs.slack_mention_people }})"
                       }
-                    ]
-                  }
-          env:
-              SLACK_BOT_TOKEN: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
-              WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                    }
+                  ]
+                }
+        env:
+            SLACK_BOT_TOKEN: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+            WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
