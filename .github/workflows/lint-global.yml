@@ -75,7 +75,7 @@ jobs:
               # We want to apply automatic fixes made by pre-commit.
               if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
-              uses: getsentry/action-github-commit@main
+              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # main
               with:
                   github-token: ${{ steps.generate-github-token.outputs.token }}
                   message: 'chore: update files from pre-commit run'
