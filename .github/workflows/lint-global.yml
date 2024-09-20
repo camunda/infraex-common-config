@@ -68,6 +68,41 @@ jobs:
               with:
                   extra_args: --all-files --verbose
 
+            - name: Import Secrets
+              # todo, only import if commit is needed
+              id: secrets
+              uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: false
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common GITHUB_APP_EMAIL;
+                      secret/data/products/infrastructure-experience/ci/common GITHUB_APP_PRIVATE_KEY;
+                      secret/data/products/infrastructure-experience/ci/common GITHUB_APP_DISPLAY_NAME;
+
+            - name: Set up GPG
+              #if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+              #    == 'success'
+              run: |
+                  mkdir -p ~/.gnupg
+                  chmod 700 ~/.gnupg
+
+                  echo "${{ steps.secrets.outputs.GITHUB_APP_PRIVATE_KEY }}" | gpg --batch --import
+
+                  echo "use-agent" >> ~/.gnupg/gpg.conf
+                  echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+
+                  # find the key id
+                  KEY_ID="$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)"
+
+                  # Configure git to use the gpg key
+                  git config --global gpg.program gpg
+                  git config --global user.signingkey "$KEY_ID"
+                  git config --global commit.gpgSign true
+
             - name: Commit Changes made by pre-commit fix
               # This workflow checks the files after the first pre-commit run.
               # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
@@ -78,3 +113,8 @@ jobs:
               uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5     # v9
               with:
                   message: 'chore: update files from pre-commit run'
+                  commit: -S
+                  author_name: ${{ steps.secrets.outputs.GITHUB_APP_DISPLAY_NAME }}
+                  author_email: ${{ steps.secrets.outputs.GITHUB_APP_EMAIL }}
+                  committer_name: ${{ steps.secrets.outputs.GITHUB_APP_DISPLAY_NAME }}
+                  committer_email: ${{ steps.secrets.outputs.GITHUB_APP_EMAIL }}
