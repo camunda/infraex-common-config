@@ -1,7 +1,8 @@
--   id: update-action-readmes-docker
-    name: Update GitHub Action READMEs
-    entry: ./pre_commit_hooks/docker_update_action_readmes.sh
-    language: script
+---
+    - id: update-action-readmes-docker
+      name: Update GitHub Action READMEs
+      entry: ./pre_commit_hooks/docker_update_action_readmes.sh
+      language: script
     # Only runs when action files are modified
-    files: ^\.github/actions/.+\.(yml|yaml)$
-    pass_filenames: false # ensure single run
+      files: ^\.github/actions/.+\.(yml|yaml)$
+      pass_filenames: false # ensure single run

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euxo pipefail
+
 # This script deletes additional AWS resources based on specified criteria.
 
 # Check if the region argument is provided
