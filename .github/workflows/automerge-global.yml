@@ -51,8 +51,21 @@ jobs:
                   if echo "$branch_name" | grep -q -i 'major'; then
                     echo "This PR is related to major changes. Skipping approval and auto-merge."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
+                    exit 0
                   else
                     echo "This PR does not involve major changes."
+                    echo "skip=false" | tee -a "$GITHUB_ENV"
+                  fi
+
+                  : # Check if the PR has already been approved
+                  approved=$(gh pr reviews ${{ github.event.pull_request.number }} --json state --jq '.[] | select(.state == "APPROVED") | .state')
+
+                  if [ "$approved" = "APPROVED" ]; then
+                    echo "This PR has already been approved. Skipping auto approval."
+                    echo "skip=true" | tee -a "$GITHUB_ENV"
+                    exit 0
+                  else
+                    echo "The PR has not been approved yet."
                     echo "skip=false" | tee -a "$GITHUB_ENV"
                   fi
               env:
