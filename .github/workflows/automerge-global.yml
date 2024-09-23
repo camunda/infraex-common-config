@@ -1,7 +1,8 @@
 ---
 name: Approve and Auto-Merge Pull Request
 
-# This re-usable workflow helps to approve and enable automerge of pull requests if it's made by an author.
+# This re-usable workflow helps to approve and enable automerge of pull requests if it's made by an author and the tests are completed.
+# It solves an issue related to wait all tests on auto merge https://github.com/orgs/community/discussions/27349
 
 on:
     workflow_call:
@@ -13,7 +14,7 @@ on:
 jobs:
     approve-and-auto-merge:
         runs-on: ubuntu-latest
-
+        name: Approve and auto merge PR for renovate
         steps:
             - name: Checkout Repository
               uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
@@ -57,16 +58,22 @@ jobs:
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
+            - name: Wait for other checks to succeed
+              uses: lewagon/wait-on-check-action@ccfb013c15c8afb7bf2b7c028fb74dc5a068cccc # v1.3.4
+              if: env.skip == 'false'
+              with:
+                  ref: ${{ github.ref }}
+                  running-workflow-name: Approve and auto merge PR for renovate
+                  repo-token: ${{ steps.generate-github-token.outputs.token }}
+                  wait-interval: 30
+
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
               run: |
-                  echo "Waiting 30s to ensure that the pipeline train is running"
-                  sleep 30s
-
                   : # Approve the PR and add a comment with workflow reference
                   workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   gh pr review ${{ github.event.pull_request.number }} --approve
-                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
-                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow as all conditions are met and tests passed. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
+                  # gh pr merge ${{ github.event.pull_request.number }} --auto --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
