@@ -84,6 +84,6 @@ jobs:
                     gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been auto-approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
                   fi
 
-                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+                  gh pr merge ${{ github.event.pull_request.number }} --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
