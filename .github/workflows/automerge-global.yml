@@ -8,7 +8,7 @@ on:
         inputs:
             author-name:
                 type: string
-                default: renovate[bot]
+                default: app/renovate
 
 jobs:
     approve-and-auto-merge:
