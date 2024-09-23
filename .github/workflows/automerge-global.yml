@@ -63,7 +63,6 @@ jobs:
               if: env.skip == 'false'
               with:
                   ref: ${{ github.ref }}
-                  running-workflow-name: Approve and auto merge PR for renovate
                   repo-token: ${{ steps.generate-github-token.outputs.token }}
                   wait-interval: 30
 
