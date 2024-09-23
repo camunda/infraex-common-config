@@ -1,7 +1,8 @@
 ---
 name: Approve and Auto-Merge Pull Request
 
-# This re-usable workflow helps to approve and enable automerge of pull requests if it's made by an author.
+# This re-usable workflow helps to approve and enable automerge of pull requests if it's made by an author and the tests are completed.
+# It solves an issue related to wait all tests on auto merge https://github.com/orgs/community/discussions/27349
 
 on:
     workflow_call:
@@ -11,9 +12,9 @@ on:
                 default: app/renovate
 
 jobs:
+    # do not change the name
     approve-and-auto-merge:
         runs-on: ubuntu-latest
-
         steps:
             - name: Checkout Repository
               uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
@@ -50,6 +51,7 @@ jobs:
                   if echo "$branch_name" | grep -q -i 'major'; then
                     echo "This PR is related to major changes. Skipping approval and auto-merge."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
+                    exit 0
                   else
                     echo "This PR does not involve major changes."
                     echo "skip=false" | tee -a "$GITHUB_ENV"
@@ -57,16 +59,31 @@ jobs:
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
+            - name: Wait for other checks to succeed
+              uses: poseidon/wait-for-status-checks@6988432d64ad3f9c2608db4ca16fded1b7d36ead # v0.5.0
+              if: env.skip == 'false'
+              with:
+                  token: ${{ steps.generate-github-token.outputs.token }}
+                  ignore_pattern: renovate-automerge / approve-and-auto-merge   # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
+                  delay: 30s   # wait 30s before checking
+                  timeout: 10800 # 3 hours timeout
+
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
               run: |
-                  echo "Waiting 30s to ensure that the pipeline train is running"
-                  sleep 30s
-
                   : # Approve the PR and add a comment with workflow reference
                   workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  gh pr review ${{ github.event.pull_request.number }} --approve
-                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow if all conditions are met and tests pass. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
-                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+
+                  : # Check if the PR has already been approved and prevent multiple comments
+                  approved=$(gh pr view ${{ github.event.pull_request.number }} --json reviewDecision --jq '.reviewDecision')
+
+                  if [ "$approved" = "APPROVED" ]; then
+                    echo "This PR has already been approved."
+                  else
+                    gh pr review ${{ github.event.pull_request.number }} --approve
+                    gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been auto-approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
+                  fi
+
+                  gh pr merge ${{ github.event.pull_request.number }} --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}

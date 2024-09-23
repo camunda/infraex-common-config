@@ -3,9 +3,13 @@ name: Renovate Auto Merge
 
 on:
     pull_request:
-        types: [opened, reopened, ready_for_review]
+
+# limit to a single execution per ref of this workflow
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-    lint:
+    renovate-automerge:
         uses: ./.github/workflows/automerge-global.yml
         secrets: inherit
