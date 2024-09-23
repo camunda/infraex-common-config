@@ -63,6 +63,7 @@ jobs:
               if: env.skip == 'false'
               with:
                   token: ${{ steps.generate-github-token.outputs.token }}
+                  ignore_pattern: renovate-automerge / approve-and-auto-merge   # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
                   delay: 30s   # wait 30s before checking
                   timeout: 10800 # 3 hours timeout
 
