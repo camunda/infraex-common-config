@@ -41,7 +41,7 @@ do
 
     for policy_arn in "${policy_arns_array[@]}"
     do
-        echo "Deleting policy: $policy_arn"
+        echo "Deleting inline policy: $policy_arn"
         aws iam delete-role-policy --role-name "$role_arn" --policy-name "$policy_arn"
     done
 
@@ -56,18 +56,28 @@ do
 
     echo "Deleting role: $role_arn"
     aws iam delete-role --role-name "$role_arn"
-
 done
 
 echo "Deleting IAM Policies"
-# Delete Policies
+# Detach and delete Policies
 iam_policies=$(aws iam list-policies --query "Policies[?contains(PolicyName, 'nightly')].Arn" --output text)
 
 read -r -a iam_policies_array <<< "$iam_policies"
 
 for iam_policy in "${iam_policies_array[@]}"
 do
-    echo "Deleting policy: $iam_policy"
+    echo "Detaching and deleting policy: $iam_policy"
+    # List entities the policy is attached to and detach it from each entity
+    entities=$(aws iam list-entities-for-policy --policy-arn "$iam_policy" --query 'PolicyRoles[].RoleName' --output text)
+    read -r -a entities_array <<< "$entities"
+
+    for entity in "${entities_array[@]}"
+    do
+        echo "Detaching policy from role: $entity"
+        aws iam detach-role-policy --role-name "$entity" --policy-arn "$iam_policy"
+    done
+
+    # Now that the policy is detached from all entities, delete it
     aws iam delete-policy --policy-arn "$iam_policy"
 done
 
