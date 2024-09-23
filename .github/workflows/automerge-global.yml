@@ -12,6 +12,7 @@ on:
                 default: app/renovate
 
 jobs:
+    # do not change the name
     approve-and-auto-merge:
         runs-on: ubuntu-latest
         steps:
@@ -73,17 +74,16 @@ jobs:
                   : # Approve the PR and add a comment with workflow reference
                   workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-                  : # Check if the PR has already been approved
+                  : # Check if the PR has already been approved and prevent multiple comments
                   approved=$(gh pr view ${{ github.event.pull_request.number }} --json reviewDecision --jq '.reviewDecision')
 
                   if [ "$approved" = "APPROVED" ]; then
                     echo "This PR has already been approved."
                   else
                     gh pr review ${{ github.event.pull_request.number }} --approve
-                    gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
+                    gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been auto-approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
                   fi
 
-                  gh pr comment ${{ github.event.pull_request.number }} --body "Automerging this PR. Workflow run: [See details](${workflow_url})"
-                  # gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+                  gh pr merge ${{ github.event.pull_request.number }} --auto --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
