@@ -4,6 +4,11 @@ name: Renovate Auto Merge
 on:
     pull_request:
 
+# limit to a single execution per ref of this workflow
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     renovate-automerge:
         uses: ./.github/workflows/automerge-global.yml
