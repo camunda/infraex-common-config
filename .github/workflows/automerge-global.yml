@@ -56,18 +56,6 @@ jobs:
                     echo "This PR does not involve major changes."
                     echo "skip=false" | tee -a "$GITHUB_ENV"
                   fi
-
-                  : # Check if the PR has already been approved
-                  approved=$(gh pr reviews ${{ github.event.pull_request.number }} --json state --jq '.[] | select(.state == "APPROVED") | .state')
-
-                  if [ "$approved" = "APPROVED" ]; then
-                    echo "This PR has already been approved. Skipping auto approval."
-                    echo "skip=true" | tee -a "$GITHUB_ENV"
-                    exit 0
-                  else
-                    echo "The PR has not been approved yet."
-                    echo "skip=false" | tee -a "$GITHUB_ENV"
-                  fi
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
@@ -84,8 +72,18 @@ jobs:
               run: |
                   : # Approve the PR and add a comment with workflow reference
                   workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  gh pr review ${{ github.event.pull_request.number }} --approve
-                  gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved and will be auto-merged by the GitHub Actions workflow as all conditions are met and tests passed. The PR does not involve major changes. Workflow run: [See details](${workflow_url})"
+
+                  : # Check if the PR has already been approved
+                  approved=$(gh pr view ${{ github.event.pull_request.number }} --json reviewDecision --jq '.reviewDecision')
+
+                  if [ "$approved" = "APPROVED" ]; then
+                    echo "This PR has already been approved. Skipping auto approval."
+                  else
+                    gh pr review ${{ github.event.pull_request.number }} --approve
+                    gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
+                  fi
+
+                  gh pr comment ${{ github.event.pull_request.number }} --body "Automerging this PR. Workflow run: [See details](${workflow_url})"
                   # gh pr merge ${{ github.event.pull_request.number }} --auto --squash
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
