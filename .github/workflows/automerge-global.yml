@@ -14,7 +14,6 @@ on:
 jobs:
     approve-and-auto-merge:
         runs-on: ubuntu-latest
-        name: Approve and auto merge PR for renovate
         steps:
             - name: Checkout Repository
               uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
@@ -60,13 +59,12 @@ jobs:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
             - name: Wait for other checks to succeed
-              uses: wechuli/allcheckspassed@2e5e8bbc775f5680ed5d02e3a22e2fc7219792ac # v1.1.0
+              uses: poseidon/wait-for-status-checks@6988432d64ad3f9c2608db4ca16fded1b7d36ead # v0.5.0
               if: env.skip == 'false'
               with:
-                  commit_sha: ${{ github.ref }}
                   token: ${{ steps.generate-github-token.outputs.token }}
-                  checks_include: .*
-                  retries: 300 # timeout
+                  delay: 30s   # wait 30s before checking
+                  timeout: 10800 # 3 hours timeout
 
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
@@ -78,7 +76,7 @@ jobs:
                   approved=$(gh pr view ${{ github.event.pull_request.number }} --json reviewDecision --jq '.reviewDecision')
 
                   if [ "$approved" = "APPROVED" ]; then
-                    echo "This PR has already been approved. Skipping auto approval."
+                    echo "This PR has already been approved."
                   else
                     gh pr review ${{ github.event.pull_request.number }} --approve
                     gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"

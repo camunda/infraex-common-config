@@ -5,7 +5,7 @@ on:
     pull_request:
 
 jobs:
-    lint:
+    renovate-automerge:
         uses: ./.github/workflows/automerge-global.yml
         with:
             # TODO: revert this before merge
