@@ -55,17 +55,20 @@ jobs:
                   else
                     echo "This PR does not involve major changes."
                     echo "skip=false" | tee -a "$GITHUB_ENV"
+
+                    echo "sleep 30s to ensure that all the tests have started"
+                    sleep 30
                   fi
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
             - name: Wait for other checks to succeed
-              uses: lewagon/wait-on-check-action@ccfb013c15c8afb7bf2b7c028fb74dc5a068cccc # v1.3.4
+              uses: wechuli/allcheckspassed@2e5e8bbc775f5680ed5d02e3a22e2fc7219792ac # v1.1.0
               if: env.skip == 'false'
               with:
-                  ref: ${{ github.ref }}
-                  repo-token: ${{ steps.generate-github-token.outputs.token }}
-                  wait-interval: 30
+                  commit_sha: ${{ github.ref }}
+                  token: ${{ steps.generate-github-token.outputs.token }}
+                  retries: 300 # timeout
 
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
