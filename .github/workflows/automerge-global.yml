@@ -65,6 +65,7 @@ jobs:
               with:
                   commit_sha: ${{ github.ref }}
                   token: ${{ steps.generate-github-token.outputs.token }}
+                  checks_include: .*
                   retries: 300 # timeout
 
             - name: Approve Pull Request and auto-merge
