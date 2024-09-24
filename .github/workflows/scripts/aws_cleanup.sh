@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# set -euxo pipefail
+set -euxo pipefail
 
 # This script deletes additional AWS resources based on specified criteria.
 
@@ -17,6 +17,51 @@ echo "Deleting additional resources in the $region region..."
 
 echo "Deleting additional resources..."
 # KMS keys can't be deleted due to resource policies, requires manual intervention
+
+echo "Deleting IAM Users"
+# Delete Users
+usernames=$(aws iam list-users --query "Users[?contains(UserName, 'nightly')].UserName" --output text)
+
+read -r -a usernames_array <<< "$usernames"
+
+for username in "${usernames_array[@]}"
+do
+    echo "Processing user: $username"
+
+    attached_policy_arns=$(aws iam list-attached-user-policies --user-name "$username" --query 'AttachedPolicies[].PolicyArn' --output text)
+    if [ -n "$attached_policy_arns" ]; then
+        read -r -a attached_policy_arns_array <<< "$attached_policy_arns"
+        for policy_arn in "${attached_policy_arns_array[@]}"
+        do
+            echo "Detaching policy $policy_arn from user $username"
+            aws iam detach-user-policy --user-name "$username" --policy-arn "$policy_arn"
+        done
+    fi
+
+    inline_policy_names=$(aws iam list-user-policies --user-name "$username" --query 'PolicyNames' --output text)
+    if [ -n "$inline_policy_names" ]; then
+        read -r -a inline_policy_names_array <<< "$inline_policy_names"
+        for policy_name in "${inline_policy_names_array[@]}"
+        do
+            echo "Deleting inline policy $policy_name from user $username"
+            aws iam delete-user-policy --user-name "$username" --policy-name "$policy_name"
+        done
+    fi
+
+    # Delete access keys for the user
+    access_key_ids=$(aws iam list-access-keys --user-name "$username" --query 'AccessKeyMetadata[].AccessKeyId' --output text)
+    if [ -n "$access_key_ids" ]; then
+        read -r -a access_key_ids_array <<< "$access_key_ids"
+        for access_key_id in "${access_key_ids_array[@]}"
+        do
+            echo "Deleting access key $access_key_id for user $username"
+            aws iam delete-access-key --user-name "$username" --access-key-id "$access_key_id"
+        done
+    fi
+
+    echo "Deleting user: $username"
+    aws iam delete-user --user-name "$username"
+done
 
 echo "Deleting IAM Roles"
 # Detach permissions and profile instances and delete IAM roles
@@ -41,7 +86,7 @@ do
 
     for policy_arn in "${policy_arns_array[@]}"
     do
-        echo "Deleting inline policy: $policy_arn"
+        echo "Deleting policy: $policy_arn"
         aws iam delete-role-policy --role-name "$role_arn" --policy-name "$policy_arn"
     done
 
@@ -56,28 +101,18 @@ do
 
     echo "Deleting role: $role_arn"
     aws iam delete-role --role-name "$role_arn"
+
 done
 
 echo "Deleting IAM Policies"
-# Detach and delete Policies
+# Delete Policies
 iam_policies=$(aws iam list-policies --query "Policies[?contains(PolicyName, 'nightly')].Arn" --output text)
 
 read -r -a iam_policies_array <<< "$iam_policies"
 
 for iam_policy in "${iam_policies_array[@]}"
 do
-    echo "Detaching and deleting policy: $iam_policy"
-    # List entities the policy is attached to and detach it from each entity
-    entities=$(aws iam list-entities-for-policy --policy-arn "$iam_policy" --query 'PolicyRoles[].RoleName' --output text)
-    read -r -a entities_array <<< "$entities"
-
-    for entity in "${entities_array[@]}"
-    do
-        echo "Detaching policy from role: $entity"
-        aws iam detach-role-policy --role-name "$entity" --policy-arn "$iam_policy"
-    done
-
-    # Now that the policy is detached from all entities, delete it
+    echo "Deleting policy: $iam_policy"
     aws iam delete-policy --policy-arn "$iam_policy"
 done
 
