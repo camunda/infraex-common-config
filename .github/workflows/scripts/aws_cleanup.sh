@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euxo pipefail
+# set -euxo pipefail
 
 # This script deletes additional AWS resources based on specified criteria.
 
