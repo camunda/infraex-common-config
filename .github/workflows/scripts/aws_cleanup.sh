@@ -18,6 +18,51 @@ echo "Deleting additional resources in the $region region..."
 echo "Deleting additional resources..."
 # KMS keys can't be deleted due to resource policies, requires manual intervention
 
+echo "Deleting IAM Users"
+# Delete Users
+usernames=$(aws iam list-users --query "Users[?contains(UserName, 'nightly')].UserName" --output text)
+
+read -r -a usernames_array <<< "$usernames"
+
+for username in "${usernames_array[@]}"
+do
+    echo "Processing user: $username"
+
+    attached_policy_arns=$(aws iam list-attached-user-policies --user-name "$username" --query 'AttachedPolicies[].PolicyArn' --output text)
+    if [ -n "$attached_policy_arns" ]; then
+        read -r -a attached_policy_arns_array <<< "$attached_policy_arns"
+        for policy_arn in "${attached_policy_arns_array[@]}"
+        do
+            echo "Detaching policy $policy_arn from user $username"
+            aws iam detach-user-policy --user-name "$username" --policy-arn "$policy_arn"
+        done
+    fi
+
+    inline_policy_names=$(aws iam list-user-policies --user-name "$username" --query 'PolicyNames' --output text)
+    if [ -n "$inline_policy_names" ]; then
+        read -r -a inline_policy_names_array <<< "$inline_policy_names"
+        for policy_name in "${inline_policy_names_array[@]}"
+        do
+            echo "Deleting inline policy $policy_name from user $username"
+            aws iam delete-user-policy --user-name "$username" --policy-name "$policy_name"
+        done
+    fi
+
+    # Delete access keys for the user
+    access_key_ids=$(aws iam list-access-keys --user-name "$username" --query 'AccessKeyMetadata[].AccessKeyId' --output text)
+    if [ -n "$access_key_ids" ]; then
+        read -r -a access_key_ids_array <<< "$access_key_ids"
+        for access_key_id in "${access_key_ids_array[@]}"
+        do
+            echo "Deleting access key $access_key_id for user $username"
+            aws iam delete-access-key --user-name "$username" --access-key-id "$access_key_id"
+        done
+    fi
+
+    echo "Deleting user: $username"
+    aws iam delete-user --user-name "$username"
+done
+
 echo "Deleting IAM Roles"
 # Detach permissions and profile instances and delete IAM roles
 role_arns=$(aws iam list-roles --query "Roles[?contains(RoleName, 'nightly')].RoleName" --output text)

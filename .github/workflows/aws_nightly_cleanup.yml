@@ -99,6 +99,8 @@ jobs:
         needs:
             - aws-nightly-cleanup
         steps:
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
             - name: Notify in Slack in case of failure
               id: slack-notification
               if: github.event_name == 'schedule'
