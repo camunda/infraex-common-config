@@ -32,6 +32,7 @@ jobs:
                   vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
                   vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
+                  skip-token-revoke: false # as we may have pipelines running for more than one hour, we don't want to inherit the default 1h expiration delay (see https://github.com/actions/create-github-app-token/issues/128)
 
             - name: Check author and type of change
               id: check-major
