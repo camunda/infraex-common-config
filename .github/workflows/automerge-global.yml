@@ -21,7 +21,8 @@ jobs:
 
             - name: Generate token for GitHub
               id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@279d811fedce4dedc973f74f7e520513fc01ca29 # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+              # TODO: once gha merged, use the pinned version, do not merge like that
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@feature/move-to-official-gh-token
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -46,15 +47,14 @@ jobs:
                     exit 0
                   fi
 
-                  : # prevent major changes from auto merge
-                  branch_name="$(git rev-parse --abbrev-ref HEAD)"
-                  if echo "$branch_name" | grep -q -i 'major'; then
+                  labels_json=$(gh pr view ${{ github.event.pull_request.number }} --json labels)
+                  if echo "$labels_json" | jq -e '.labels[] | select(.name == "upgrade:major")' > /dev/null; then
                     echo "This PR is related to major changes. Skipping approval and auto-merge."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
                     exit 0
                   else
-                    echo "This PR does not involve major changes."
-                    echo "skip=false" | tee -a "$GITHUB_ENV"
+                      echo "The label 'upgrade:major' is not present. Proceeding with approval and auto-merge."
+                      echo "skip=false" | tee -a "$GITHUB_ENV"
                   fi
               env:
                   GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
