@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@279d811fedce4dedc973f74f7e520513fc01ca29     # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@79e29fb829958fe05ed5014e564ec6b814bd3619 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -41,8 +41,7 @@ jobs:
                   vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
 
-
-            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332     # v4
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
               if: env.autofix_pr == 'true'
               # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
@@ -50,19 +49,19 @@ jobs:
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
                   ref: ${{ github.event.pull_request.head.ref }}
 
-            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332     # v4
+            - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
               if: env.autofix_pr == 'false'
 
             - name: Install tooling using asdf
-              uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6   # v3
+              uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
 
-            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd   # v3.0.1
+            - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
               with:
                   extra_args: --all-files --verbose
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
-              uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd     # v3.0.1
+              uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               if: always() && env.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:

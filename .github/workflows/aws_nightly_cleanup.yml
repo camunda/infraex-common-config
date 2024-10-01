@@ -44,7 +44,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
 
-        # Official action does not support profiles
+            # Official action does not support profiles
             - name: Add profile credentials to ~/.aws/credentials
               run: |
                   aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
@@ -56,9 +56,9 @@ jobs:
                   wget https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
                   chmod +x cloud-nuke_linux_amd64
 
-        # This is likely to fail, therefore we ignore the error
-        # We're ignoring ec2_dhcp_option as they couldn't be deleted
-        # cloudtrail is managed by IT and can't be deleted either
+            # This is likely to fail, therefore we ignore the error
+            # We're ignoring ec2_dhcp_option as they couldn't be deleted
+            # cloudtrail is managed by IT and can't be deleted either
             - name: Run Cloud Nuke
               timeout-minutes: 45
               env:
@@ -73,12 +73,12 @@ jobs:
                   --exclude-resource-type s3 \
                   --exclude-resource-type cloudtrail || true
 
-        # Following will delete global resources and things that cloud-nuke does not support
+            # Following will delete global resources and things that cloud-nuke does not support
             - name: Delete additional AWS resources
               timeout-minutes: 15
               run: .github/workflows/scripts/aws_cleanup.sh "${{ env.AWS_REGION }}"
 
-        # The second run should remove the remaining resources (VPCs) and fail if there's anything left
+            # The second run should remove the remaining resources (VPCs) and fail if there's anything left
             - name: Run Cloud Nuke
               timeout-minutes: 45
               env:

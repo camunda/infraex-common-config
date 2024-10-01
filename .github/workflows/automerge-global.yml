@@ -50,14 +50,13 @@ jobs:
               if: env.skip == 'false'
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  ignore_pattern: renovate-automerge / approve-and-auto-merge   # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
-                  delay: 30s   # wait 30s before checking
+                  ignore_pattern: renovate-automerge / approve-and-auto-merge # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
+                  delay: 30s # wait 30s before checking
                   timeout: 10800 # 3 hours timeout
 
             - name: Generate token for GitHub
               id: generate-github-token
-              # TODO: once gha merged, use the pinned version, do not merge like that
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@feature/move-to-official-gh-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@79e29fb829958fe05ed5014e564ec6b814bd3619 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
