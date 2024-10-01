@@ -73,12 +73,12 @@ jobs:
                   --exclude-resource-type s3 \
                   --exclude-resource-type cloudtrail || true
 
-        # Following will delete regional resources that cloud-nuke does not support
+            # Following will delete regional resources that cloud-nuke does not support
             - name: Delete additional regional AWS resources
               timeout-minutes: 15
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
 
-        # Following will delete global resources that cloud-nuke does not support
+            # Following will delete global resources that cloud-nuke does not support
             - name: Delete additional global AWS resources
               # Only run in a single matrix run
               if: ${{ env.AWS_REGION == 'eu-west-2' }}
