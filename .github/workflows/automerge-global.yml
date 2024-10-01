@@ -19,19 +19,6 @@ jobs:
             - name: Checkout Repository
               uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
 
-            - name: Generate token for GitHub
-              id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@279d811fedce4dedc973f74f7e520513fc01ca29 # f5bbd25c97507d6d2a884eebecaa804a6e34b15f
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
             - name: Check author and type of change
               id: check-major
               run: |
@@ -46,27 +33,39 @@ jobs:
                     exit 0
                   fi
 
-                  : # prevent major changes from auto merge
-                  branch_name="$(git rev-parse --abbrev-ref HEAD)"
-                  if echo "$branch_name" | grep -q -i 'major'; then
+                  labels_json=$(gh pr view ${{ github.event.pull_request.number }} --json labels)
+                  if echo "$labels_json" | jq -e '.labels[] | select(.name == "upgrade:major")' > /dev/null; then
                     echo "This PR is related to major changes. Skipping approval and auto-merge."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
                     exit 0
                   else
-                    echo "This PR does not involve major changes."
-                    echo "skip=false" | tee -a "$GITHUB_ENV"
+                      echo "The label 'upgrade:major' is not present. Proceeding with approval and auto-merge."
+                      echo "skip=false" | tee -a "$GITHUB_ENV"
                   fi
               env:
-                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Wait for other checks to succeed
               uses: poseidon/wait-for-status-checks@6988432d64ad3f9c2608db4ca16fded1b7d36ead # v0.5.0
               if: env.skip == 'false'
               with:
-                  token: ${{ steps.generate-github-token.outputs.token }}
-                  ignore_pattern: renovate-automerge / approve-and-auto-merge   # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
-                  delay: 30s   # wait 30s before checking
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  ignore_pattern: renovate-automerge / approve-and-auto-merge # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
+                  delay: 30s # wait 30s before checking
                   timeout: 10800 # 3 hours timeout
+
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@79e29fb829958fe05ed5014e564ec6b814bd3619 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
 
             - name: Approve Pull Request and auto-merge
               if: env.skip == 'false'
