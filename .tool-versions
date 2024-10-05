@@ -1,5 +1,5 @@
 pre-commit 3.8.0
 
-python 3.12.6
+python 3.12.7
 
 shellcheck 0.10.0
