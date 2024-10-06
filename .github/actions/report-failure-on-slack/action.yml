@@ -36,7 +36,7 @@ runs:
         - name: Generate token for GitHub
           id: generate-github-token
           if: ${{ inputs.disable_silence_check == 'false' }}
-          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f401ac1b10dc547cedead5b61055ec838782996e # main
+          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8a68f36933b77338ddde36d5b6f8fb8f9aad6cc3 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
               github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
