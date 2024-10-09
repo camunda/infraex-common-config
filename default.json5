@@ -133,7 +133,7 @@
         "^justfile$"
         ],
       matchStrings: [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?<currentValue>.*)",
+        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?:\\s\\.)?(?<currentValue>.*)",
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?- (?<currentValue>.*)",
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?: (?<currentValue>.*)",
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=\"(?<currentValue>.*)\"",
