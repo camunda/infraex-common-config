@@ -17,7 +17,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+              uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
 
             - name: Check author and type of change
               id: check-major
@@ -56,7 +56,7 @@ jobs:
 
             - name: Generate token for GitHub
               id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8a68f36933b77338ddde36d5b6f8fb8f9aad6cc3 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@adc932a586d745b8a147a7f52117e683d5c59b54 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
