@@ -53,7 +53,11 @@ jobs:
 
             - name: Install Cloud Nuke
               run: |
-                  wget https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
+                  curl -LO \
+                    --retry 5 \
+                    --max-time 15 \
+                    --retry-delay 30 \
+                    https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
                   chmod +x cloud-nuke_linux_amd64
 
             # This is likely to fail, therefore we ignore the error
