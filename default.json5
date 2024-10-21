@@ -103,7 +103,7 @@
     // "v1.2.3" and where the asdf plugin ignores the "v" prefix, we also tell
     // Renovate to ignore it via extractVersion when updating .tool-version file
     {
-      matchFileNames: ["**/.tool-versions", "**/*.tf"],
+      matchFileNames: ["**/.tool-versions", "**/*.tf", "**/*.tfvars"],
       matchPackageNames: [
         "eksctl-io/eksctl",
         "hashicorp/terraform",
@@ -113,6 +113,11 @@
         "rhysd/actionlint",
       ],
       extractVersion: "^v(?<version>.*)$",
+    },
+    {
+      "matchDatasources": ["endoflife-date"],
+      "matchPackageNames": ["amazon-eks"],
+      "extractVersion": "^(?<version>.*)-eks.+$"
     },
   ],
   "customDatasources": {
@@ -125,10 +130,12 @@
    {
       customType: "regex",
       fileMatch: [
-        "\.yml",
-        "\.sh",
-        "\.go",
-        "\.tf",
+        "\.yaml$",
+        "\.yml$",
+        "\.sh$",
+        "\.go$",
+        "\.tf$",
+        "\.tfvars$",
         "\.tool-versions$",
         "^justfile$"
         ],
