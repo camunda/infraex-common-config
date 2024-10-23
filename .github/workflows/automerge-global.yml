@@ -15,6 +15,8 @@ jobs:
     # do not change the name
     approve-and-auto-merge:
         runs-on: ubuntu-latest
+        # only trigger on a renovate branch
+        if: contains(github.head_ref || github.ref, 'renovate/')
         steps:
             - name: Checkout Repository
               uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
