@@ -86,7 +86,7 @@ if [ -n "$role_arns" ]; then
     for role_arn in "${role_arns_array[@]}"
     do
         # Skip roles prefixed that we want to keep
-        if [[ "$role_arn" == AWS* || "$role_arn" == transformSlackToC8*  || "$role_arn" == rds-monitoring-role* || "$role_arn" == medicAbsenceFormToJsonData* || "$role_arn" == AmazonEKS* || "$role_arn" == lambda_exec_role* || "$role_arn" == ManagedOpenShift* || "$role_arn" == OrganizationAccountAccessRole* || "$role_arn" == aws-ec2-spot-fleet-tagging-role* ]]; then
+        if [[ "$role_arn" == AWS* || "$role_arn" == AmazonEKS* || "$role_arn" == lambda_exec_role* || "$role_arn" == ManagedOpenShift* || "$role_arn" == OrganizationAccountAccessRole* || "$role_arn" == aws-ec2-spot-fleet-tagging-role* ]]; then
             echo "Skipping role: $role_arn"
             continue
         fi
