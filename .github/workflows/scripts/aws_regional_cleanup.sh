@@ -16,7 +16,7 @@ echo "Deleting additional resources in the $region region..."
 
 echo "Deleting OIDC Providers"
 # Delete OIDC Provider
-oidc_providers=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, '$region')].Arn" --output text)
+oidc_providers=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, '$region')].Arn" --output text --no-paginate)
 
 read -r -a oidc_providers_array <<< "$oidc_providers"
 
@@ -28,7 +28,7 @@ done
 
 echo "Deleting VPC Peering Connections"
 # Delete VPC Peering Connection
-peering_connection_ids=$(aws ec2 describe-vpc-peering-connections --region "$region" --query "VpcPeeringConnections[?Status.Code == 'active' && Tags[?contains(Value, 'nightly')]]".VpcPeeringConnectionId --output text)
+peering_connection_ids=$(aws ec2 describe-vpc-peering-connections --region "$region" --query "VpcPeeringConnections[?Status.Code == 'active']]".VpcPeeringConnectionId --output text --no-paginate)
 
 read -r -a peering_connection_ids_array <<< "$peering_connection_ids"
 

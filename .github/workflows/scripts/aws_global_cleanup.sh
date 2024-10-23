@@ -28,7 +28,7 @@ echo "Deleting additional global resources..."
 
 echo "Deleting IAM Users"
 # Delete Users
-usernames=$(aws iam list-users --query "Users[].UserName" --output text)
+usernames=$(aws iam list-users --query "Users[].UserName" --output text --no-paginate)
 
 if [ -n "$usernames" ]; then
     read -r -a usernames_array <<< "$usernames"
@@ -41,7 +41,7 @@ if [ -n "$usernames" ]; then
         fi
 
         echo "Processing user: $username"
-        attached_policy_arns=$(aws iam list-attached-user-policies --user-name "$username" --query 'AttachedPolicies[].PolicyArn' --output text)
+        attached_policy_arns=$(aws iam list-attached-user-policies --user-name "$username" --query 'AttachedPolicies[].PolicyArn' --output text --no-paginate)
         if [ -n "$attached_policy_arns" ]; then
             read -r -a attached_policy_arns_array <<< "$attached_policy_arns"
             for policy_arn in "${attached_policy_arns_array[@]}"
@@ -51,7 +51,7 @@ if [ -n "$usernames" ]; then
             done
         fi
 
-        inline_policy_names=$(aws iam list-user-policies --user-name "$username" --query 'PolicyNames' --output text)
+        inline_policy_names=$(aws iam list-user-policies --user-name "$username" --query 'PolicyNames' --output text  --no-paginate)
         if [ -n "$inline_policy_names" ]; then
             read -r -a inline_policy_names_array <<< "$inline_policy_names"
             for policy_name in "${inline_policy_names_array[@]}"
@@ -61,7 +61,7 @@ if [ -n "$usernames" ]; then
             done
         fi
 
-        access_key_ids=$(aws iam list-access-keys --user-name "$username" --query 'AccessKeyMetadata[].AccessKeyId' --output text)
+        access_key_ids=$(aws iam list-access-keys --user-name "$username" --query 'AccessKeyMetadata[].AccessKeyId' --output text --no-paginate)
         if [ -n "$access_key_ids" ]; then
             read -r -a access_key_ids_array <<< "$access_key_ids"
             for access_key_id in "${access_key_ids_array[@]}"
@@ -78,7 +78,7 @@ fi
 
 echo "Deleting IAM Roles"
 # Detach permissions and profile instances and delete IAM roles
-role_arns=$(aws iam list-roles --query "Roles[].RoleName" --output text)
+role_arns=$(aws iam list-roles --query "Roles[].RoleName" --output text --no-paginate)
 
 if [ -n "$role_arns" ]; then
     read -r -a role_arns_array <<< "$role_arns"
@@ -92,7 +92,7 @@ if [ -n "$role_arns" ]; then
         fi
 
         echo "Removing instance profiles and policies of role: $role_arn"
-        attached_policy_arns=$(aws iam list-attached-role-policies --role-name "$role_arn" --query 'AttachedPolicies[].PolicyArn' --output text)
+        attached_policy_arns=$(aws iam list-attached-role-policies --role-name "$role_arn" --query 'AttachedPolicies[].PolicyArn' --output text --no-paginate)
 
         if [ -n "$attached_policy_arns" ]; then
             read -r -a attached_policy_arns_array <<< "$attached_policy_arns"
@@ -103,7 +103,7 @@ if [ -n "$role_arns" ]; then
                 execute_or_simulate "aws iam detach-role-policy --role-name $role_arn --policy-arn $policy_arn"
             done
 
-            policy_arns=$(aws iam list-role-policies --role-name "$role_arn" --query 'PolicyNames' --output text)
+            policy_arns=$(aws iam list-role-policies --role-name "$role_arn" --query 'PolicyNames' --output text --no-paginate)
             if [ -n "$policy_arns" ]; then
                 read -r -a policy_arns_array <<< "$policy_arns"
 
@@ -114,7 +114,7 @@ if [ -n "$role_arns" ]; then
                 done
             fi
 
-            instance_profile_arns=$(aws iam list-instance-profiles-for-role --role-name "$role_arn" --query 'InstanceProfiles[].InstanceProfileName' --output text)
+            instance_profile_arns=$(aws iam list-instance-profiles-for-role --role-name "$role_arn" --query 'InstanceProfiles[].InstanceProfileName' --output text --no-paginate)
 
             if [ -n "$instance_profile_arns" ]; then
                 read -r -a instance_profile_arns_array <<< "$instance_profile_arns"
@@ -134,7 +134,7 @@ fi
 
 echo "Deleting IAM Policies"
 # Delete Policies
-iam_policies=$(aws iam list-policies --query "Policies[].Arn" --output text)
+iam_policies=$(aws iam list-policies --query "Policies[].Arn" --output text --no-paginate)
 
 if [ -n "$iam_policies" ]; then
     read -r -a iam_policies_array <<< "$iam_policies"
@@ -153,7 +153,7 @@ if [ -n "$iam_policies" ]; then
 fi
 
 echo "Deleting nightly S3 Buckets"
-bucket_ids=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'nightly')].Name" --output text)
+bucket_ids=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'nightly')].Name" --output text --no-paginate)
 
 if [ -n "$bucket_ids" ]; then
     read -r -a buckets <<< "$bucket_ids"
@@ -169,7 +169,7 @@ if [ -n "$bucket_ids" ]; then
 fi
 
 echo "Deleting IAM Identity Providers"
-identity_providers=$(aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[].Arn' --output text)
+identity_providers=$(aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[].Arn' --output text --no-paginate)
 
 if [ -n "$identity_providers" ]; then
     read -r -a identity_providers_array <<< "$identity_providers"
