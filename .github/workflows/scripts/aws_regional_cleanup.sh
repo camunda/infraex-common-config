@@ -28,7 +28,7 @@ done
 
 echo "Deleting VPC Peering Connections"
 # Delete VPC Peering Connection
-peering_connection_ids=$(aws ec2 describe-vpc-peering-connections --region "$region" --query "VpcPeeringConnections[?Status.Code == 'active']]".VpcPeeringConnectionId --output text --no-paginate)
+peering_connection_ids=$(aws ec2 describe-vpc-peering-connections --region "$region" --query "VpcPeeringConnections[?Status.Code == 'active']".VpcPeeringConnectionId --output text --no-paginate)
 
 read -r -a peering_connection_ids_array <<< "$peering_connection_ids"
 
