@@ -175,7 +175,7 @@ if [ -n "$iam_policies" ]; then
     for iam_policy in "${iam_policies_array[@]}"
     do
         # Skip policies prefixed that we veulent garder
-        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
+        if [[ "$iam_policy" == */AdministratorAccess* || "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
             echo "Skipping policy: $iam_policy"
             continue
         fi
