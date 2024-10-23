@@ -21,6 +21,11 @@ env:
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.37.2
 
+# limit to a single execution per ref of this workflow
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     aws-nightly-cleanup:
         runs-on: ubuntu-latest
