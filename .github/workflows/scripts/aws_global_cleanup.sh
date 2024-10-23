@@ -167,7 +167,7 @@ fi
 
 echo "Deleting IAM Policies"
 # Delete Policies
-iam_policies=$(paginate "aws iam list-policies" "Policies[].Arn")
+iam_policies=$(paginate "aws iam list-policies --scope Local" "Policies[].Arn")
 
 if [ -n "$iam_policies" ]; then
     read -r -a iam_policies_array <<< "$iam_policies"
@@ -175,7 +175,7 @@ if [ -n "$iam_policies" ]; then
     for iam_policy in "${iam_policies_array[@]}"
     do
         # Skip policies prefixed that we want to keep
-        if [[ "$iam_policy" == */PowerUserAccess* ||  "$iam_policy" == */AdministratorAccess* || "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
+        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
             echo "Skipping policy: $iam_policy"
             continue
         fi
