@@ -142,7 +142,7 @@ if [ -n "$role_arns" ]; then
 
                 for policy_name in "${policy_arns_array[@]}"
                 do
-                    echo "Deleting policy: $policy_name"
+                    echo "Deleting role policy: $policy_name"
                     execute_or_simulate "aws iam delete-role-policy --role-name $role_arn --policy-name $policy_name"
                 done
             fi
@@ -175,7 +175,7 @@ if [ -n "$iam_policies" ]; then
     for iam_policy in "${iam_policies_array[@]}"
     do
         # Skip policies prefixed that we veulent garder
-        if [[ "$iam_policy" == AWS* || "$iam_policy" == AmazonEKS* || "$iam_policy" == ManagedOpenShift* || "$iam_policy" == OrganizationAccountAccessRole* ]]; then
+        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
             echo "Skipping policy: $iam_policy"
             continue
         fi
