@@ -12,6 +12,8 @@ on:
     pull_request:
         paths:
             - .github/workflows/aws_nightly_cleanup.yml
+            - .github/workflows/scripts/aws_global_cleanup.sh
+            - .github/workflows/scripts/aws_regional_cleanup.sh
 
 env:
     AWS_PROFILE: infex
