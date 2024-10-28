@@ -81,7 +81,7 @@ jobs:
             # We're ignoring ec2_dhcp_option as they couldn't be deleted
             # cloudtrail is managed by IT and can't be deleted either
             - name: Run Cloud Nuke
-              timeout-minutes: 45
+              timeout-minutes: 90
               env:
                   DISABLE_TELEMETRY: 'true'
               run: |
@@ -96,7 +96,7 @@ jobs:
 
             # The second run should remove the remaining resources (VPCs) and fail if there's anything left
             - name: Run Cloud Nuke
-              timeout-minutes: 45
+              timeout-minutes: 90
               env:
                   DISABLE_TELEMETRY: 'true'
               run: |
