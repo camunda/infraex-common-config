@@ -37,6 +37,9 @@
     addLabels: ["security"], // Security alerts should be handled manually to assess the consequences.
     enabled: true,
   },
+  lockFileMaintenance: {
+    enabled: true
+  },
   packageRules: [
     {
       "groupName": "minor-grouped",
