@@ -101,7 +101,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
 
-            # Add profile credentials
+            # Official action does not support profiles
             - name: Add profile credentials to ~/.aws/credentials
               run: |
                   aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
