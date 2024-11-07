@@ -71,25 +71,33 @@ jobs:
             - name: Check if job should run based on the day
               id: day-check
               run: |
+                  # Initialize a variable to determine if the job should continue
+                  should_run=true
+
                   # If it's a workflow_dispatch, only allow the first region (eu-west-2) of the matrix to run
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-
                       if [[ "${{ matrix.config.region }}" != "eu-west-2" ]]; then
                           echo "Skipping job for this region because only the first region is allowed to run for workflow_dispatch."
-                          exit 0
+                          should_run=false
+                      else
+                          echo "Running job for the first region only since it's a workflow_dispatch event."
                       fi
-                      echo "Running job for the first region only since it's a workflow_dispatch event."
                   else
-                      # otherwise, check the day match the one in the matrix
+                      # Otherwise, check if the day matches the one in the matrix
                       current_day=$(date +%A)
                       if [[ "${{ matrix.config.day }}" != "All" && "${{ matrix.config.day }}" != "$current_day" ]]; then
                           echo "Skipping job for region ${{ env.AWS_REGION }} as it’s intended for ${{ matrix.config.day }} only."
-                          exit 0
+                          should_run=false
+                      else
+                          echo "Running job for region ${{ env.AWS_REGION }} on the correct day: $current_day."
                       fi
                   fi
 
+                  echo "should_run=$should_run" | tee -a "$GITHUB_ENV"
+
             - name: Import Secrets
               id: secrets
+              if: ${{ env.should_run == 'true' }}
               uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
               with:
                   url: ${{ secrets.VAULT_ADDR }}
@@ -103,12 +111,14 @@ jobs:
 
             # Official action does not support profiles
             - name: Add profile credentials to ~/.aws/credentials
+              if: ${{ env.should_run == 'true' }}
               run: |
                   aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
                   aws configure set aws_secret_access_key ${{ steps.secrets.outputs.AWS_SECRET_KEY }} --profile ${{ env.AWS_PROFILE }}
                   aws configure set region ${{ env.AWS_REGION }} --profile ${{ env.AWS_PROFILE }}
 
             - name: Install Cloud Nuke
+              if: ${{ env.should_run == 'true' }}
               run: |
                   curl -LO \
                     --retry 5 \
@@ -119,11 +129,12 @@ jobs:
 
             - name: Delete additional regional AWS resources
               timeout-minutes: 15
+              if: ${{ env.should_run == 'true' }}
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
 
             - name: Delete additional global AWS resources
               # Only run in a single time per week
-              if: ${{ env.AWS_REGION == 'eu-north-1' }}
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
               timeout-minutes: 15
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
@@ -134,6 +145,7 @@ jobs:
               timeout-minutes: 90
               env:
                   DISABLE_TELEMETRY: 'true'
+              if: ${{ env.should_run == 'true' }}
               run: |
                   ./cloud-nuke_linux_amd64 aws \
                   --region ${{ env.AWS_REGION }} \
@@ -149,6 +161,7 @@ jobs:
               timeout-minutes: 90
               env:
                   DISABLE_TELEMETRY: 'true'
+              if: ${{ env.should_run == 'true' }}
               run: |
                   ./cloud-nuke_linux_amd64 aws \
                   --region ${{ env.AWS_REGION }} \
