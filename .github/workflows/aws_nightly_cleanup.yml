@@ -1,13 +1,17 @@
 ---
-name: AWS Nightly Cleanup of test regions
+name: AWS Scheduled Cleanup of test regions
 
 on:
     schedule:
+        # Single daily schedule at 5:00
         - cron: 0 5 * * *
     workflow_dispatch:
         inputs:
+            region:
+                description: AWS Region to clean up
+                default: eu-west-2
             cleanup_older_than:
-                description: Minimum age of the ressources to cleanup
+                description: Minimum age of the resources to cleanup
                 default: 12h
     pull_request:
         paths:
@@ -17,26 +21,72 @@ on:
 
 env:
     AWS_PROFILE: infex
-    CLEANUP_OLDER_THAN: ${{ github.event.inputs.cleanup_older_than || '12h' }}
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.37.2
 
-# limit to a single execution per ref of this workflow
+# Limit workflow to a single execution per ref
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
 jobs:
-    aws-nightly-cleanup:
+    aws-cleanup:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false # don't propagate failing jobs
             matrix:
-                aws_test_regions: [eu-west-2, eu-west-3]
-        env:
-            AWS_REGION: ${{ matrix.aws_test_regions }}
+                # Define regions and types of cleanup based on day
+                # Please also update the README.md of the project
+                config:
+                    - region: eu-west-2
+                      day: All
+                      cleanup_older_than: 12h
+                    - region: eu-west-3
+                      day: All
+                      cleanup_older_than: 12h
+                    - region: eu-north-1
+                      day: Saturday
+                      cleanup_older_than: 0h
+                    - region: us-east-1
+                      day: Saturday
+                      cleanup_older_than: 0h
+
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+            - name: Determine AWS_REGION and CLEANUP_OLDER_THAN
+              id: determine-values
+              run: |
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      AWS_REGION="${{ github.event.inputs.region }}"
+                      CLEANUP_OLDER_THAN="${{ github.event.inputs.cleanup_older_than }}"
+                  else
+                      AWS_REGION="${{ matrix.config.region }}"
+                      CLEANUP_OLDER_THAN="${{ matrix.config.cleanup_older_than }}"
+                  fi
+
+                  echo "AWS_REGION=$AWS_REGION" | tee -a "$GITHUB_ENV"
+                  echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
+
+            - name: Check if job should run based on the day
+              id: day-check
+              run: |
+                  # If it's a workflow_dispatch, only allow the first region (eu-west-2) of the matrix to run
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+
+                      if [[ "${{ matrix.config.region }}" != "eu-west-2" ]]; then
+                          echo "Skipping job for this region because only the first region is allowed to run for workflow_dispatch."
+                          exit 0
+                      fi
+                      echo "Running job for the first region only since it's a workflow_dispatch event."
+                  else
+                      # otherwise, check the day match the one in the matrix
+                      current_day=$(date +%A)
+                      if [[ "${{ matrix.config.day }}" != "All" && "${{ matrix.config.day }}" != "$current_day" ]]; then
+                          echo "Skipping job for region ${{ env.AWS_REGION }} as it’s intended for ${{ matrix.config.day }} only."
+                          exit 0
+                      fi
+                  fi
 
             - name: Import Secrets
               id: secrets
@@ -51,7 +101,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
 
-            # Official action does not support profiles
+            # Add profile credentials
             - name: Add profile credentials to ~/.aws/credentials
               run: |
                   aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
@@ -72,8 +122,8 @@ jobs:
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
 
             - name: Delete additional global AWS resources
-              # Only run in a single matrix run
-              if: ${{ env.AWS_REGION == 'eu-west-2' }}
+              # Only run in a single time per week
+              if: ${{ env.AWS_REGION == 'eu-north-1' }}
               timeout-minutes: 15
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
@@ -113,7 +163,7 @@ jobs:
         runs-on: ubuntu-latest
         if: failure()
         needs:
-            - aws-nightly-cleanup
+            - aws-cleanup
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
