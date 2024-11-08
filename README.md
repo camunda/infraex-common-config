@@ -15,30 +15,44 @@ Create a file `.github/renovate.json5`:
 }
 ```
 
-### Test Regions of Cloud Providers
+### Region Usage for Cloud Providers
 
-Test regions are designated for Continuous Integration (CI) tests and are deleted nightly as part of routine maintenance. Please ensure that you utilize these regions for CI tests.
+#### CI Regions
 
-#### AWS Regions
+CI Regions are designated specifically for **Continuous Integration (CI) tests**. Resources in these regions are deleted nightly as part of routine maintenance. Please ensure that these regions are used exclusively for CI-related tests.
 
-| Region     | Identifier |
-|------------|------------|
-| EU (London)| eu-west-2  |
-| EU (Paris) | eu-west-3  |
+##### AWS Regions
 
-### Permanent Regions
+| Region     | Identifier | Cleanup Schedule |
+|------------|------------|------------------|
+| EU (London)| eu-west-2  | Daily @5AM       |
+| EU (Paris) | eu-west-3  | Daily @5AM       |
 
-These regions are designated for so-called permanent resources like S3 buckets, lambda functions, reference architectures... anything that is out of the scope of testing.
 
-These are not cleaned up by the mentioned CI test above.
+#### Weekly Work Regions
 
-Here we differentiate between the use cases and have reference architectures outside of other permanent resources. This allows to potentially clean things up easier and have a better understanding on what belongs where.
+Weekly Work Regions provide a **temporary environment** for projects that require resources to be retained for the duration of a work week. These regions are ideal for projects that span multiple days without requiring nightly cleanup.
 
-All of this is kept in [Terraform](https://github.com/camunda/infraex-terraform/tree/main/aws).
+To keep the environment organized, all resources in these regions are automatically cleaned up every week. This ensures that resources do not persist beyond their intended use, making the regions ready for new projects each week.
 
-#### AWS Regions
+##### AWS Regions
 
-| Region        | Identifier    | Use Case                |
-|---------------|---------------|-------------------------|
-| EU (Frankfurt)| eu-central-1  | permanent resources     |
-| EU (Ireland)  | eu-west-1     | reference architectures |
+| Region              | Identifier   | Cleanup Schedule |
+|---------------------|--------------|------------------|
+| EU (Stockholm)      | eu-north-1   | Saturday @5AM    |
+| US East (N. Virginia) | us-east-1 | Saturday @5AM    |
+
+#### Permanent Regions
+
+Permanent Regions are designated for **persistent resources** that fall outside the scope of CI testing. This includes resources such as S3 buckets, Lambda functions, and reference architectures, all of which are critical for ongoing infrastructure and operational requirements.
+
+To facilitate resource management, we distinguish between **reference architectures** and other permanent resources, allowing for easier cleanup and a clearer understanding of resource allocation.
+
+All configurations are maintained in [Terraform](https://github.com/camunda/infraex-terraform/tree/main/aws).
+
+##### AWS Regions
+
+| Region         | Identifier   | Use Case                |
+|----------------|--------------|-------------------------|
+| EU (Frankfurt) | eu-central-1 | Permanent resources     |
+| EU (Ireland)   | eu-west-1    | Reference architectures |
