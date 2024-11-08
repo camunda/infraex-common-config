@@ -118,7 +118,7 @@ if [ -n "$role_arns" ]; then
     for role_arn in "${role_arns_array[@]}"
     do
         # Skip roles prefixed that we want to keep
-        if [[ "$role_arn" == AWS* || "$role_arn" == AmazonEKS* || "$role_arn" == lambda_exec_role* || "$role_arn" == ManagedOpenShift* || "$role_arn" == OrganizationAccountAccessRole* || "$role_arn" == aws-ec2-spot-fleet-tagging-role* ]]; then
+        if [[ "$role_arn" == AWS* || "$role_arn" == AmazonEKS* || "$role_arn" == lambda_exec_role* || "$role_arn" == ManagedOpenShift* || "$role_arn" == OrganizationAccountAccessRole* || "$role_arn" == aws-ec2-spot-fleet-tagging-role* || "$role_arn" == ref-arch-* ]]; then
             echo "Skipping role: $role_arn"
             continue
         fi
@@ -175,7 +175,7 @@ if [ -n "$iam_policies" ]; then
     for iam_policy in "${iam_policies_array[@]}"
     do
         # Skip policies prefixed that we want to keep
-        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* ]]; then
+        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* || "$iam_policy" == */ref-arch* ]]; then
             echo "Skipping policy: $iam_policy"
             continue
         fi
