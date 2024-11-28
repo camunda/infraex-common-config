@@ -87,10 +87,11 @@ runs:
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
           uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
           with:
-              channel-id: ${{ inputs.slack_channel_id }}
               method: chat.postMessage
+              token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
               payload: |
                   {
+                    "channel" : "${{ inputs.slack_channel_id }}",
                     "unfurl_links": false,
                     "unfurl_media": false,
                     "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
@@ -105,5 +106,4 @@ runs:
                     ]
                   }
           env:
-              SLACK_BOT_TOKEN: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
