@@ -3,7 +3,27 @@
 set -euxo pipefail
 
 # Default value for DRY_RUN is false
-DRY_RUN=false
+DRY_RUN=${DRY_RUN:-false}
+
+SKIP_ROLES=(
+  "AWS*"
+  "AmazonEKS*"
+  "lambda_exec_role*"
+  "ManagedOpenShift*"
+  "OrganizationAccountAccessRole*"
+  "aws-ec2-spot-fleet-tagging-role*"
+  "ref-arch-*"
+  "Wiz*"
+)
+
+SKIP_POLICIES=(
+  "*/AWS*"
+  "*/AmazonEKS*"
+  "*/ManagedOpenShift*"
+  "*/OrganizationAccountAccessRole*"
+  "*/ref-arch*"
+  "*/Wiz*"
+)
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -117,9 +137,17 @@ if [ -n "$role_arns" ]; then
 
     for role_arn in "${role_arns_array[@]}"
     do
+        skip=false
         # Skip roles prefixed that we want to keep
-        if [[ "$role_arn" == AWS* || "$role_arn" == AmazonEKS* || "$role_arn" == lambda_exec_role* || "$role_arn" == ManagedOpenShift* || "$role_arn" == OrganizationAccountAccessRole* || "$role_arn" == aws-ec2-spot-fleet-tagging-role* || "$role_arn" == ref-arch-* ]]; then
-            echo "Skipping role: $role_arn"
+        for pattern in "${SKIP_ROLES[@]}"; do
+            if [[ "$role_arn" == $pattern ]]; then
+                echo "Skipping role: $role_arn"
+                skip=true
+                break
+            fi
+        done
+
+        if [ "$skip" = true ]; then
             continue
         fi
 
@@ -174,9 +202,17 @@ if [ -n "$iam_policies" ]; then
 
     for iam_policy in "${iam_policies_array[@]}"
     do
+        skip=false
         # Skip policies prefixed that we want to keep
-        if [[ "$iam_policy" == */AWS* || "$iam_policy" == */AmazonEKS* || "$iam_policy" == */ManagedOpenShift* || "$iam_policy" == */OrganizationAccountAccessRole* || "$iam_policy" == */ref-arch* ]]; then
-            echo "Skipping policy: $iam_policy"
+        for pattern in "${SKIP_POLICIES[@]}"; do
+            if [[ "$iam_policy" == $pattern ]]; then
+                echo "Skipping policy: $iam_policy"
+                skip=true
+                break
+            fi
+        done
+
+        if [ "$skip" = true ]; then
             continue
         fi
 
