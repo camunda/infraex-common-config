@@ -52,6 +52,9 @@ jobs:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
               if: env.autofix_pr == 'false'
 
+            - name: Centralized Actionlint
+              uses: camunda/infra-global-github-actions/actionlint@gh-620-centralized-infracheck-workflow
+
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
 
