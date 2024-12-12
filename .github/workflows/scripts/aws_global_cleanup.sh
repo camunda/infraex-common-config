@@ -14,6 +14,7 @@ SKIP_ROLES=(
   "aws-ec2-spot-fleet-tagging-role*"
   "ref-arch-*"
   "Wiz*"
+  "stacksets-exec-17b1ba2d4b46b1c7ed312b029f146659"
 )
 
 SKIP_POLICIES=(
