@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@20933e788b7808787c86af5e19668867cb2eac84 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f33b10a93487ac736a5f125fc3b13b1066ba760f # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -53,7 +53,7 @@ jobs:
               if: env.autofix_pr == 'false'
 
             - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@20933e788b7808787c86af5e19668867cb2eac84 # main
+              uses: camunda/infra-global-github-actions/actionlint@f33b10a93487ac736a5f125fc3b13b1066ba760f # main
 
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
