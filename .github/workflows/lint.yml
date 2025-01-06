@@ -17,6 +17,10 @@ jobs:
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
+            # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
+            - name: Install SQLite dependency
+              run: sudo apt-get install -y libsqlite3-dev
+
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
 

@@ -55,6 +55,10 @@ jobs:
             - name: Centralized Actionlint
               uses: camunda/infra-global-github-actions/actionlint@f33b10a93487ac736a5f125fc3b13b1066ba760f # main
 
+            # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
+            - name: Install SQLite dependency
+              run: sudo apt-get install -y libsqlite3-dev
+
             - name: Install tooling using asdf
               uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
 
