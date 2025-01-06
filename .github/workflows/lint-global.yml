@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f33b10a93487ac736a5f125fc3b13b1066ba760f # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@3232e9983af5e05ea446e2cdc3bbaffd4b300e5c # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -53,7 +53,7 @@ jobs:
               if: env.autofix_pr == 'false'
 
             - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@f33b10a93487ac736a5f125fc3b13b1066ba760f # main
+              uses: camunda/infra-global-github-actions/actionlint@3232e9983af5e05ea446e2cdc3bbaffd4b300e5c # main
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install SQLite dependency
