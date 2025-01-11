@@ -36,7 +36,7 @@ runs:
         - name: Generate token for GitHub
           id: generate-github-token
           if: ${{ inputs.disable_silence_check == 'false' }}
-          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@3232e9983af5e05ea446e2cdc3bbaffd4b300e5c # main
+          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@d77000545c7ea9403f90bf2eedbe052ff9656873 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
               github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -72,7 +72,7 @@ runs:
         - name: Import Secrets
           id: secrets
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
+          uses: hashicorp/vault-action@a1b77a09293a4366e48a5067a86692ac6e94fdc0 # v3
           with:
               url: ${{ inputs.vault_addr }}
               method: approle

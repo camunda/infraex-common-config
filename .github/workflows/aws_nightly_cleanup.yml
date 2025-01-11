@@ -22,7 +22,7 @@ on:
 env:
     AWS_PROFILE: infex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.38.0
+    CLOUD_NUKE_VERSION: v0.38.1
 
 # Limit workflow to a single execution per ref
 concurrency:
@@ -98,7 +98,7 @@ jobs:
             - name: Import Secrets
               id: secrets
               if: ${{ env.should_run == 'true' }}
-              uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3
+              uses: hashicorp/vault-action@a1b77a09293a4366e48a5067a86692ac6e94fdc0 # v3
               with:
                   url: ${{ secrets.VAULT_ADDR }}
                   method: approle
