@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@cc971246d27325abdcd5f21399e3dddc20e9205e # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@e5313bba9c105f41c38a3bbadfa4465837e9f1d8 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -53,7 +53,7 @@ jobs:
               if: env.autofix_pr == 'false'
 
             - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@cc971246d27325abdcd5f21399e3dddc20e9205e # main
+              uses: camunda/infra-global-github-actions/actionlint@e5313bba9c105f41c38a3bbadfa4465837e9f1d8 # main
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
