@@ -50,6 +50,9 @@ jobs:
                     - region: us-east-1
                       day: Saturday
                       cleanup_older_than: 0h
+                    - region: us-east-2
+                      day: Saturday
+                      cleanup_older_than: 0h
 
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
