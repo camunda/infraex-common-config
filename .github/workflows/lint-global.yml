@@ -57,7 +57,7 @@ jobs:
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
-              run: sudo apt-get install -y libsqlite3-dev libbz2-dev liblzma-dev
+              run: sudo apt-get install -y liblzma-dev libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 
             # Setup tool cache
             - name: Cache asdf installation
