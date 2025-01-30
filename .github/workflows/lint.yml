@@ -46,6 +46,7 @@ jobs:
               run: |
                   go install "github.com/asdf-vm/asdf@${ASDF_VERSION}"
                   ~/go/bin/asdf install
+                  echo "export ASDF_DATA_DIR=\"\$HOME/.asdf\"" >> "$HOME/.bashrc"
                   echo "export PATH=\"\${ASDF_DATA_DIR:-\$HOME/.asdf}/shims:\$PATH\"" >> "$HOME/.bashrc"
                   source "$HOME/.bashrc"
                   just install-tooling
