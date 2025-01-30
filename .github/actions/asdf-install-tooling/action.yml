@@ -109,7 +109,7 @@ runs:
 
         - name: Cache installed tools
           id: cache-tools
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'true' && steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
