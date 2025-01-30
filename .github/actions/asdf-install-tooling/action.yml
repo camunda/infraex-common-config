@@ -90,12 +90,18 @@ runs:
 
               if [ -f .tool-versions ]; then
                 echo "Installing asdf plugins"
-                for plugin in $(awk '{print $1}' .tool-versions); do \
-                  asdf plugin add ${plugin} 2>&1 | (grep "already added" && exit 0); \
+                for plugin in $(awk '{print $1}' .tool-versions); do
+                  if ! asdf plugin list | grep -q "^${plugin}$"; then
+                    asdf plugin add "${plugin}"
+                  else
+                    echo "Plugin ${plugin} already added"
+                  fi
                 done
 
                 echo "Update all asdf plugins"
                 asdf plugin update --all
+
+                asdf install
               else
                 echo "No .tool-versions file found, skipping plugin installation."
               fi
