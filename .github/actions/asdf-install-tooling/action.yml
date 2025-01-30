@@ -25,6 +25,9 @@ inputs:
     asdf_path_tools:
         description: Path where asdf installs tools
         default: /home/runner/.asdf
+    cache:
+        description: Use cache for tools installed
+        default: 'true'
 
 runs:
     using: composite
@@ -39,17 +42,18 @@ runs:
 
         - name: Check if asdf cache exists
           id: cache-asdf-check
+          if: ${{ inputs.cache == 'true' }}
           uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
-        # invalidate the cache every week as we might need dependencies of the packages
+              # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
 
         - name: Install asdf when no cache hit
           id: install
           shell: bash
-          if: ${{ steps.cache-key.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
           run: |
               set -euxo pipefail
 
@@ -79,7 +83,7 @@ runs:
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
-          if: ${{ steps.cache-key.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
           shell: bash
           run: |
               asdf current
@@ -94,10 +98,10 @@ runs:
 
         - name: Cache installed tools
           id: cache-tools
-          if: ${{ steps.cache-key.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
           uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
-        # invalidate the cache every week as we might need dependencies of the packages
+              # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}

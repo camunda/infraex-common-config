@@ -20,6 +20,7 @@ This action will:
 | `os` | <p>Target OS (linux or darwin)</p> | `false` | `linux` |
 | `arch` | <p>Target architecture (amd64, arm64, etc.)</p> | `false` | `amd64` |
 | `asdf_path_tools` | <p>Path where asdf installs tools</p> | `false` | `/home/runner/.asdf` |
+| `cache` | <p>Use cache for tools installed</p> | `false` | `true` |
 
 
 ## Runs
@@ -54,4 +55,10 @@ This action is a `composite` action.
     #
     # Required: false
     # Default: /home/runner/.asdf
+
+    cache:
+    # Use cache for tools installed
+    #
+    # Required: false
+    # Default: true
 ```
