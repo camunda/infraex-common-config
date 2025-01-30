@@ -43,8 +43,7 @@ jobs:
               env:
                   # renovate: datasource=github-tags depName=asdf-vm/asdf
                   ASDF_VERSION: v0.16.0
-                  GOOS: linux
-                  GOARCH: amd64
+                  CGO_ENABLED: 0
               run: |
                   go install "github.com/asdf-vm/asdf@${ASDF_VERSION}"
                   ~/go/bin/asdf install
