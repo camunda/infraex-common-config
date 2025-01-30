@@ -21,42 +21,8 @@ jobs:
             - name: Install SQLite dependency
               run: sudo apt-get install -y libsqlite3-dev
 
-            # Setup tool cache
-            - name: Get current week number
-              run: echo "WEEK_NUMBER=$(date +%V)" | tee -a "$GITHUB_ENV"
-
-            # Setup tool cache
-            - name: Cache asdf installation
-              id: cache
-              uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
-              with:
-                  path: |
-                      /home/runner/.asdf
-                  # invalidate the cache every week as we might need dependencies of the packages
-                  key: ${{ runner.os }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${{ env.WEEK_NUMBER }}
-
-            - name: Setup go
-              uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5
-
-            - name: Setup asdf and install tooling
-              shell: bash
-              env:
-                  # renovate: datasource=github-tags depName=asdf-vm/asdf
-                  ASDF_VERSION: v0.16.0
-                  CGO_ENABLED: 1
-              run: |
-                  go install "github.com/asdf-vm/asdf@${ASDF_VERSION}"
-                  ~/go/bin/asdf install
-                  echo "export ASDF_DATA_DIR=\"\$HOME/.asdf\"" >> "$HOME/.bashrc"
-                  echo "export PATH=\"\${ASDF_DATA_DIR:-\$HOME/.asdf}/shims:\$PATH\"" >> "$HOME/.bashrc"
-                  source "$HOME/.bashrc"
-                  just install-tooling
-
-            - name: Print used versions
-              shell: bash
-              run: |
-                  asdf current
-                  go version
+            - name: Install asdf tools
+              uses: ./.github/actions/asdf-install-tooling
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               name: Validate renovate5.json
