@@ -59,21 +59,9 @@ jobs:
             - name: Install Python dependencies
               run: sudo apt-get install -y libsqlite3-dev libbz2-dev liblzma-dev
 
-            - name: Get current week number
-              run: echo "WEEK_NUMBER=$(date +%V)" | tee -a "$GITHUB_ENV"
-
             # Setup tool cache
-            - name: Cache asdf installation
-              id: cache
-              uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
-              with:
-                  path: |
-                      /home/runner/.asdf
-                  # invalidate the cache every week as we might need dependencies of the packages
-                  key: ${{ runner.os }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${{ env.WEEK_NUMBER }}
-
-            - name: Install tooling using asdf
-              uses: asdf-vm/actions/install@05e0d2ed97b598bfce82fd30daf324ae0c4570e6 # v3
+            - name: Install asdf tools
+              uses: ./.github/actions/asdf-install-tooling
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run

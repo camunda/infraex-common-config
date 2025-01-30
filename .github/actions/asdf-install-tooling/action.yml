@@ -53,7 +53,7 @@ runs:
         - name: Install asdf when no cache hit
           id: install
           shell: bash
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           run: |
               set -euxo pipefail
 
@@ -83,7 +83,7 @@ runs:
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
               asdf current
@@ -98,7 +98,7 @@ runs:
 
         - name: Cache installed tools
           id: cache-tools
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit == 'false' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
