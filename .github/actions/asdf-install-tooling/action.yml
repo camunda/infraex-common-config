@@ -89,9 +89,13 @@ runs:
               asdf current
 
               if [ -f .tool-versions ]; then
-                echo "Installing plugins from .tool-versions..."
-                cut -d ' ' -f 1 .tool-versions | xargs -I {} asdf plugin add {} || true
-                asdf install
+                echo "Installing asdf plugins"
+                for plugin in $(awk '{print $1}' .tool-versions); do \
+                  asdf plugin add ${plugin} 2>&1 | (grep "already added" && exit 0); \
+                done
+
+                echo "Update all asdf plugins"
+                asdf plugin update --all
               else
                 echo "No .tool-versions file found, skipping plugin installation."
               fi
