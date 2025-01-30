@@ -90,7 +90,8 @@ runs:
 
               if [ -f .tool-versions ]; then
                 echo "Installing asdf plugins"
-                for plugin in $(awk '{print $1}' .tool-versions); do
+
+                for plugin in $(awk '!/^#/ && NF {print $1}' .tool-versions); do
                   if ! asdf plugin list | grep -q "^${plugin}$"; then
                     asdf plugin add "${plugin}"
                   else
