@@ -69,7 +69,6 @@ runs:
 
               # Update destination
               mkdir -p "${{ inputs.asdf_install_path }}"
-              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
 
               # Download asdf binary and checksum
               curl -L -o asdf.tar.gz "$DOWNLOAD_URL"
@@ -82,6 +81,12 @@ runs:
               # Extract and install
               tar -xzf asdf.tar.gz -C "${{ inputs.asdf_install_path }}"
               chmod +x "${{ inputs.asdf_install_path }}/asdf"
+
+        - name: Add asdf path to the action path
+          shell: bash
+          run: |
+              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
+              echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
@@ -109,12 +114,6 @@ runs:
               else
                 echo "No .tool-versions file found, skipping plugin installation."
               fi
-
-        - name: Add asdf path to the action path
-          shell: bash
-          run: |
-              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
-              echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
         - name: Cache installed tools
           id: cache-tools
