@@ -50,6 +50,7 @@ runs:
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
+                  ${{ inputs.asdf_install_path }}/asdf
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
 
@@ -122,5 +123,6 @@ runs:
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
+                  ${{ inputs.asdf_install_path }}/asdf
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
