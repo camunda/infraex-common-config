@@ -103,9 +103,15 @@ runs:
                 asdf plugin update --all
 
                 asdf install
+
               else
                 echo "No .tool-versions file found, skipping plugin installation."
               fi
+
+        - name: Add asdf path to the action path
+          shell: bash
+          run: |
+              echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
         - name: Cache installed tools
           id: cache-tools
