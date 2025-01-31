@@ -14,7 +14,7 @@ description: |
 inputs:
     version:
         description: asdf version
-    # renovate: datasource=github-tags depName=asdf-vm/asdf
+        # renovate: datasource=github-tags depName=asdf-vm/asdf
         default: v0.16.0
     os:
         description: Target OS (linux or darwin)
