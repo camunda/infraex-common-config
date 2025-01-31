@@ -19,7 +19,8 @@ This action will:
 | `version` | <p>asdf version</p> | `false` | `v0.16.0` |
 | `os` | <p>Target OS (linux or darwin)</p> | `false` | `linux` |
 | `arch` | <p>Target architecture (amd64, arm64, etc.)</p> | `false` | `amd64` |
-| `asdf_path_tools` | <p>Path where asdf installs tools</p> | `false` | `/home/runner/.asdf` |
+| `asdf_install_path` | <p>Path where asdf is installed</p> | `false` | `~/.local/bin` |
+| `asdf_path_tools` | <p>Path where asdf installs tools</p> | `false` | `~/.asdf` |
 | `cache` | <p>Use cache for tools installed</p> | `false` | `true` |
 
 
@@ -50,11 +51,17 @@ This action is a `composite` action.
     # Required: false
     # Default: amd64
 
+    asdf_install_path:
+    # Path where asdf is installed
+    #
+    # Required: false
+    # Default: ~/.local/bin
+
     asdf_path_tools:
     # Path where asdf installs tools
     #
     # Required: false
-    # Default: /home/runner/.asdf
+    # Default: ~/.asdf
 
     cache:
     # Use cache for tools installed

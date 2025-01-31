@@ -22,9 +22,12 @@ inputs:
     arch:
         description: Target architecture (amd64, arm64, etc.)
         default: amd64
+    asdf_install_path:
+        description: Path where asdf is installed
+        default: ~/.local/bin
     asdf_path_tools:
         description: Path where asdf installs tools
-        default: /home/runner/.asdf
+        default: ~/.asdf
     cache:
         description: Use cache for tools installed
         default: 'true'
@@ -61,13 +64,12 @@ runs:
               FILE_NAME="asdf-${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}.tar.gz"
               DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${{ inputs.version }}/${FILE_NAME}"
               MD5_URL="${DOWNLOAD_URL}.md5"
-              DEST_DIR="$HOME/.local/bin"
 
               echo "Installing asdf ${{ inputs.version }} ($DOWNLOAD_URL)"
 
               # Update destination
-              mkdir -p "$DEST_DIR"
-              echo "$DEST_DIR" | tee -a "$GITHUB_PATH"
+              mkdir -p "${{ inputs.asdf_install_path }}"
+              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
 
               # Download asdf binary and checksum
               curl -L -o asdf.tar.gz "$DOWNLOAD_URL"
@@ -78,8 +80,8 @@ runs:
               echo "$CHECKSUM  asdf.tar.gz" | md5sum -c -
 
               # Extract and install
-              tar -xzf asdf.tar.gz -C "$DEST_DIR"
-              chmod +x "$DEST_DIR/asdf"
+              tar -xzf asdf.tar.gz -C "${{ inputs.asdf_install_path }}"
+              chmod +x "${{ inputs.asdf_install_path }}/asdf"
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
@@ -111,6 +113,7 @@ runs:
         - name: Add asdf path to the action path
           shell: bash
           run: |
+              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
               echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
         - name: Cache installed tools
