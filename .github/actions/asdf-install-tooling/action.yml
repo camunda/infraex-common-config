@@ -22,9 +22,6 @@ inputs:
     arch:
         description: Target architecture (amd64, arm64, etc.)
         default: amd64
-    asdf_install_path:
-        description: Path where asdf is installed
-        default: ~/.local/bin
     asdf_path_tools:
         description: Path where asdf installs tools
         default: ~/.asdf
@@ -50,7 +47,7 @@ runs:
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
-                  ${{ inputs.asdf_install_path }}/asdf
+                  $HOME/.local/bin/asdf
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
 
@@ -69,7 +66,7 @@ runs:
               echo "Installing asdf ${{ inputs.version }} ($DOWNLOAD_URL)"
 
               # Update destination
-              mkdir -p "${{ inputs.asdf_install_path }}"
+              mkdir -p "$HOME/.local/bin"
 
               # Download asdf binary and checksum
               curl -L -o asdf.tar.gz "$DOWNLOAD_URL"
@@ -80,13 +77,13 @@ runs:
               echo "$CHECKSUM  asdf.tar.gz" | md5sum -c -
 
               # Extract and install
-              tar -xzf asdf.tar.gz -C "${{ inputs.asdf_install_path }}"
-              chmod +x "${{ inputs.asdf_install_path }}/asdf"
+              tar -xzf asdf.tar.gz -C "$HOME/.local/bin"
+              chmod +x "$HOME/.local/bin/asdf"
 
         - name: Add asdf path to the action path
           shell: bash
           run: |
-              echo "${{ inputs.asdf_install_path }}" | tee -a "$GITHUB_PATH"
+              echo "$HOME/.local/bin" | tee -a "$GITHUB_PATH"
               echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
         - name: Install asdf plugins and tools from .tool-versions
@@ -123,6 +120,6 @@ runs:
           with:
               path: |
                   ${{ inputs.asdf_path_tools }}
-                  ${{ inputs.asdf_install_path }}/asdf
+                  $HOME/.local/bin/asdf
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
