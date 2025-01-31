@@ -23,8 +23,6 @@ jobs:
 
             - name: Install asdf tools
               uses: ./.github/actions/asdf-install-tooling
-              with:
-                  cache: false
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               name: Validate renovate5.json
