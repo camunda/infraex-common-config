@@ -36,6 +36,8 @@ runs:
               WEEK_NUMBER="$(date +%V)"
 
               echo "cache_key=${{ runner.os }}-${{ inputs.version }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
 
         - name: Check if asdf cache exists
           id: cache-asdf-check
@@ -43,8 +45,8 @@ runs:
           uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
-                  "$HOME/.asdf"
-                  "$HOME/.local/bin/asdf"
+                  ${{ steps.cache-key.outputs.cache_asdf_path }}
+                  ${{ steps.cache-key.outputs.cache_asdf_bin_path }}
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
 
@@ -116,7 +118,7 @@ runs:
           uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
           with:
               path: |
-                  "$HOME/.asdf"
-                  "$HOME/.local/bin/asdf"
+                  ${{ steps.cache-key.outputs.cache_asdf_path }}
+                  ${{ steps.cache-key.outputs.cache_asdf_bin_path }}
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
