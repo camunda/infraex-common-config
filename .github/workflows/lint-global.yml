@@ -61,7 +61,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: ./.github/actions/asdf-install-tooling
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@ca5f4c53e82d4787cec72d6f3a177abaa59423b0 # 1.2.15
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
