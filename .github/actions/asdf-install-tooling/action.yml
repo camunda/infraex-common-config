@@ -20,8 +20,8 @@ inputs:
         description: Target OS (linux or darwin)
         default: linux
     arch:
-        description: Target architecture (amd64, arm64, etc.)
-        default: amd64
+        description: Target architecture (amd64, arm64, etc.). Default will try to detect runner arch.
+        default: auto
     cache:
         description: Use cache for tools installed
         default: 'true'
@@ -29,13 +29,30 @@ inputs:
 runs:
     using: composite
     steps:
+        - name: Detect architecture if auto
+          id: detect-arch
+          shell: bash
+          run: |
+              if [[ "${{ inputs.arch }}" == "auto" ]]; then
+                ARCH=$(uname -m)
+                case "$ARCH" in
+                  x86_64) ARCH="amd64" ;;
+                  aarch64) ARCH="arm64" ;;
+                  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+                esac
+                echo "Detected architecture: $ARCH"
+              else
+                ARCH="${{ inputs.arch }}"
+              fi
+              echo "arch=$ARCH" | tee -a "$GITHUB_OUTPUT"
+
         - name: Compute cache key
           id: cache-key
           shell: bash
           run: |
               WEEK_NUMBER="$(date +%V)"
 
-              echo "cache_key=${{ runner.os }}-${{ inputs.version }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${{ inputs.version }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
 
@@ -58,7 +75,7 @@ runs:
               set -euxo pipefail
 
               # Variables
-              FILE_NAME="asdf-${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}.tar.gz"
+              FILE_NAME="asdf-${{ inputs.version }}-${{ inputs.os }}-${{ steps.detect-arch.outputs.arch }}.tar.gz"
               DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${{ inputs.version }}/${FILE_NAME}"
               MD5_URL="${DOWNLOAD_URL}.md5"
 
