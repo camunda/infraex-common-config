@@ -18,7 +18,7 @@ This action will:
 | --- | --- | --- | --- |
 | `version` | <p>asdf version</p> | `false` | `v0.16.1` |
 | `os` | <p>Target OS (linux or darwin)</p> | `false` | `linux` |
-| `arch` | <p>Target architecture (amd64, arm64, etc.)</p> | `false` | `amd64` |
+| `arch` | <p>Target architecture (amd64, arm64, etc.). Default will try to detect runner arch.</p> | `false` | `auto` |
 | `cache` | <p>Use cache for tools installed</p> | `false` | `true` |
 
 
@@ -44,10 +44,10 @@ This action is a `composite` action.
     # Default: linux
 
     arch:
-    # Target architecture (amd64, arm64, etc.)
+    # Target architecture (amd64, arm64, etc.). Default will try to detect runner arch.
     #
     # Required: false
-    # Default: amd64
+    # Default: auto
 
     cache:
     # Use cache for tools installed
