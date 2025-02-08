@@ -17,6 +17,6 @@ just 1.39.0
 
 pre-commit 4.1.0
 
-python 3.13.1
+python 3.13.2
 
 shellcheck 0.10.0
