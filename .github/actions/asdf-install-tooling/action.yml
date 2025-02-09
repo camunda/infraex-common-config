@@ -15,7 +15,7 @@ inputs:
     version:
         description: asdf version
         # renovate: datasource=github-tags depName=asdf-vm/asdf
-        default: v0.16.1
+        default: v0.16.2
     os:
         description: Target OS (linux or darwin)
         default: linux
