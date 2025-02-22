@@ -15,7 +15,7 @@ inputs:
     version:
         description: asdf version
         # renovate: datasource=github-tags depName=asdf-vm/asdf
-        default: v0.16.2
+        default: v0.16.3
     os:
         description: Target OS (linux or darwin)
         default: linux
@@ -59,7 +59,7 @@ runs:
         - name: Check if asdf cache exists
           id: cache-asdf-check
           if: ${{ inputs.cache == 'true' }}
-          uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+          uses: actions/cache/restore@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4
           with:
               path: |
                   ${{ steps.cache-key.outputs.cache_asdf_path }}
@@ -132,7 +132,7 @@ runs:
         - name: Cache installed tools
           id: cache-tools
           if: ${{ steps.cache-asdf-check.outputs.cache-hit != 'true' }}
-          uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+          uses: actions/cache/save@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4
           with:
               path: |
                   ${{ steps.cache-key.outputs.cache_asdf_path }}
