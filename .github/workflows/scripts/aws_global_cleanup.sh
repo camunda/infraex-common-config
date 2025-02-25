@@ -222,19 +222,38 @@ if [ -n "$iam_policies" ]; then
     done
 fi
 
+echo "Deleting S3 Buckets"
+
+# list of bucket not to be deleted
+# please use https://github.com/camunda/infraex-terraform/blob/main/aws/s3-buckets.yml
+# to reference the bucket then add it to this list
+keeplist_buckets=(
+    "camunda.ie"                          # Public bucket to redirect camunda.ie to camunda.com
+    "tf-state-multi-reg"                  # used in tests (github.com/camunda/camunda-deployment-references)
+    "tests-rosa-tf-state-eu-central-1"     # used in tests (github.com/camunda/camunda-tf-rosa)
+    "tests-ra-aws-rosa-hcp-tf-state-eu-central-1" # used in rosa hcp tests (github.com/camunda/camunda-deployment-references)
+    "tests-eks-tf-state-eu-central-1"      # used for tests (github.com/camunda/camunda-tf-eks-module)
+    "tests-c8-multi-region-es-eu-central-1" # used in tests (github.com/camunda/c8-multi-region)
+    "general-purpose-bucket-that-will-not-be-deleted" # general purpose bucket
+)
+
 echo "Deleting nightly S3 Buckets"
-bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[?contains(Name, 'nightly')].Name")
+bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[].Name")
 
 if [ -n "$bucket_ids" ]; then
     read -r -a buckets <<< "$bucket_ids"
 
     for bucket in "${buckets[@]}"
     do
-        echo "Deleting contents of bucket: $bucket"
-        execute_or_simulate "aws s3 rm s3://$bucket --recursive"
+        if echo "${keeplist_buckets[@]}" | grep -qw "$bucket"; then
+            echo "Bucket $bucket is in the keeplist, skipping deletion."
+        else
+            echo "Deleting contents of bucket: $bucket"
+            execute_or_simulate "aws s3 rm s3://$bucket --recursive"
 
-        echo "Deleting bucket: $bucket"
-        execute_or_simulate "aws s3api delete-bucket --bucket $bucket"
+            echo "Deleting bucket: $bucket"
+            execute_or_simulate "aws s3api delete-bucket --bucket $bucket"
+        fi
     done
 fi
 
