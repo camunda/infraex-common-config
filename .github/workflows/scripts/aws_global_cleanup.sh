@@ -237,7 +237,7 @@ keeplist_buckets=(
     "general-purpose-bucket-that-will-not-be-deleted" # general purpose bucket
 )
 
-echo "Deleting nightly S3 Buckets"
+echo "Deleting S3 Buckets"
 bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[].Name")
 
 if [ -n "$bucket_ids" ]; then
