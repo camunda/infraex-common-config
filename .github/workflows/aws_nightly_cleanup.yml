@@ -45,7 +45,7 @@ jobs:
                       day: All
                       cleanup_older_than: 12h
                     - region: eu-north-1
-                      day: Wednesday
+                      day: Tuesday
                       cleanup_older_than: 0h
                     - region: us-east-1
                       day: Saturday
