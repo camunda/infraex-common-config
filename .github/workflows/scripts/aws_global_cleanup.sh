@@ -225,17 +225,9 @@ fi
 echo "Deleting S3 Buckets"
 
 # list of bucket not to be deleted
-# please use https://github.com/camunda/infraex-terraform/blob/main/aws/s3-buckets.yml
-# to reference the bucket then add it to this list
-keeplist_buckets=(
-    "camunda.ie"                          # Public bucket to redirect camunda.ie to camunda.com
-    "tf-state-multi-reg"                  # used in tests (github.com/camunda/camunda-deployment-references)
-    "tests-rosa-tf-state-eu-central-1"     # used in tests (github.com/camunda/camunda-tf-rosa)
-    "tests-ra-aws-rosa-hcp-tf-state-eu-central-1" # used in rosa hcp tests (github.com/camunda/camunda-deployment-references)
-    "tests-eks-tf-state-eu-central-1"      # used for tests (github.com/camunda/camunda-tf-eks-module)
-    "tests-c8-multi-region-es-eu-central-1" # used in tests (github.com/camunda/c8-multi-region)
-    "general-purpose-bucket-that-will-not-be-deleted" # general purpose bucket
-)
+# URL du fichier YAML contenant la liste des buckets
+S3_BUCKETS_URL="https://raw.githubusercontent.com/camunda/infraex-terraform/refs/heads/main/aws/s3-buckets.yml"
+keeplist_buckets=($(curl -s -H "Authorization: token $GITHUB_TOKEN" "$S3_BUCKETS_URL" | yq eval '.buckets | keys | .[]' -))
 
 echo "Deleting S3 Buckets"
 bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[].Name")
