@@ -222,19 +222,29 @@ if [ -n "$iam_policies" ]; then
     done
 fi
 
-echo "Deleting nightly S3 Buckets"
-bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[?contains(Name, 'nightly')].Name")
+echo "Deleting S3 Buckets"
+
+# list of bucket not to be deleted
+S3_BUCKETS_URL="https://raw.githubusercontent.com/camunda/infraex-terraform/refs/heads/main/aws/s3-buckets.yml"
+keeplist_buckets=($(curl -s -H "Authorization: token $GITHUB_TOKEN" "$S3_BUCKETS_URL" | yq eval '.buckets | keys | .[]' -))
+
+echo "Deleting S3 Buckets"
+bucket_ids=$(paginate "aws s3api list-buckets" "Buckets[].Name")
 
 if [ -n "$bucket_ids" ]; then
     read -r -a buckets <<< "$bucket_ids"
 
     for bucket in "${buckets[@]}"
     do
-        echo "Deleting contents of bucket: $bucket"
-        execute_or_simulate "aws s3 rm s3://$bucket --recursive"
+        if echo "${keeplist_buckets[@]}" | grep -qw "$bucket"; then
+            echo "Bucket $bucket is in the keeplist, skipping deletion."
+        else
+            echo "Deleting contents of bucket: $bucket"
+            execute_or_simulate "aws s3 rm s3://$bucket --recursive"
 
-        echo "Deleting bucket: $bucket"
-        execute_or_simulate "aws s3api delete-bucket --bucket $bucket"
+            echo "Deleting bucket: $bucket"
+            execute_or_simulate "aws s3api delete-bucket --bucket $bucket"
+        fi
     done
 fi
 

@@ -135,10 +135,30 @@ jobs:
               if: ${{ env.should_run == 'true' }}
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
 
+            # this token is used to clone the github repository containing the base modules
+            - name: Generate token for GitHub
+              id: generate-github-token
+              # Only run for the next step
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@a218d8908df69fa48d25edf338c6f2f45e6ef39b # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID}}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+                  owner: camunda
+                  repositories: infraex-terraform
+
             - name: Delete additional global AWS resources
               # Only run in a single time per week
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
               timeout-minutes: 15
+              env:
+                  GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
             # This is likely to fail, therefore we ignore the error
