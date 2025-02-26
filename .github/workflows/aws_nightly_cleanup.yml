@@ -45,7 +45,7 @@ jobs:
                       day: All
                       cleanup_older_than: 12h
                     - region: eu-north-1
-                      day: Wednesday
+                      day: Saturday
                       cleanup_older_than: 0h
                     - region: us-east-1
                       day: Saturday
@@ -140,6 +140,8 @@ jobs:
             # this token is used to clone the github repository containing the base modules
             - name: Generate token for GitHub
               id: generate-github-token
+              # Only run for the next step
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-west-3' }}
               uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@a218d8908df69fa48d25edf338c6f2f45e6ef39b # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
@@ -155,7 +157,7 @@ jobs:
 
             - name: Delete additional global AWS resources
               # Only run in a single time per week
-              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-west-3' }}
               timeout-minutes: 15
               env:
                   GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
