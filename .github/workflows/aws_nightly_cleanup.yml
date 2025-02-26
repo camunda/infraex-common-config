@@ -111,8 +111,6 @@ jobs:
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
-                      secret/data/products/infrastructure-experience/ci/common GITHUB_APP_INSTALLATION_ID;
-                      secret/data/products/infrastructure-experience/ci/common GITHUB_APP_PRIVATE_KEY;
 
             # Official action does not support profiles
             - name: Add profile credentials to ~/.aws/credentials

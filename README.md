@@ -17,7 +17,7 @@ Create a file `.github/renovate.json5`:
 
 ### Bucket Usage
 
-By default, any bucket not listed in the `keeplist_buckets` in `.github/workflows/scripts/aws_global_cleanup.sh` will be deleted during the daily cleanup.
+By default, any bucket not listed in <https://github.com/camunda/infraex-terraform/blob/main/aws/s3-buckets.yml> will be deleted during the daily cleanup.
 For temporary tests or work, use `general-purpose-bucket-that-will-not-be-deleted`, but ensure manual cleanup to avoid data accumulation.
 
 ### Region Usage for Cloud Providers

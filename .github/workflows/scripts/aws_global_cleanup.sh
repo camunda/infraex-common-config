@@ -225,7 +225,6 @@ fi
 echo "Deleting S3 Buckets"
 
 # list of bucket not to be deleted
-# URL du fichier YAML contenant la liste des buckets
 S3_BUCKETS_URL="https://raw.githubusercontent.com/camunda/infraex-terraform/refs/heads/main/aws/s3-buckets.yml"
 keeplist_buckets=($(curl -s -H "Authorization: token $GITHUB_TOKEN" "$S3_BUCKETS_URL" | yq eval '.buckets | keys | .[]' -))
 
