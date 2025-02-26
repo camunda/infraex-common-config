@@ -141,7 +141,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               # Only run for the next step
-              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-west-3' }}
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
               uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@a218d8908df69fa48d25edf338c6f2f45e6ef39b # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
@@ -157,11 +157,10 @@ jobs:
 
             - name: Delete additional global AWS resources
               # Only run in a single time per week
-              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-west-3' }}
+              if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
               timeout-minutes: 15
               env:
                   GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
-                  DRY_RUN: true
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
             # This is likely to fail, therefore we ignore the error
