@@ -26,8 +26,12 @@ inputs:
         description: Use cache for tools installed
         default: 'true'
     tool_versions_files:
-        description: List of the path .tool-versions files to install (coma separated)
-        default: .tool-versions
+        description: |
+            List of the path `.tool-versions` files to install.
+            Each path should be specified on a new line.
+        default: |
+            .tool-versions
+
 
 runs:
     using: composite
@@ -113,8 +117,7 @@ runs:
               asdf current
 
               # Loop over each .tool-versions file specified in the input
-              IFS=',' read -ra TOOL_VERSIONS_FILES <<< "${{ inputs.tool_versions_files }}"
-              for tool_file in "${TOOL_VERSIONS_FILES[@]}"; do
+              for tool_file in "${{ inputs.tool_versions_files[@] }}"; do
                 if [ -f "$tool_file" ]; then
                   echo "Installing asdf plugins from ${tool_file}"
 
