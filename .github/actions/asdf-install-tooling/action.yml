@@ -25,9 +25,9 @@ inputs:
     cache:
         description: Use cache for tools installed
         default: 'true'
-    directory:
-        description: Directory of the .tool-versions file
-        default: ./
+    tool_versions_files:
+        description: List of the path .tool-versions files to install (coma separated)
+        default: .tool-versions
 
 runs:
     using: composite
@@ -108,30 +108,36 @@ runs:
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
-          working-directory: ${{ inputs.directory }}
           shell: bash
           run: |
               asdf current
 
-              if [ -f .tool-versions ]; then
-                echo "Installing asdf plugins"
+              # Loop over each .tool-versions file specified in the input
+              IFS=',' read -ra TOOL_VERSIONS_FILES <<< "${{ inputs.tool_versions_files }}"
+              for tool_file in "${TOOL_VERSIONS_FILES[@]}"; do
+                if [ -f "$tool_file" ]; then
+                  echo "Installing asdf plugins from ${tool_file}"
 
-                for plugin in $(awk '!/^#/ && NF {print $1}' .tool-versions); do
-                  if ! asdf plugin list | grep -q "^${plugin}$"; then
-                    asdf plugin add "${plugin}"
-                  else
-                    echo "Plugin ${plugin} already added"
-                  fi
-                done
+                  # Loop through each plugin in the current .tool-versions file
+                  for plugin in $(awk '!/^#/ && NF {print $1}' "$tool_file"); do
+                    # Add plugin if it is not already installed
+                    if ! asdf plugin list | grep -q "^${plugin}$"; then
+                      echo "Adding plugin ${plugin}"
+                      asdf plugin add "${plugin}"
+                    else
+                      echo "Plugin ${plugin} already added"
+                    fi
+                  done
 
-                echo "Update all asdf plugins"
-                asdf plugin update --all
+                  echo "Updating all asdf plugins"
+                  asdf plugin update --all
 
-                asdf install
-
-              else
-                echo "No .tool-versions file found, skipping plugin installation."
-              fi
+                  # Install the tools specified in the current .tool-versions file
+                  asdf install
+                else
+                  echo "No ${tool_file} file found, skipping plugin installation for this file."
+                fi
+              done
 
         - name: Cache installed tools
           id: cache-tools

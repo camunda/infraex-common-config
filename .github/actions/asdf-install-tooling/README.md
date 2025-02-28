@@ -20,7 +20,7 @@ This action will:
 | `os` | <p>Target OS (linux or darwin)</p> | `false` | `linux` |
 | `arch` | <p>Target architecture (amd64, arm64, etc.). Default will try to detect runner arch.</p> | `false` | `auto` |
 | `cache` | <p>Use cache for tools installed</p> | `false` | `true` |
-| `directory` | <p>Directory of the .tool-versions file</p> | `false` | `./` |
+| `tool_versions_files` | <p>List of the path .tool-versions files to install (coma separated)</p> | `false` | `.tool-versions` |
 
 
 ## Runs
@@ -56,9 +56,9 @@ This action is a `composite` action.
     # Required: false
     # Default: true
 
-    directory:
-    # Directory of the .tool-versions file
+    tool_versions_files:
+    # List of the path .tool-versions files to install (coma separated)
     #
     # Required: false
-    # Default: ./
+    # Default: .tool-versions
 ```
