@@ -124,11 +124,17 @@ runs:
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
+              set -euxo pipefail
+
               asdf current
 
               IFS=',' read -r -a tool_versions_files <<< "${{ inputs.tool_versions_files }}"
               for tool_file in "${tool_versions_files[@]}"; do
                 if [ -f "$tool_file" ]; then
+                  tool_file_dir=$(dirname "$tool_file")
+                  echo "Changing directory to $tool_file_dir"
+                  cd "$tool_file_dir" || { echo "Failed to change directory to $tool_file_dir"; exit 1; }
+
                   echo "Installing asdf plugins from ${tool_file}"
 
                   # Loop through each plugin in the current .tool-versions file
@@ -147,8 +153,12 @@ runs:
 
                   # Install the tools specified in the current .tool-versions file
                   asdf install
+
+                  # return to the root dir
+                  cd - || exit
                 else
-                  echo "No ${tool_file} file found, skipping plugin installation for this file."
+                  echo "Error: ${tool_file} not found, please check your inputs."
+                  exit 1
                 fi
               done
 
