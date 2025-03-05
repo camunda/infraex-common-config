@@ -25,6 +25,9 @@ inputs:
     cache:
         description: Use cache for tools installed
         default: 'true'
+    tool_versions_files:
+        description: Comma-separated list of .tool-versions files
+        default: .tool-versions
 
 runs:
     using: composite
@@ -52,7 +55,21 @@ runs:
           run: |
               WEEK_NUMBER="$(date +%V)"
 
-              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${{ inputs.version }}-tooling-${{ hashFiles('**/.tool-versions') }}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              COMBINED_HASHES=""
+
+              # Loop over each .tool-versions file, generate a hash for each one, and combine them
+              IFS=',' read -r -a tool_versions_files <<< "${{ inputs.tool_versions_files }}"
+              for tool_file in "${tool_versions_files[@]}"; do
+                if [ -f "$tool_file" ]; then
+                  FILE_HASH=$(sha256sum "$tool_file" | awk '{print $1}')
+                  COMBINED_HASHES="${COMBINED_HASHES}${FILE_HASH}"
+                fi
+              done
+
+              # Now generate a final hash of the combined hashes (this is the "hash of hashes")
+              FINAL_HASH=$(echo -n "$COMBINED_HASHES" | sha256sum | awk '{print $1}')
+
+              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${{ inputs.version }}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
 
@@ -107,27 +124,44 @@ runs:
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
+              set -euxo pipefail
+
               asdf current
 
-              if [ -f .tool-versions ]; then
-                echo "Installing asdf plugins"
+              IFS=',' read -r -a tool_versions_files <<< "${{ inputs.tool_versions_files }}"
+              for tool_file in "${tool_versions_files[@]}"; do
+                if [ -f "$tool_file" ]; then
+                  tool_file_dir=$(dirname "$tool_file")
+                  tool_file_file=$(basename "$tool_file")
+                  echo "Changing directory to $tool_file_dir"
+                  cd "$tool_file_dir" || { echo "Failed to change directory to $tool_file_dir"; exit 1; }
 
-                for plugin in $(awk '!/^#/ && NF {print $1}' .tool-versions); do
-                  if ! asdf plugin list | grep -q "^${plugin}$"; then
-                    asdf plugin add "${plugin}"
-                  else
-                    echo "Plugin ${plugin} already added"
-                  fi
-                done
+                  echo "Installing asdf plugins from ${tool_file_file}"
 
-                echo "Update all asdf plugins"
-                asdf plugin update --all
+                  # Loop through each plugin in the current .tool-versions file
+                  for plugin in $(awk '!/^#/ && NF {print $1}' "$tool_file_file"); do
+                    # Add plugin if it is not already installed
+                    if ! asdf plugin list | grep -q "^${plugin}$"; then
+                      echo "Adding plugin ${plugin}"
+                      asdf plugin add "${plugin}"
+                    else
+                      echo "Plugin ${plugin} already added"
+                    fi
+                  done
 
-                asdf install
+                  echo "Updating all asdf plugins"
+                  asdf plugin update --all
 
-              else
-                echo "No .tool-versions file found, skipping plugin installation."
-              fi
+                  # Install the tools specified in the current .tool-versions file
+                  asdf install
+
+                  # return to the root dir
+                  cd - || exit
+                else
+                  echo "Error: ${tool_file} not found, please check your inputs."
+                  exit 1
+                fi
+              done
 
         - name: Cache installed tools
           id: cache-tools
