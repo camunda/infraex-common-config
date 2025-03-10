@@ -122,6 +122,11 @@
       "matchPackageNames": ["amazon-eks"],
       "extractVersion": "^(?<version>.*)-eks.+$"
     },
+      {
+      // The versioning is a bit strange, so we need to help a bit with parsing it correctly
+      matchPackageNames: ["amazon/cloudwatch-agent"],
+      versioning: "regex:^(?<major>\\d)(\\.(?<minor>\\d+))(\\.(?<patch>\\db\\d+))$",
+    },
   ],
   "customDatasources": {
     "rosa-camunda": {
