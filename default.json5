@@ -54,6 +54,15 @@
       "enabled": false
     },
     {
+      description: "Allow patch and minor releases of camunda-platform on maintenance branches.",
+      matchPackageNames: ["camunda-platform"],
+      matchBaseBranches: [
+        "/^stable\\/8\\..*/"
+      ],
+      matchUpdateTypes: ["minor", "patch"],
+      enabled: true,
+    },
+    {
       "groupName": "minor-grouped",
       "matchUpdateTypes": [
         "minor"
@@ -84,7 +93,7 @@
       matchPackageNames: ["*"],
       matchUpdateTypes: ["minor", "major"],
       schedule: ["* * 15-30 4,10 *"],
-    }
+    },
     {
       matchDatasources: ["go"],
       addLabels: ["group:go"],
@@ -109,17 +118,11 @@
       matchDatasources: ["terraform-module"],
       matchPackageNames: ["terraform-aws-modules.*"],
       addLabels: ["group:terraform"],
-      schedule: [
-        "* * * * 0,6",
-      ],
     },
     // Terraform major provider updates
     {
       matchDatasources: ["terraform-provider"],
       addLabels: ["group:terraform"],
-      schedule: [
-        "* * * * 0,6",
-      ]
     },
     // For known GitHub repositories that use GitHub tags/releases of format
     // "v1.2.3" and where the asdf plugin ignores the "v" prefix, we also tell
