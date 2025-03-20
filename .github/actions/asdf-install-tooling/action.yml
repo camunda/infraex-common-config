@@ -102,15 +102,15 @@ runs:
               mkdir -p "$HOME/.local/bin"
 
               # Download asdf binary and checksum
-              curl -L -o asdf.tar.gz "$DOWNLOAD_URL"
-              curl -L -o asdf.md5 "$MD5_URL"
+              curl -L -o /tmp/asdf.tar.gz "$DOWNLOAD_URL"
+              curl -L -o /tmp/asdf.md5 "$MD5_URL"
 
               # Verify MD5 checksum
-              CHECKSUM=$(awk '{print $1}' asdf.md5)
-              echo "$CHECKSUM  asdf.tar.gz" | md5sum -c -
+              CHECKSUM=$(awk '{print $1}' /tmp/asdf.md5)
+              echo "$CHECKSUM  /tmp/asdf.tar.gz" | md5sum -c -
 
               # Extract and install
-              tar -xzf asdf.tar.gz -C "$HOME/.local/bin"
+              tar -xzf /tmp/asdf.tar.gz -C "$HOME/.local/bin"
               chmod +x "$HOME/.local/bin/asdf"
 
         - name: Add asdf path to the action path
