@@ -8,7 +8,11 @@
     ":enablePreCommit",
     ":semanticCommits",
   ],
-  schedule: ["every weekend"],
+  baseBranches: [
+    "main",
+    "/^stable\\/8\\..*/",
+    ],
+  schedule: ["* * * * 0,6"],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
   prHourlyLimit: 6,
@@ -42,6 +46,14 @@
   },
   packageRules: [
     {
+      "description": "Only patch updates for our maintenance branches to avoid breaking changes.",
+      "matchBaseBranches": [
+        "/^stable\\/8\\..*/"
+      ],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    },
+    {
       "groupName": "minor-grouped",
       "matchUpdateTypes": [
         "minor"
@@ -66,6 +78,13 @@
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
     },
+    // Only update certain packages (k8s, sql, rosa) on the 15th to 30th of April and October (after a release)
+    {
+      matchDatasources: ["endoflife-date", "custom.rosa-camunda"],
+      matchPackageNames: ["*"],
+      matchUpdateTypes: ["minor", "major"],
+      schedule: ["* * 15-30 4,10 *"],
+    }
     {
       matchDatasources: ["go"],
       addLabels: ["group:go"],
@@ -78,7 +97,7 @@
     },
     {
       matchPackageNames: ["renovatebot/pre-commit-hooks"],
-      schedule: ["on Saturday"],
+      schedule: ["* * * * 0"],
     },
     // GitHub Actions
     {
@@ -91,7 +110,7 @@
       matchPackageNames: ["terraform-aws-modules.*"],
       addLabels: ["group:terraform"],
       schedule: [
-        "every 2 weeks on Saturday and Sunday",
+        "* * * * 0,6",
       ],
     },
     // Terraform major provider updates
@@ -99,7 +118,7 @@
       matchDatasources: ["terraform-provider"],
       addLabels: ["group:terraform"],
       schedule: [
-        "every 2 weeks on Saturday and Sunday",
+        "* * * * 0,6",
       ]
     },
     // For known GitHub repositories that use GitHub tags/releases of format
