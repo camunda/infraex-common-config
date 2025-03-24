@@ -7,6 +7,8 @@
     ":docker",
     ":enablePreCommit",
     ":semanticCommits",
+    "helpers:pinGitHubActionDigests",
+    ":pinDevDependencies",
   ],
   schedule: ["every weekend"],
   ignorePaths: [], // overwrites default to track also test paths
