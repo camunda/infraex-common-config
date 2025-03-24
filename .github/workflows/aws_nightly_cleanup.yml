@@ -22,7 +22,7 @@ on:
 env:
     AWS_PROFILE: infex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.38.2
+    CLOUD_NUKE_VERSION: v0.39.0
 
 # Limit workflow to a single execution per ref
 concurrency:
@@ -140,7 +140,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@7b801f54b8d94e8c6a760feed5122ff4b5932283 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@10e245cd78ae2c263dbc6e4c785ab7b7613dc085 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
