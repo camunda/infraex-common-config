@@ -7,6 +7,8 @@
     ":docker",
     ":enablePreCommit",
     ":semanticCommits",
+    "helpers:pinGitHubActionDigests",
+    ":pinDevDependencies",
   ],
   schedule: ["every weekend"],
   ignorePaths: [], // overwrites default to track also test paths
@@ -127,6 +129,10 @@
       matchPackageNames: ["amazon/cloudwatch-agent"],
       versioning: "regex:^(?<major>\\d)(\\.(?<minor>\\d+))(\\.(?<patch>\\db\\d+))$",
     },
+    {
+      matchPackageNames: ["camunda/camunda-platform-helm"],
+      versioning: "regex:^camunda-platform-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    }
   ],
   "customDatasources": {
     "rosa-camunda": {
