@@ -54,8 +54,13 @@
       "enabled": false
     },
     {
-      description: "Allow patch and minor releases of camunda-platform on maintenance branches.",
-      matchPackageNames: ["camunda-platform"],
+      description: "Allow patch and minor releases of camunda-platform component on maintenance branches.",
+      matchPackageNames: [
+        // helm source
+        "camunda-platform",
+        // github source
+        "camunda/camunda-platform-helm"
+        ],
       matchBaseBranches: [
         "/^stable\\/8\\..*/"
       ],
@@ -86,13 +91,6 @@
     {
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
-    },
-    // Only update certain packages (k8s, sql, rosa) on the 15th to 30th of April and October (after a release)
-    {
-      matchDatasources: ["endoflife-date", "custom.rosa-camunda"],
-      matchPackageNames: ["*"],
-      matchUpdateTypes: ["minor", "major"],
-      schedule: ["* * 15-30 4,10 *"],
     },
     {
       matchDatasources: ["go"],
