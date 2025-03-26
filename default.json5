@@ -12,7 +12,6 @@
     "main",
     "/^stable\\/8\\..*/",
     ],
-  schedule: ["* * * * 0,6"],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
   prHourlyLimit: 6,
@@ -45,6 +44,21 @@
     enabled: true
   },
   packageRules: [
+    {
+      "description": "Only update major versions on Fridays outside of business hours.",
+      "matchUpdateTypes": ["major"],
+      "schedule": ["* 0-6,18-23 * * 5"]
+    },
+    {
+      "description": "Only update minor versions on Saturdays.",
+      "matchUpdateTypes": ["minor"],
+      "schedule": ["* * * * 6"]
+    },
+    {
+      "description": "Only update patch versions on Sundays.",
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["* * * * 0"]
+    },
     {
       "description": "Only patch updates for our maintenance branches to avoid breaking changes.",
       "matchBaseBranches": [
@@ -92,6 +106,15 @@
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
     },
+    // Only update certain packages (k8s, sql, rosa) on the 15th to 30th of April and October (after a release)
+    {
+      matchDatasources: ["endoflife-date", "custom.rosa-camunda"],
+      matchPackageNames: ["*"],
+      matchUpdateTypes: ["minor", "major"],
+      draftPR: true,
+      groupName: "infra-updates",
+      addLabels: ["group:infra-updates"],
+    },
     {
       matchDatasources: ["go"],
       addLabels: ["group:go"],
@@ -101,10 +124,6 @@
       matchPackageNames: ["renovatebot/pre-commit-hooks"],
       matchUpdateTypes: ["patch"],
       enabled: false,
-    },
-    {
-      matchPackageNames: ["renovatebot/pre-commit-hooks"],
-      schedule: ["* * * * 0"],
     },
     // GitHub Actions
     {
