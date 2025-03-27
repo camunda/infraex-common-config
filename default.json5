@@ -106,14 +106,23 @@
       matchPackageNames: ["camunda-platform"],
       addLabels: ["group:camunda-platform"],
     },
-    // Only update certain packages (k8s, sql, rosa) on the 15th to 30th of April and October (after a release)
     {
-      matchDatasources: ["endoflife-date", "custom.rosa-camunda"],
-      matchPackageNames: ["*"],
-      matchUpdateTypes: ["minor", "major"],
-      draftPR: true,
-      groupName: "infra-updates",
-      addLabels: ["group:infra-updates"],
+      "matchPackageNames": [
+        "amazon-eks",
+        "amazon-rds-postgresql",
+        "opensearch",
+        "red-hat-openshift",
+        ],
+      "matchUpdateTypes": ["major", "minor"],
+      "draftPR": true,
+      "groupName": "infra-updates",
+      "addLabels": ["group:infra-updates"],
+      "prBodyNotes": [
+        "⚠️ **Breaking Changes Possible** ⚠️",
+        "This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `postgresql`, or `openshift`).",
+        "Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.",
+        "This update **should not** be merged mid-cycle unless explicitly approved by yourself."
+      ]
     },
     {
       matchDatasources: ["go"],
