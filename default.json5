@@ -10,7 +10,10 @@
     "helpers:pinGitHubActionDigests",
     ":pinDevDependencies",
   ],
-  schedule: ["every weekend"],
+  baseBranches: [
+    "main",
+    "/^stable\\/8\\..*/",
+    ],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
   prHourlyLimit: 6,
@@ -44,6 +47,43 @@
   },
   packageRules: [
     {
+      "description": "Only update major versions on Fridays outside of business hours.",
+      "matchUpdateTypes": ["major"],
+      "schedule": ["* 0-6,18-23 * * 5"]
+    },
+    {
+      "description": "Only update minor versions on Saturdays.",
+      "matchUpdateTypes": ["minor"],
+      "schedule": ["* * * * 6"]
+    },
+    {
+      "description": "Only update patch versions on Sundays.",
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["* * * * 0"]
+    },
+    {
+      "description": "Only patch updates for our maintenance branches to avoid breaking changes.",
+      "matchBaseBranches": [
+        "/^stable\\/8\\..*/"
+      ],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    },
+    {
+      description: "Allow patch and minor releases of camunda-platform component on maintenance branches.",
+      matchPackageNames: [
+        // helm source
+        "camunda-platform",
+        // github source
+        "camunda/camunda-platform-helm"
+        ],
+      matchBaseBranches: [
+        "/^stable\\/8\\..*/"
+      ],
+      matchUpdateTypes: ["minor", "patch"],
+      enabled: true,
+    },
+    {
       "groupName": "minor-grouped",
       "matchUpdateTypes": [
         "minor"
@@ -69,6 +109,24 @@
       addLabels: ["group:camunda-platform"],
     },
     {
+      "matchPackageNames": [
+        "amazon-eks",
+        "amazon-rds-postgresql",
+        "opensearch",
+        "red-hat-openshift",
+        ],
+      "matchUpdateTypes": ["major", "minor"],
+      "draftPR": true,
+      "groupName": "infra-updates",
+      "addLabels": ["group:infra-updates"],
+      "prBodyNotes": [
+        "⚠️ **Breaking Changes Possible** ⚠️",
+        "This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `postgresql`, or `openshift`).",
+        "Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.",
+        "This update **should not** be merged mid-cycle unless explicitly approved by yourself."
+      ]
+    },
+    {
       matchDatasources: ["go"],
       addLabels: ["group:go"],
     },
@@ -77,10 +135,6 @@
       matchPackageNames: ["renovatebot/pre-commit-hooks"],
       matchUpdateTypes: ["patch"],
       enabled: false,
-    },
-    {
-      matchPackageNames: ["renovatebot/pre-commit-hooks"],
-      schedule: ["on Saturday"],
     },
     // GitHub Actions
     {
@@ -92,17 +146,11 @@
       matchDatasources: ["terraform-module"],
       matchPackageNames: ["terraform-aws-modules.*"],
       addLabels: ["group:terraform"],
-      schedule: [
-        "every 2 weeks on Saturday and Sunday",
-      ],
     },
     // Terraform major provider updates
     {
       matchDatasources: ["terraform-provider"],
       addLabels: ["group:terraform"],
-      schedule: [
-        "every 2 weeks on Saturday and Sunday",
-      ]
     },
     // For known GitHub repositories that use GitHub tags/releases of format
     // "v1.2.3" and where the asdf plugin ignores the "v" prefix, we also tell
