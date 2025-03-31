@@ -5,7 +5,7 @@ set -euxo pipefail
 # This script deletes additional AWS resources based on specified criteria.
 
 # Default value for DRY_RUN is false
-DRY_RUN=false
+DRY_RUN=${DRY_RUN:-false}
 
 # Check if the region argument is provided
 if [ -z "$1" ]; then

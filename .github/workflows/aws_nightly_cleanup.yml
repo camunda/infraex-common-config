@@ -98,6 +98,14 @@ jobs:
 
                   echo "should_run=$should_run" | tee -a "$GITHUB_ENV"
 
+            # For PR purposes we're overwriting the setting and enable dry run
+            - name: Set DRY_RUN for PR
+              if: github.event_name == 'pull_request'
+              run: |
+                  echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
+                  echo "CLOUD_NUKE_EXTRA_ARGS=--dry-run" | tee -a "$GITHUB_ENV"
+                  echo "should_run=true" | tee -a "$GITHUB_ENV"
+
             - name: Import Secrets
               id: secrets
               if: ${{ env.should_run == 'true' }}
@@ -170,7 +178,7 @@ jobs:
                   DISABLE_TELEMETRY: 'true'
               if: ${{ env.should_run == 'true' }}
               run: |
-                  ./cloud-nuke_linux_amd64 aws \
+                  ./cloud-nuke_linux_amd64 aws ${{ env.CLOUD_NUKE_EXTRA_ARGS }} \
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
@@ -186,7 +194,7 @@ jobs:
                   DISABLE_TELEMETRY: 'true'
               if: ${{ env.should_run == 'true' }}
               run: |
-                  ./cloud-nuke_linux_amd64 aws \
+                  ./cloud-nuke_linux_amd64 aws ${{ env.CLOUD_NUKE_EXTRA_ARGS }} \
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
