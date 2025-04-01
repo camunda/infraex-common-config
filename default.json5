@@ -58,7 +58,12 @@
     },
     {
       "description": "Only update patch versions on Sundays.",
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": [
+        "lockFileMaintenance",
+        "pin",
+        "digest",
+        "patch"
+      ],
       "schedule": ["* * * * 0"]
     },
     {
