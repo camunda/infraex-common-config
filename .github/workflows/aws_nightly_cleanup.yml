@@ -164,7 +164,7 @@ jobs:
             - name: Delete additional global AWS resources
               # Only run in a single time per week
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              timeout-minutes: 15
+              timeout-minutes: 45
               env:
                   GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               run: .github/workflows/scripts/aws_global_cleanup.sh
