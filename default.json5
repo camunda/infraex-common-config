@@ -184,7 +184,7 @@
     },
     {
       matchPackageNames: ["camunda/camunda-platform-helm"],
-      versioning: "regex:^camunda-platform-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+      versioning: "regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     }
   ],
   "customDatasources": {
