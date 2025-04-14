@@ -84,6 +84,15 @@ runs:
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
 
+        # Some ASDF packages require Python to be compiled with lzma support
+        # including e.g. azure cli
+        - name: Install library preqrequisites
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          shell: bash
+          run: |
+              sudo apt-get update
+              sudo apt-get install liblzma-dev
+
         - name: Install asdf when no cache hit
           id: install
           shell: bash
