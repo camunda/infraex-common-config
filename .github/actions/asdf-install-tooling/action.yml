@@ -162,6 +162,8 @@ runs:
                   exit 1
                 fi
               done
+          env:
+              ASDF_PYTHON_EXTRA_CONFIGURE_OPTIONS: --with-lzma
 
         - name: Cache installed tools
           id: cache-tools
