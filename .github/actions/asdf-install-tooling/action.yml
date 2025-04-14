@@ -91,7 +91,7 @@ runs:
           shell: bash
           run: |
               sudo apt-get update
-              sudo apt-get install liblzma-dev
+              sudo apt-get install liblzma-dev libbz2-dev
 
         - name: Install asdf when no cache hit
           id: install
