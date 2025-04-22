@@ -47,6 +47,12 @@
     enabled: true
   },
   packageRules: [
+    // temporarily ignoring trivy updates to stick with 0.60.0
+    // see https://github.com/camunda/team-infrastructure-experience/issues/680
+    {
+      "matchPackageNames": ["aquasecurity/trivy"],
+      "enabled": false
+    },
     {
       "description": "Only update major versions on Fridays outside of business hours.",
       "matchUpdateTypes": ["major"],
