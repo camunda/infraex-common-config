@@ -20,6 +20,7 @@
   prConcurrentLimit: 20,
   commitBodyTable: true,
   separateMajorMinor: false,
+  recreateWhen: "always", // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
   prBodyNotes: [
     "{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}",
     "Before merging, *always* check with the release notes if any other changes need to be done.",
