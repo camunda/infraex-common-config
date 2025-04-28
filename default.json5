@@ -1,243 +1,309 @@
 {
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
-    "config:recommended",
-    ":automergeDisabled",
-    ":dependencyDashboard",
-    ":docker",
-    ":enablePreCommit",
-    ":semanticCommits",
-    "helpers:pinGitHubActionDigests",
-    ":pinDevDependencies",
+    'config:recommended',
+    ':automergeDisabled',
+    ':dependencyDashboard',
+    ':docker',
+    ':enablePreCommit',
+    ':semanticCommits',
+    'helpers:pinGitHubActionDigests',
+    ':pinDevDependencies',
   ],
   baseBranches: [
-    "main",
-    "/^stable\\/8\\..*/",
-    ],
+    'main',
+    '/^stable\\/8\\..*/',
+  ],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
   prHourlyLimit: 6,
   prConcurrentLimit: 20,
   commitBodyTable: true,
   separateMajorMinor: false,
-  recreateWhen: "always", // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
+  recreateWhen: 'always', // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
   prBodyNotes: [
-    "{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}",
-    "Before merging, *always* check with the release notes if any other changes need to be done.",
+    '{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}',
+    'Before merging, *always* check with the release notes if any other changes need to be done.',
   ],
   major: {
     enabled: true,
-    addLabels: ["upgrade:major"], // Each major component should have a dedicated PR.
+    addLabels: ['upgrade:major'], // Each major component should have a dedicated PR.
   },
   minor: {
     enabled: true,
-    addLabels: ["upgrade:minor"],
-    groupName: "minor-grouped", // Group all minor updates in a single branch to save CI computing.
+    addLabels: ['upgrade:minor'],
+    groupName: 'minor-grouped', // Group all minor updates in a single branch to save CI computing.
   },
   patch: {
     enabled: true,
-    addLabels: ["upgrade:patch"],
-    groupName: "patch-grouped", // Group all patch updates in a single branch to save CI computing.
+    addLabels: ['upgrade:patch'],
+    groupName: 'patch-grouped', // Group all patch updates in a single branch to save CI computing.
   },
   vulnerabilityAlerts: {
-    addLabels: ["security"], // Security alerts should be handled manually to assess the consequences.
+    addLabels: ['security'], // Security alerts should be handled manually to assess the consequences.
     enabled: true,
   },
   lockFileMaintenance: {
-    enabled: true
+    enabled: true,
   },
   packageRules: [
-    // temporarily ignoring trivy updates to stick with 0.60.0
-    // see https://github.com/camunda/team-infrastructure-experience/issues/680
     {
-      "matchPackageNames": ["aquasecurity/trivy"],
-      "enabled": false
-    },
-    {
-      "description": "Only update major versions on Fridays outside of business hours.",
-      "matchUpdateTypes": ["major"],
-      "schedule": ["* 0-6,18-23 * * 5"]
-    },
-    {
-      "description": "Only update minor versions on Saturdays.",
-      "matchUpdateTypes": ["minor"],
-      "schedule": ["* * * * 6"]
-    },
-    {
-      "description": "Only update patch versions on Sundays.",
-      "matchUpdateTypes": [
-        "lockFileMaintenance",
-        "pin",
-        "digest",
-        "patch"
+      // temporarily ignoring trivy updates to stick with 0.60.0
+      // see https://github.com/camunda/team-infrastructure-experience/issues/680
+      matchPackageNames: [
+        'aquasecurity/trivy',
       ],
-      "schedule": ["* * * * 0"]
+      enabled: false,
     },
     {
-      "description": "Only patch updates for our maintenance branches to avoid breaking changes.",
-      "matchBaseBranches": [
-        "/^stable\\/8\\..*/"
+      description: 'Only update major versions on Fridays outside of business hours.',
+      matchUpdateTypes: [
+        'major',
       ],
-      "matchUpdateTypes": ["minor", "major"],
-      "enabled": false
+      schedule: [
+        '* 0-6,18-23 * * 5',
+      ],
     },
     {
-      description: "Allow patch and minor releases of camunda-platform component on maintenance branches.",
+      description: 'Only update minor versions on Saturdays.',
+      matchUpdateTypes: [
+        'minor',
+      ],
+      schedule: [
+        '* * * * 6',
+      ],
+    },
+    {
+      description: 'Only update patch versions on Sundays.',
+      matchUpdateTypes: [
+        'lockFileMaintenance',
+        'pin',
+        'digest',
+        'patch',
+      ],
+      schedule: [
+        '* * * * 0',
+      ],
+    },
+    {
+      description: 'Only patch updates for our maintenance branches to avoid breaking changes.',
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'major',
+      ],
+      enabled: false,
+    },
+    {
+      description: 'Allow patch and minor releases of camunda-platform component on maintenance branches.',
       matchPackageNames: [
         // helm source
-        "camunda-platform",
+        'camunda-platform',
         // github source
-        "camunda/camunda-platform-helm"
-        ],
-      matchBaseBranches: [
-        "/^stable\\/8\\..*/"
+        'camunda/camunda-platform-helm',
       ],
-      matchUpdateTypes: ["minor", "patch"],
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+      ],
       enabled: true,
     },
     {
-      "groupName": "minor-grouped",
-      "matchUpdateTypes": [
-        "minor"
+      groupName: 'minor-grouped',
+      matchUpdateTypes: [
+        'minor',
       ],
-      "matchPackageNames": [
-        "*"
-      ]
-    },
-    {
-      "groupName": "patch-grouped", // Group all pin and digests updates in a single branch with patch to save CI computing.
-      "enabled": true,
-      "matchUpdateTypes": [
-        "pin",
-        "digest",
-        "patch"
-      ],
-      "matchPackageNames": [
-        "*"
+      matchPackageNames: [
+        '*',
       ],
     },
     {
-      matchPackageNames: ["camunda-platform"],
-      addLabels: ["group:camunda-platform"],
+      groupName: 'patch-grouped', // Group all pin and digests updates in a single branch with patch to save CI computing.
+      enabled: true,
+      matchUpdateTypes: [
+        'pin',
+        'digest',
+        'patch',
+      ],
+      matchPackageNames: [
+        '*',
+      ],
     },
     {
-      "matchPackageNames": [
-        "amazon-eks",
-        "amazon-rds-postgresql",
-        "opensearch",
-        "red-hat-openshift",
-        ],
-      "matchUpdateTypes": ["major", "minor"],
-      "draftPR": true,
-      "groupName": "infra-updates",
-      "addLabels": ["group:infra-updates"],
-      "prBodyNotes": [
-        "⚠️ **Breaking Changes Possible** ⚠️",
-        "This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `postgresql`, or `openshift`).",
-        "Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.",
-        "This update **should not** be merged mid-cycle unless explicitly approved by yourself."
-      ]
+      matchPackageNames: [
+        'camunda-platform',
+      ],
+      addLabels: [
+        'group:camunda-platform',
+      ],
     },
     {
-      matchDatasources: ["go"],
-      addLabels: ["group:go"],
+      matchPackageNames: [
+        'amazon-eks',
+        'amazon-rds-postgresql',
+        'opensearch',
+        'red-hat-openshift',
+      ],
+      matchUpdateTypes: [
+        'major',
+        'minor',
+      ],
+      draftPR: true,
+      groupName: 'infra-updates',
+      addLabels: [
+        'group:infra-updates',
+      ],
+      prBodyNotes: [
+        '⚠️ **Breaking Changes Possible** ⚠️',
+        'This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `postgresql`, or `openshift`).',
+        'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
+        'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
+      ],
+    },
+    {
+      matchDatasources: [
+        'go',
+      ],
+      addLabels: [
+        'group:go',
+      ],
     },
     // limit the PR creation for the Renovate pre-commit hook (it's released very frequently)
     {
-      matchPackageNames: ["renovatebot/pre-commit-hooks"],
-      matchUpdateTypes: ["patch"],
+      matchPackageNames: [
+        'renovatebot/pre-commit-hooks',
+      ],
+      matchUpdateTypes: [
+        'patch',
+      ],
       enabled: false,
     },
     // GitHub Actions
     {
-      matchManagers: ["github-actions"],
-      addLabels: ["group:github-actions", "component:ci"],
+      matchManagers: [
+        'github-actions',
+      ],
+      addLabels: [
+        'group:github-actions',
+        'component:ci',
+      ],
     },
     // Terraform AWS modules
     {
-      matchDatasources: ["terraform-module"],
-      matchPackageNames: ["terraform-aws-modules.*"],
-      addLabels: ["group:terraform"],
+      matchDatasources: [
+        'terraform-module',
+      ],
+      matchPackageNames: [
+        'terraform-aws-modules.*',
+      ],
+      addLabels: [
+        'group:terraform',
+      ],
     },
     // Terraform major provider updates
     {
-      matchDatasources: ["terraform-provider"],
-      addLabels: ["group:terraform"],
+      matchDatasources: [
+        'terraform-provider',
+      ],
+      addLabels: [
+        'group:terraform',
+      ],
     },
     // For known GitHub repositories that use GitHub tags/releases of format
-    // "v1.2.3" and where the asdf plugin ignores the "v" prefix, we also tell
+    // 'v1.2.3' and where the asdf plugin ignores the 'v' prefix, we also tell
     // Renovate to ignore it via extractVersion when updating .tool-version file
     {
-      matchFileNames: ["**/.tool-versions", "**/*.tf", "**/*.tfvars"],
-      matchPackageNames: [
-        "eksctl-io/eksctl",
-        "hashicorp/terraform",
-        "helm/helm",
-        "koalaman/shellcheck",
-        "pre-commit/pre-commit",
-        "rhysd/actionlint",
+      matchFileNames: [
+        '**/.tool-versions',
+        '**/*.tf',
+        '**/*.tfvars',
       ],
-      extractVersion: "^v(?<version>.*)$",
+      matchPackageNames: [
+        'eksctl-io/eksctl',
+        'hashicorp/terraform',
+        'helm/helm',
+        'koalaman/shellcheck',
+        'pre-commit/pre-commit',
+        'rhysd/actionlint',
+      ],
+      extractVersion: '^v(?<version>.*)$',
     },
     {
-      "matchDatasources": ["endoflife-date"],
-      "matchPackageNames": ["amazon-eks"],
-      "extractVersion": "^(?<version>.*)-eks.+$"
+      matchDatasources: [
+        'endoflife-date',
+      ],
+      matchPackageNames: [
+        'amazon-eks',
+      ],
+      extractVersion: '^(?<version>.*)-eks.+$',
     },
       {
       // The versioning is a bit strange, so we need to help a bit with parsing it correctly
-      matchPackageNames: ["amazon/cloudwatch-agent"],
-      versioning: "regex:^(?<major>\\d)(\\.(?<minor>\\d+))(\\.(?<patch>\\db\\d+))$",
-    },
-    {
-      matchPackageNames: ["camunda/camunda-platform-helm"],
-      versioning: "regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "description": "Update ACM Subscription channel using custom.openshift-acm",
-      "matchDatasources": ["custom.openshift-acm"],
-      "matchManagers": ["regex"],
-      "matchStrings": [
-        "channel:\\s*release-(?<currentValue>\\d+\\.\\d+)"
+      matchPackageNames: [
+        'amazon/cloudwatch-agent',
       ],
-      "extractVersion": "^release-(?<version>\\d+\\.\\d+)$",
-      "versioning": "major.minor"
-    }
-  ],
-  "customDatasources": {
-    "rosa-camunda": {
-      "defaultRegistryUrlTemplate": "https://camunda.github.io/camunda-deployment-references/rosa_versions.txt",
-      "format": "plain",
+      versioning: 'regex:^(?<major>\\d)(\\.(?<minor>\\d+))(\\.(?<patch>\\db\\d+))$',
     },
-    "openshift-acm": {
-      "defaultRegistryUrlTemplate": "https://camunda.github.io/camunda-deployment-references/openshift_acm_versions.txt",
-      "format": "plain",
+    {
+      matchPackageNames: [
+        'camunda/camunda-platform-helm',
+      ],
+      versioning: 'regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
+    },
+    {
+      description: 'Update ACM Subscription channel using custom.openshift-acm',
+      matchDatasources: [
+        'custom.openshift-acm',
+      ],
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchStrings: [
+        'channel:\\s*release-(?<currentValue>\\d+\\.\\d+)',
+      ],
+      extractVersion: '^release-(?<version>\\d+\\.\\d+)$',
+      versioning: 'major.minor',
+    },
+  ],
+  'customDatasources': {
+    'rosa-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/rosa_versions.txt',
+      'format': 'plain',
+    },
+    'openshift-acm': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/openshift_acm_versions.txt',
+      'format': 'plain',
     },
   },
   customManagers: [
    {
-      customType: "regex",
+      customType: 'regex',
       fileMatch: [
-        "\.yaml$",
-        "\.yml$",
-        "\.sh$",
-        "\.go$",
-        "\.tf$",
-        "\.tfvars$",
-        "\.tool-versions$",
-        "^justfile$"
+        '.yaml$',
+        '.yml$',
+        '.sh$',
+        '.go$',
+        '.tf$',
+        '.tfvars$',
+        '.tool-versions$',
+        '^justfile$',
         ],
       matchStrings: [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?:\\s\\.)?(?<currentValue>.*)",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?- (?<currentValue>.*)",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?: (?<currentValue>.*)",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=\"(?<currentValue>.*)\"",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?-\"(?<currentValue>.*)\"",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*? \"(?<currentValue>.*)\"",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( extractVersion=(?<extractVersion>.*?))?\\s.*? (?<currentValue>.*)\\s",
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( extractVersion=(?<extractVersion>.*?))?\\s(?<originalPackageName>.*) := \"(?<currentValue>.*?)\"\\s"
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?:\\s\\.)?(?<currentValue>.*)',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?- (?<currentValue>.*)',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?: (?<currentValue>.*)',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?="(?<currentValue>.*)"',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?-"(?<currentValue>.*)"',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*? "(?<currentValue>.*)"',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( extractVersion=(?<extractVersion>.*?))?\\s.*? (?<currentValue>.*)\\s',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( extractVersion=(?<extractVersion>.*?))?\\s(?<originalPackageName>.*) := "(?<currentValue>.*?)"\\s',
       ],
-      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+      versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}',
     },
   ]
 }
