@@ -242,7 +242,7 @@
       ],
       extractVersion: '^(?<version>.*)-eks.+$',
     },
-      {
+    {
       // The versioning is a bit strange, so we need to help a bit with parsing it correctly
       matchPackageNames: [
         'amazon/cloudwatch-agent',
@@ -254,20 +254,6 @@
         'camunda/camunda-platform-helm',
       ],
       versioning: 'regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
-    },
-    {
-      description: 'Update ACM Subscription channel using custom.openshift-acm',
-      matchDatasources: [
-        'custom.openshift-acm',
-      ],
-      matchManagers: [
-        'custom.regex',
-      ],
-      matchStrings: [
-        'channel:\\s*release-(?<currentValue>\\d+\\.\\d+)',
-      ],
-      extractVersion: '^release-(?<version>\\d+\\.\\d+)$',
-      versioning: 'major.minor',
     },
   ],
   'customDatasources': {
@@ -297,6 +283,7 @@
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?:\\s\\.)?(?<currentValue>.*)',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?- (?<currentValue>.*)',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?: (?<currentValue>.*)',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?: release-(?<currentValue>.*)',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?="(?<currentValue>.*)"',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?-"(?<currentValue>.*)"',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*? "(?<currentValue>.*)"',
