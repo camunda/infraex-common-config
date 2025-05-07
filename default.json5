@@ -267,18 +267,18 @@
     },
   },
   customManagers: [
-   {
+    {
       customType: 'regex',
-      fileMatch: [
-        '.yaml$',
-        '.yml$',
-        '.sh$',
-        '.go$',
-        '.tf$',
-        '.tfvars$',
-        '.tool-versions$',
-        '^justfile$',
-        ],
+      managerFilePatterns: [
+        '/\\.yaml$/',
+        '/\\.yml$/',
+        '/\\.sh$/',
+        '/\\.go$/',
+        '/\\.tf$/',
+        '/\\.tfvars$/',
+        '/\\.tool-versions$/',
+        '/^justfile$/',
+      ],
       matchStrings: [
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?=(?:\\s\\.)?(?<currentValue>.*)',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?- (?<currentValue>.*)',
