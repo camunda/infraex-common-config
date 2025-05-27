@@ -1,0 +1,89 @@
+---
+name: Azure Scheduled Cleanup of test regions
+
+on:
+    schedule:
+        # Single daily schedule at 5:00
+        - cron: 0 5 * * *
+    workflow_dispatch:
+        inputs:
+            region:
+                description: Azure region to clean up
+                default: swedencentral
+    pull_request:
+        paths:
+            - .github/workflows/azure_nightly_cleanup.yml
+            - .github/workflows/scripts/azure_rg_cleanup.sh
+
+# Limit workflow to a single execution per ref
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    azure-cleanup:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+            - name: Determine AZURE_REGION
+              id: determine-values
+              run: |
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      AZURE_REGION="${{ github.event.inputs.region }}"
+                  else
+                      AZURE_REGION="swedencentral"
+                  fi
+
+                  echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
+
+            # For PR purposes we're overwriting the setting and enable dry run
+            - name: Set DRY_RUN for PR
+              if: github.event_name == 'pull_request'
+              run: |
+                  echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@7709c609789c5e27b757a85817483caadbb5939a # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: true
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_TENANT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_SUBSCRIPTION_ID;
+
+            - name: Azure Login with OIDC
+              uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+              with:
+                  client-id: ${{ steps.secrets.outputs.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ steps.secrets.outputs.AZURE_TENANT_ID }}
+                  subscription-id: ${{ steps.secrets.outputs.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Run Azure Cleanup Script
+              id: azure-cleanup
+              run: |
+                  ./.github/workflows/scripts/azure_rg_cleanup.sh
+
+
+    notify-on-failure:
+        runs-on: ubuntu-latest
+        if: failure()
+        needs:
+            - azure-cleanup
+        steps:
+            - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+            - name: Notify in Slack in case of failure
+              id: slack-notification
+              if: github.event_name == 'schedule'
+              uses: ./.github/actions/report-failure-on-slack
+              with:
+                  vault_addr: ${{ secrets.VAULT_ADDR }}
+                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
