@@ -13,6 +13,9 @@ on:
             region:
                 description: Azure region to clean up
                 default: swedencentral
+            cleanup_older_than:
+                description: Minimum age of the resources to cleanup
+                default: 12h
             required_tag_key:
                 description: Required tag key for deletion (optional)
                 required: false
@@ -47,20 +50,24 @@ jobs:
                 config:
                     - region: swedencentral
                       day: All
+                      cleanup_older_than: 12h
 
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-            - name: Determine AZURE_REGION
+            - name: Determine AZURE_REGION and CLEANUP_OLDER_THAN
               id: determine-values
               run: |
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       AZURE_REGION="${{ github.event.inputs.region }}"
+                      CLEANUP_OLDER_THAN="${{ github.event.inputs.cleanup_older_than }}"
                   else
                       AZURE_REGION="${{ matrix.config.region }}"
+                      CLEANUP_OLDER_THAN="${{ matrix.config.cleanup_older_than }}"
                   fi
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
+                  echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
 
             - name: Set environment from workflow_dispatch inputs
               if: ${{ github.event_name == 'workflow_dispatch' }}

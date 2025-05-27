@@ -2,8 +2,18 @@
 
 set -euo pipefail
 
+CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-}"
+date_command="gdate"
+
 if [[ "${DRY_RUN:-}" == "true" ]]; then
   echo "Dry run mode enabled. No changes will be made."
+fi
+
+if [[ -n "$CLEANUP_OLDER_THAN" ]]; then
+  MIN_HOURS="${CLEANUP_OLDER_THAN%h}"
+  [[ "$MIN_HOURS" =~ ^[0-9]+$ ]] || { echo "Invalid CLEANUP_OLDER_THAN: $CLEANUP_OLDER_THAN"; exit 1; }
+  LIMIT_DATE=$($date_command -u -d "$MIN_HOURS hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+  echo "Filtering RGs to only those with oldest resource created before: $LIMIT_DATE"
 fi
 
 for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); do
@@ -24,6 +34,22 @@ for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); d
     if [[ "$tag_value" != "$REQUIRED_TAG_VALUE" ]]; then
       echo "Skipping RG $RG: tag ${REQUIRED_TAG_KEY} does not match required value (${REQUIRED_TAG_VALUE})."
       continue
+    fi
+  fi
+
+  # --- MINIMUM AGE FILTER ---
+  if [[ -n "$CLEANUP_OLDER_THAN" ]]; then
+  RESOURCES=$(az resource list --resource-group "$RG" --query "[].{created:createdTime}" -o json)
+  OLDEST_DATE=$(echo "$RESOURCES" | jq -r '.[].created' | sort | head -n 1)
+
+  if [[ -z "$OLDEST_DATE" || "$OLDEST_DATE" == "null" ]]; then
+      echo "No resource timestamps found in $RG - will proceed to delete"
+  else
+      if [[ "$OLDEST_DATE" > "$LIMIT_DATE" ]]; then
+      echo "Skipping $RG - oldest resource is too new ($OLDEST_DATE)"
+      continue
+      fi
+      echo "Eligible: $RG - oldest resource created $OLDEST_DATE"
     fi
   fi
 
