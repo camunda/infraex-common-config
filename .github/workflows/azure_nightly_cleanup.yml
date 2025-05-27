@@ -1,6 +1,9 @@
 ---
 name: Azure Scheduled Cleanup of test regions
 
+permissions:
+    id-token: write
+
 on:
     schedule:
         # Single daily schedule at 5:00
