@@ -49,6 +49,34 @@ jobs:
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
 
+            - name: Check if job should run based on the day
+              id: day-check
+              run: |
+                  # Initialize a variable to determine if the job should continue
+                  should_run=true
+
+                  # If it's a workflow_dispatch, only allow the first region (swedencentral) of the matrix to run
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      if [[ "${{ matrix.config.region }}" != "swedencentral" ]]; then
+                          echo "Skipping job for this region because only the first region is allowed to run for workflow_dispatch."
+                          should_run=false
+                      else
+                          echo "Running job for the first region only since it's a workflow_dispatch event."
+                      fi
+                  else
+                      # Otherwise, check if the day matches the one in the matrix
+                      current_day=$(date +%A)
+                      if [[ "${{ matrix.config.day }}" != "All" && "${{ matrix.config.day }}" != "$current_day" ]]; then
+                          echo "Skipping job for region ${{ env.AZURE_REGION }} as it’s intended for ${{ matrix.config.day }} only."
+                          should_run=false
+                      else
+                          echo "Running job for region ${{ env.AZURE_REGION }} on the correct day: $current_day."
+                      fi
+                  fi
+
+                  echo "should_run=$should_run" | tee -a "$GITHUB_ENV"
+
+
             # For PR purposes we're overwriting the setting and enable dry run
             - name: Set DRY_RUN for PR
               if: github.event_name == 'pull_request'
@@ -56,6 +84,7 @@ jobs:
                   echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
 
             - name: Import Secrets
+              if: ${{ env.should_run == 'true' }}
               id: secrets
               uses: hashicorp/vault-action@7709c609789c5e27b757a85817483caadbb5939a # v3
               with:
@@ -70,6 +99,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AZURE_SUBSCRIPTION_ID;
 
             - name: Azure Login with OIDC
+              if: ${{ env.should_run == 'true' }}
               uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
               with:
                   client-id: ${{ steps.secrets.outputs.AZURE_CLIENT_ID }}
@@ -77,6 +107,7 @@ jobs:
                   subscription-id: ${{ steps.secrets.outputs.AZURE_SUBSCRIPTION_ID }}
 
             - name: Run Azure Cleanup Script
+              if: ${{ env.should_run == 'true' }}
               id: azure-cleanup
               run: |
                   ./.github/workflows/scripts/azure_rg_cleanup.sh
