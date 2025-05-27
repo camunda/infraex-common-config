@@ -24,11 +24,11 @@ on:
             protected_tag_key:
                 description: Protected tag key (optional; RGs with this will NEVER be deleted)
                 required: false
-                default: ''
+                default: neverdelete
             protected_tag_value:
                 description: Protected tag value (optional)
                 required: false
-                default: ''
+                default: 'true'
 
     pull_request:
         paths:
@@ -67,7 +67,6 @@ jobs:
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
 
             - name: Set environment from workflow_dispatch inputs
-              if: github.event_name == 'workflow_dispatch'
               run: |
                   {
                     echo "REQUIRED_TAG_KEY=\"${{ github.event.inputs.required_tag_key }}\""
