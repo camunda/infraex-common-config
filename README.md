@@ -53,6 +53,12 @@ To keep the environment organized, all resources in these regions are automatica
 | US East (N. Virginia) | us-east-1 | Saturday @5AM    |
 | US East (Ohio) | us-east-2 | Saturday @5AM    |
 
+##### Azure Regions
+
+| Region         | Identifier   | Cleanup Schedule          |
+|----------------|--------------|-------------------------|
+| Spain Central  | spaincentral | Saturday @5AM     |
+
 
 #### Permanent Regions
 

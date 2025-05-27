@@ -16,18 +16,6 @@ on:
             cleanup_older_than:
                 description: Minimum age of the resources to cleanup
                 default: 12h
-            required_tag_key:
-                description: Required tag key for deletion (optional)
-                required: false
-            required_tag_value:
-                description: Required tag value for deletion (optional)
-                required: false
-            protected_tag_key:
-                description: Protected tag key (optional; RGs with this will NEVER be deleted)
-                required: false
-            protected_tag_value:
-                description: Protected tag value (optional)
-                required: false
 
     pull_request:
         paths:
@@ -51,6 +39,9 @@ jobs:
                     - region: swedencentral
                       day: All
                       cleanup_older_than: 12h
+                    - region: spaincentral
+                      day: Saturday
+                      cleanup_older_than: 0h
 
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -68,23 +59,6 @@ jobs:
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
                   echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
-
-            - name: Set environment from workflow_dispatch inputs
-              if: ${{ github.event_name == 'workflow_dispatch' }}
-              run: |
-                  if [[ -n "${{ github.event.inputs.required_tag_key }}" ]]; then
-                  echo "REQUIRED_TAG_KEY=${{ github.event.inputs.required_tag_key }}" >> "$GITHUB_ENV"
-                  fi
-                  if [[ -n "${{ github.event.inputs.required_tag_value }}" ]]; then
-                  echo "REQUIRED_TAG_VALUE=${{ github.event.inputs.required_tag_value }}" >> "$GITHUB_ENV"
-                  fi
-                  if [[ -n "${{ github.event.inputs.protected_tag_key }}" ]]; then
-                  echo "PROTECTED_TAG_KEY=${{ github.event.inputs.protected_tag_key }}" >> "$GITHUB_ENV"
-                  fi
-                  if [[ -n "${{ github.event.inputs.protected_tag_value }}" ]]; then
-                  echo "PROTECTED_TAG_VALUE=${{ github.event.inputs.protected_tag_value }}" >> "$GITHUB_ENV"
-                  fi
-
 
             - name: Check if job should run based on the day
               id: day-check
@@ -119,6 +93,7 @@ jobs:
               if: github.event_name == 'pull_request'
               run: |
                   echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
+                  echo "should_run=true" | tee -a "$GITHUB_ENV"
 
             - name: Import Secrets
               if: ${{ env.should_run == 'true' }}

@@ -2,8 +2,16 @@
 
 set -euo pipefail
 
+PROTECTED_RG_LIST="NetworkWatcherRG Default-ActivityLogAlertsRG"
+
 CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-}"
-date_command="date"
+
+# Detect operating system and set the appropriate date command
+if [[ "$(uname)" == "Darwin" ]]; then
+    date_command="gdate"
+else
+    date_command="date"
+fi
 
 if [[ "${DRY_RUN:-}" == "true" ]]; then
   echo "Dry run mode enabled. No changes will be made."
@@ -19,22 +27,10 @@ fi
 for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); do
   [[ -z "$RG" ]] && continue
 
-  # --- PROTECTED TAG FILTER ---
-  if [[ -n "${PROTECTED_TAG_KEY:-}" && -n "${PROTECTED_TAG_VALUE:-}" ]]; then
-    tag_value=$(az group show --name "$RG" --query "tags.${PROTECTED_TAG_KEY}" -o tsv || true)
-    if [[ "$tag_value" == "$PROTECTED_TAG_VALUE" ]]; then
-      echo "Skipping RG $RG: protected tag ${PROTECTED_TAG_KEY}=${PROTECTED_TAG_VALUE} present."
-      continue
-    fi
-  fi
-
-  # --- REQUIRED TAG FILTER ---
-  if [[ -n "${REQUIRED_TAG_KEY:-}" && -n "${REQUIRED_TAG_VALUE:-}" ]]; then
-    tag_value=$(az group show --name "$RG" --query "tags.${REQUIRED_TAG_KEY}" -o tsv || true)
-    if [[ "$tag_value" != "$REQUIRED_TAG_VALUE" ]]; then
-      echo "Skipping RG $RG: tag ${REQUIRED_TAG_KEY} does not match required value (${REQUIRED_TAG_VALUE})."
-      continue
-    fi
+  # Protected RG name check (skip if in protected list)
+  if [[ " $PROTECTED_RG_LIST " =~ " $RG " ]]; then
+    echo "Skipping $RG: protected"
+    continue
   fi
 
   # --- MINIMUM AGE FILTER ---
