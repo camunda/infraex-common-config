@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-PROTECTED_RG_LIST="NetworkWatcherRG Default-ActivityLogAlertsRG"
+PROTECTED_RG_LIST="NetworkWatcherRG Default-ActivityLogAlertsRG rg-infraex-global-permanent"
 
 CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-}"
 
