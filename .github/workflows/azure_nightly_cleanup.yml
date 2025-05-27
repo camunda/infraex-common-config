@@ -16,11 +16,9 @@ on:
             required_tag_key:
                 description: Required tag key for deletion (optional)
                 required: false
-                default: ''
             required_tag_value:
                 description: Required tag value for deletion (optional)
                 required: false
-                default: ''
             protected_tag_key:
                 description: Protected tag key (optional; RGs with this will NEVER be deleted)
                 required: false
