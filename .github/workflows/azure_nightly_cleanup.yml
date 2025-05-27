@@ -13,6 +13,23 @@ on:
             region:
                 description: Azure region to clean up
                 default: swedencentral
+            required_tag_key:
+                description: Required tag key for deletion (optional)
+                required: false
+                default: ''
+            required_tag_value:
+                description: Required tag value for deletion (optional)
+                required: false
+                default: ''
+            protected_tag_key:
+                description: Protected tag key (optional; RGs with this will NEVER be deleted)
+                required: false
+                default: ''
+            protected_tag_value:
+                description: Protected tag value (optional)
+                required: false
+                default: ''
+
     pull_request:
         paths:
             - .github/workflows/azure_nightly_cleanup.yml
@@ -48,6 +65,16 @@ jobs:
                   fi
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
+
+            - name: Set environment from workflow_dispatch inputs
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  {
+                    echo "REQUIRED_TAG_KEY=\"${{ github.event.inputs.required_tag_key }}\""
+                    echo "REQUIRED_TAG_VALUE=\"${{ github.event.inputs.required_tag_value }}\""
+                    echo "PROTECTED_TAG_KEY=\"${{ github.event.inputs.protected_tag_key }}\""
+                    echo "PROTECTED_TAG_VALUE=\"${{ github.event.inputs.protected_tag_value }}\""
+                  } >> "$GITHUB_ENV"
 
             - name: Check if job should run based on the day
               id: day-check
