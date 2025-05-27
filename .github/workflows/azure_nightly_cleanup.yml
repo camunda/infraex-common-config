@@ -66,12 +66,19 @@ jobs:
 
             - name: Set environment from workflow_dispatch inputs
               run: |
-                  {
-                    echo "REQUIRED_TAG_KEY=\"${{ github.event.inputs.required_tag_key }}\""
-                    echo "REQUIRED_TAG_VALUE=\"${{ github.event.inputs.required_tag_value }}\""
-                    echo "PROTECTED_TAG_KEY=\"${{ github.event.inputs.protected_tag_key }}\""
-                    echo "PROTECTED_TAG_VALUE=\"${{ github.event.inputs.protected_tag_value }}\""
-                  } >> "$GITHUB_ENV"
+                  if [[ -n "${{ github.event.inputs.required_tag_key }}" ]]; then
+                  echo "REQUIRED_TAG_KEY=${{ github.event.inputs.required_tag_key }}" >> "$GITHUB_ENV"
+                  fi
+                  if [[ -n "${{ github.event.inputs.required_tag_value }}" ]]; then
+                  echo "REQUIRED_TAG_VALUE=${{ github.event.inputs.required_tag_value }}" >> "$GITHUB_ENV"
+                  fi
+                  if [[ -n "${{ github.event.inputs.protected_tag_key }}" ]]; then
+                  echo "PROTECTED_TAG_KEY=${{ github.event.inputs.protected_tag_key }}" >> "$GITHUB_ENV"
+                  fi
+                  if [[ -n "${{ github.event.inputs.protected_tag_value }}" ]]; then
+                  echo "PROTECTED_TAG_VALUE=${{ github.event.inputs.protected_tag_value }}" >> "$GITHUB_ENV"
+                  fi
+
 
             - name: Check if job should run based on the day
               id: day-check
