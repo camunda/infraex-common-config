@@ -26,6 +26,14 @@ concurrency:
 jobs:
     azure-cleanup:
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false # don't propagate failing jobs
+            matrix:
+                # Define regions and types of cleanup based on day
+                # Please also update the README.md of the project
+                config:
+                    - region: swedencentral
+                      day: All
 
         steps:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -36,7 +44,7 @@ jobs:
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       AZURE_REGION="${{ github.event.inputs.region }}"
                   else
-                      AZURE_REGION="swedencentral"
+                      AZURE_REGION="${{ matrix.config.region }}"
                   fi
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
