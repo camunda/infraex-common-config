@@ -3,7 +3,7 @@
 set -euo pipefail
 
 CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-}"
-date_command="gdate"
+date_command="date"
 
 if [[ "${DRY_RUN:-}" == "true" ]]; then
   echo "Dry run mode enabled. No changes will be made."
