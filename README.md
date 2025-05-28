@@ -33,6 +33,11 @@ CI Regions are designated specifically for **Continuous Integration (CI) tests**
 | EU (London)| eu-west-2  | Daily @5AM       |
 | EU (Paris) | eu-west-3  | Daily @5AM       |
 
+##### Azure Regions
+
+| Region         | Identifier   | Cleanup Schedule       |
+|----------------|--------------|-------------------------|
+| Sweden Central | swedencentral| Daily @5AM              |
 
 #### Weekly Work Regions
 
@@ -48,6 +53,13 @@ To keep the environment organized, all resources in these regions are automatica
 | US East (N. Virginia) | us-east-1 | Saturday @5AM    |
 | US East (Ohio) | us-east-2 | Saturday @5AM    |
 
+##### Azure Regions
+
+| Region         | Identifier   | Cleanup Schedule          |
+|----------------|--------------|-------------------------|
+| Spain Central  | spaincentral | Saturday @5AM     |
+
+
 #### Permanent Regions
 
 Permanent Regions are designated for **persistent resources** that fall outside the scope of CI testing. This includes resources such as S3 buckets, Lambda functions, and reference architectures, all of which are critical for ongoing infrastructure and operational requirements.
@@ -62,3 +74,9 @@ All configurations are maintained in [Terraform](https://github.com/camunda/infr
 |----------------|--------------|-------------------------|
 | EU (Frankfurt) | eu-central-1 | Permanent resources     |
 | EU (Ireland)   | eu-west-1    | Reference architectures |
+
+##### Azure Regions
+
+| Region         | Identifier   | Use Case                |
+|----------------|--------------|-------------------------|
+| West Europe    | westeurope   | Permanent resources     |
