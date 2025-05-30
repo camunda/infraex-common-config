@@ -111,7 +111,7 @@ jobs:
                     echo "✅ $FILE:$LINE is in added lines"
 
                     EXISTING=$(jq -r --arg file "$FILE" --argjson line "$LINE" \
-                      '.[] | select(.path == $file and .line == $line)' comments.json)
+                      '[.[] | select(.path == $file and .line == $line and .user.login == "github-actions[bot]" and (.body | contains("A new Todo was discovered")))] | first' comments.json)
 
                     SKIP=false
 
