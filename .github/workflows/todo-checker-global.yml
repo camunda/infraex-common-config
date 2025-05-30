@@ -91,6 +91,8 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
+                  yq comments.json
+
                   FOUND_REMAINING_TODO=false
 
                   echo "🔁 Processing TODOs"
