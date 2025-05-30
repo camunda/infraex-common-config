@@ -91,9 +91,8 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  found_remaining_todos=0
-
                   echo "🔁 Processing TODOs"
+                  echo "0" > todo_count.txt
                   jq -c '.' todos.json | while IFS= read -r todo; do
                     FILE=$(echo "$todo" | jq -r '.path')
                     LINE=$(echo "$todo" | jq -r '.line')
@@ -128,10 +127,14 @@ jobs:
                       if [ "$REACT_DOWN" -ge 1 ]; then
                         echo "🔕 Already acknowledged via 👎"
                       else
-                        found_remaining_todos=$(( found_remaining_todos + 1 ))
+                        count=$(cat todo_count.txt)
+                        count=$((count + 1))
+                        echo "$count" > todo_count.txt
                       fi
                     else
-                      found_remaining_todos=$(( found_remaining_todos + 1 ))
+                      count=$(cat todo_count.txt)
+                      count=$((count + 1))
+                      echo "$count" > todo_count.txt
 
                       COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
                       <br> TODO: \`$TEXT\`
@@ -151,6 +154,7 @@ jobs:
                     fi
                   done
 
+                  found_remaining_todos=$(cat todo_count.txt)
                   echo "$found_remaining_todos"
 
                   if [ "$found_remaining_todos" -gt 0 ]; then
