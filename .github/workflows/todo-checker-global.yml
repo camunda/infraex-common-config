@@ -128,7 +128,7 @@ jobs:
 
                       ID=$(echo "$EXISTING" | jq -n 'inputs | .id' | head -n1)
                       echo "Checking comment replies ID=$ID"
-                      RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || true)
+                      RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '[]')
                       if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
                         echo "🔕 Already acknowledged or ignored"
                       else
