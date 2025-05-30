@@ -91,7 +91,7 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  FOUND_REMAINING_TODO=0
+                  found_remaining_todos=0
 
                   echo "🔁 Processing TODOs"
                   jq -c '.' todos.json | while IFS= read -r todo; do
@@ -127,10 +127,10 @@ jobs:
                       if [ "$REACT_DOWN" -ge 1 ]; then
                         echo "🔕 Already acknowledged via 👎"
                       else
-                        FOUND_REMAINING_TODO=$(( FOUND_REMAINING_TODO + 1 ))
+                        found_remaining_todos=$(( found_remaining_todos + 1 ))
                       fi
                     else
-                      FOUND_REMAINING_TODO=$(( FOUND_REMAINING_TODO + 1 ))
+                      found_remaining_todos=$(( found_remaining_todos + 1 ))
 
                       COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
                       <br> TODO: \`$TEXT\`
@@ -150,9 +150,9 @@ jobs:
                     fi
                   done
 
-                  echo "$FOUND_REMAINING_TODO"
+                  echo "$found_remaining_todos"
 
-                  if [ "$FOUND_REMAINING_TODO" -gt 0 ]; then
-                    echo "::error title=Unresolved TODOs::❌ $FOUND_REMAINING_TODO TODO(s) remain unresolved. React with 👎 to suppress reminders."
-                    exit "$FOUND_REMAINING_TODO"
+                  if [ "$found_remaining_todos" -gt 0 ]; then
+                    echo "::error title=Unresolved TODOs::❌ $found_remaining_todos TODO(s) remain unresolved. React with 👎 to suppress reminders."
+                    exit "$found_remaining_todos"
                   fi
