@@ -126,7 +126,7 @@ jobs:
                       SKIP=true
                       echo "✅ $FILE:$LINE a comment already reports this TODO: $EXISTING"
 
-                      ID=$(echo "$EXISTING" | jq -r '.id')
+                      ID=$(echo "$EXISTING" | yq e '.[0].id')
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || true)
                       if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
                         echo "🔕 Already acknowledged or ignored"
