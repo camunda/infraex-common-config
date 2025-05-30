@@ -122,6 +122,9 @@ jobs:
                       if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
                         echo "🔕 Already acknowledged or ignored"
                         SKIP=true
+                      else
+                        # The comment already exists, but we need to track it's not resolved yet
+                        FOUND_REMAINING_TODO=true
                       fi
                     fi
 
