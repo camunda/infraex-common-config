@@ -129,10 +129,15 @@ jobs:
                       ID=$(echo "$EXISTING" | jq -n 'inputs | .id' | head -n1)
                       echo "Checking comment replies ID=$ID"
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '[]')
-                      if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
-                        echo "🔕 Already acknowledged or ignored"
+                      if [ "$(echo "$RESPONSES" | jq 'length')" -eq 0 ]; then
+                        echo "No replies found"
                       else
-                        FOUND_REMAINING_TODO=true
+                        # Check if any reply contains ACK or Ignore
+                        if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
+                          echo "🔕 Already acknowledged or ignored"
+                        else
+                          FOUND_REMAINING_TODO=true
+                        fi
                       fi
                     fi
 
