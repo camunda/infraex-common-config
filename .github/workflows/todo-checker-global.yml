@@ -148,7 +148,7 @@ jobs:
                     fi
                   done
 
-                  if [ "$FOUND_REMAINING_TODO" = "true" ]; then
+                  if [[ "$FOUND_REMAINING_TODO" == "true" ]]; then
                     echo "There are still unresolved todos remaining. Reply \"Ignore\" if you want to ignore them."
                     exit 1
                   fi
