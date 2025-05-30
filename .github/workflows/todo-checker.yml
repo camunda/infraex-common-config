@@ -4,11 +4,11 @@ name: Check TODOs via global workflow
 on:
     pull_request_review_comment:
         types: [created, edited, deleted]
+    issue_comment:
+        types: [created, edited, deleted]
     pull_request:
         types: [opened, synchronize, reopened]
 
-# TODO: test
-# TODO: 4
 jobs:
     call-todo-checker:
         uses: ./.github/workflows/todo-checker-global.yml

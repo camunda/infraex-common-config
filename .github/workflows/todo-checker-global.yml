@@ -10,9 +10,6 @@ env:
     # renovate: datasource=github-releases depName=ianlewis/todos
     TODOS_VERSION: v0.13.0
 
-# TODO 2
-# TODO: 2
-
 jobs:
     check-todos:
         runs-on: ubuntu-latest
