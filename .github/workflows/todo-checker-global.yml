@@ -128,7 +128,9 @@ jobs:
 
                       ID=$(echo "$EXISTING" | jq -n 'inputs | .id' | head -n1)
                       echo "Checking comment replies ID=$ID"
+                      set +e
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '')
+                      set -e
                       if [ -z "$RESPONSES" ]; then
                         echo "No replies found"
                         FOUND_REMAINING_TODO=true
