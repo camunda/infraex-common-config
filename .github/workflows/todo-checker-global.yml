@@ -121,7 +121,7 @@ jobs:
                     ' comments.json)
 
                     if [ -n "$EXISTING" ]; then
-                      echo "✅ $FILE:$LINE a comment already reports this TODO"
+                      echo "✅ $FILE:$LINE a comment already reports this TODO $EXISTING"
 
                       REACT_DOWN=$(echo "$EXISTING" | yq  '.[0].reactions["-1"] // 0' )
                       if [ "$REACT_DOWN" -ge 1 ]; then
