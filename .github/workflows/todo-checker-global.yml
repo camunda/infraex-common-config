@@ -131,6 +131,7 @@ jobs:
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '[]')
                       if [ "$(echo "$RESPONSES" | jq 'length')" -eq 0 ]; then
                         echo "No replies found"
+                        FOUND_REMAINING_TODO=true
                       else
                         # Check if any reply contains ACK or Ignore
                         if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
