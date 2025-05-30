@@ -141,7 +141,7 @@ jobs:
                       <br> TODO: \`$TEXT\`
                       <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
                       <br>
-                      <a href=\"$WORKFLOW_URL\" target=\"_blank\">Click here to refresh list of TODOs left</a>"
+                      <a href=\"$WORKFLOW_URL\" target=\"_blank\">Click here to retry and refresh the list of remaining TODOs</a>"
 
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \
