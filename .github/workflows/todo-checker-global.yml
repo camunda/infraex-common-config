@@ -110,13 +110,18 @@ jobs:
 
                     echo "✅ $FILE:$LINE is in added lines"
 
+                    export FILE="$FILE"
+                    export LINE="$LINE"
+
                     EXISTING=$(yq e '
-                      .[] | select(
-                        .path == env(FILE) and
-                        .line == env(LINE) and
-                        .user.login == "github-actions[bot]" and
-                        (.body | contains("A new Todo was discovered"))
-                      ) | first
+                      .[]
+                      | select(
+                          .path == env(FILE) and
+                          (.line | tostring) == env(LINE) and
+                          .user.login == "github-actions[bot]" and
+                          (.body | contains("A new Todo was discovered"))
+                        )
+                      | first
                     ' comments.json)
 
                     SKIP=false
