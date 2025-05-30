@@ -94,7 +94,7 @@ jobs:
                   FOUND_REMAINING_TODO=0
 
                   echo "🔁 Processing TODOs"
-                  while read -r todo; do
+                  jq -c '.' todos.json | while IFS= read -r todo; do
                     FILE=$(echo "$todo" | jq -r '.path')
                     LINE=$(echo "$todo" | jq -r '.line')
                     TEXT=$(echo "$todo" | jq -r '.text')
@@ -148,7 +148,7 @@ jobs:
                           -F "line=$LINE" \
                           -f "side=RIGHT"
                     fi
-                  done < todos.json
+                  done
 
                   if [ "$FOUND_REMAINING_TODO" -gt 0 ]; then
                     echo "::error title=Unresolved TODOs::❌ $FOUND_REMAINING_TODO TODO(s) remain unresolved. React with 👎 to suppress reminders."
