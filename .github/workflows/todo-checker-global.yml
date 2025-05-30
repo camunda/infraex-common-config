@@ -113,7 +113,7 @@ jobs:
                     EXISTING=$(yq e '
                       .[] | select(
                         .path == env(FILE) and
-                        (.line | tostring) == env(LINE) and
+                        .line == env(LINE) and
                         .user.login == "github-actions[bot]" and
                         (.body | contains("A new Todo was discovered"))
                       ) | first
