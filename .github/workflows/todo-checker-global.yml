@@ -91,7 +91,7 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  FOUND_REMAINING_TODO=false
+                  FOUND_REMAINING_TODO=0
 
                   echo "🔁 Processing TODOs"
                   while read -r todo; do
@@ -120,37 +120,21 @@ jobs:
                         ) | . // ""
                     ' comments.json)
 
-                    SKIP=false
-
                     if [ -n "$EXISTING" ]; then
-                      SKIP=true
                       echo "✅ $FILE:$LINE a comment already reports this TODO"
 
-                      ID=$(echo "$EXISTING" | jq -n 'inputs | .id' | head -n1)
-                      echo "Checking comment replies ID=$ID"
-                      set +e
-                      # TODO: fix this part, find a way to capture answers to comment
-                      RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '')
-                      set -e
-                      if [ -z "$RESPONSES" ]; then
-                        echo "No replies found"
-                        FOUND_REMAINING_TODO=true
+                      REACT_DOWN=$(echo "$EXISTING" | jq -r '.reactions["-1"] // 0')
+                      if [ "$REACT_DOWN" -ge 1 ]; then
+                        echo "🔕 Already acknowledged via 👎"
                       else
-                        # Check if any reply contains ACK or Ignore
-                        if echo "$RESPONSES" | jq -r '.[].body' | grep -Ei 'ACK|Ignore' > /dev/null; then
-                          echo "🔕 Already acknowledged or ignored"
-                        else
-                          FOUND_REMAINING_TODO=true
-                        fi
+                        FOUND_REMAINING_TODO=$((FOUND_REMAINING_TODO + 1))
                       fi
-                    fi
-
-                    if [ "$SKIP" = false ]; then
+                    else
                       COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
                       <br> TODO: \`$TEXT\`
-                      <br>**🔕 Reply with \`Ignore\` to prevent further reminders for this line.**</sub>"
+                      <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**</sub>"
 
-                      FOUND_REMAINING_TODO=true
+                      FOUND_REMAINING_TODO=$((FOUND_REMAINING_TODO + 1))
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \
                           --method POST \
@@ -165,7 +149,7 @@ jobs:
                     fi
                   done < todos.json
 
-                  if [ "$FOUND_REMAINING_TODO" = true ]; then
-                    echo "There are still unresolved todos remaining. Reply \"Ignore\" if you want to ignore them."
-                    exit 1
+                  if [ "$FOUND_REMAINING_TODO" -gt 0 ]; then
+                    echo "::error title=Unresolved TODOs::❌ $FOUND_REMAINING_TODO TODO(s) remain unresolved. React with 👎 or reply 'Ignore' to suppress reminders."
+                    exit "$FOUND_REMAINING_TODO"
                   fi
