@@ -58,103 +58,104 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  echo "🔍 Getting diff from base branch"
-                  BASE_SHA=$(git merge-base origin/main HEAD)
-                  git diff "$BASE_SHA"...HEAD > pr.diff
+                  process_todos() {
 
-                  echo "📄 Parsing added lines"
-                  awk '
-                  /^diff --git / { file="" }
-                  /^+++ b\//     { file=substr($0,7) }
-                  /^@@ / {
-                    split($0, a, " ")
-                    split(a[3], new, ",")
-                    new_start = substr(new[1], 2)
-                    curr = new_start
-                  }
-                  /^+/ && !/^\+\+\+/ {
-                    print file ":" curr
-                    curr++
-                  }
-                  /^[^-+]/ { curr++ }
-                  ' pr.diff > added_lines.txt
+                    echo "🔍 Getting diff from base branch"
+                    BASE_SHA=$(git merge-base origin/main HEAD)
+                    git diff "$BASE_SHA"...HEAD > pr.diff
 
-                  echo "🧠 Running todos"
-                  set +e
-                  todos -o json > todos.json
-                  code=$?
-                  if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
-                    exit $code
-                  fi
-                  set -e
+                    echo "📄 Parsing added lines"
+                    awk '
+                    /^diff --git / { file="" }
+                    /^+++ b\//     { file=substr($0,7) }
+                    /^@@ / {
+                      split($0, a, " ")
+                      split(a[3], new, ",")
+                      new_start = substr(new[1], 2)
+                      curr = new_start
+                    }
+                    /^+/ && !/^\+\+\+/ {
+                      print file ":" curr
+                      curr++
+                    }
+                    /^[^-+]/ { curr++ }
+                    ' pr.diff > added_lines.txt
 
-                  echo "📥 Getting existing comments"
-                  gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
-
-                  TODO_COUNT_FILE=$(mktemp)
-                  echo 0 > "$TODO_COUNT_FILE"
-
-                  echo "🔁 Processing TODOs"
-                  jq -c '.' todos.json | while IFS= read -r todo; do
-                    FILE=$(echo "$todo" | jq -r '.path')
-                    LINE=$(echo "$todo" | jq -r '.line')
-                    TEXT=$(echo "$todo" | jq -r '.text')
-
-                    echo "Checking $FILE:$LINE"
-
-                    if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
-                      echo "❌ $FILE:$LINE not in added lines"
-                      continue
+                    echo "🧠 Running todos"
+                    set +e
+                    todos -o json > todos.json
+                    code=$?
+                    if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+                      exit $code
                     fi
+                    set -e
 
-                    echo "✅ $FILE:$LINE is in added lines"
+                    echo "📥 Getting existing comments"
+                    gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                    export FILE="$FILE"
-                    export LINE="$LINE"
-                    EXISTING=$(yq e '
-                      .[]
-                      | select(
-                          .path == env(FILE) and
-                          .line == env(LINE) and
-                          .user.login == "github-actions[bot]" and
-                          (.body | contains("A new Todo was discovered"))
-                        ) | . // ""
-                    ' comments.json)
+                    FOUND_REMAINING_TODO=0
 
-                    if [ -n "$EXISTING" ]; then
-                      echo "✅ $FILE:$LINE a comment already reports this TODO"
+                    echo "🔁 Processing TODOs"
+                    jq -c '.' todos.json | while IFS= read -r todo; do
+                      FILE=$(echo "$todo" | jq -r '.path')
+                      LINE=$(echo "$todo" | jq -r '.line')
+                      TEXT=$(echo "$todo" | jq -r '.text')
 
-                      REACT_DOWN=$(echo "$EXISTING" | jq -r '.reactions["-1"] // 0')
-                      if [ "$REACT_DOWN" -ge 1 ]; then
-                        echo "🔕 Already acknowledged via 👎"
-                      else
-                        count=$(<"$TODO_COUNT_FILE")
-                        echo $((count + 1)) > "$TODO_COUNT_FILE"
+                      echo "Checking $FILE:$LINE"
+
+                      if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
+                        echo "❌ $FILE:$LINE not in added lines"
+                        continue
                       fi
-                    else
-                      count=$(<"$TODO_COUNT_FILE")
-                      echo $((count + 1)) > "$TODO_COUNT_FILE"
 
-                      COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
-                      <br> TODO: \`$TEXT\`
-                      <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**</sub>"
+                      echo "✅ $FILE:$LINE is in added lines"
 
-                      echo "💬 Commenting on $FILE:$LINE"
-                      gh api \
-                          --method POST \
-                          -H "Accept: application/vnd.github+json" \
-                          -H "X-GitHub-Api-Version: 2022-11-28" \
-                          "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
-                          -f "body=$COMMENT_BODY" \
-                          -f "commit_id=${{ github.event.pull_request.head.sha }}" \
-                          -f "path=$FILE" \
-                          -F "line=$LINE" \
-                          -f "side=RIGHT"
+                      export FILE="$FILE"
+                      export LINE="$LINE"
+                      EXISTING=$(yq e '
+                        .[]
+                        | select(
+                            .path == env(FILE) and
+                            .line == env(LINE) and
+                            .user.login == "github-actions[bot]" and
+                            (.body | contains("A new Todo was discovered"))
+                          ) | . // ""
+                      ' comments.json)
+
+                      if [ -n "$EXISTING" ]; then
+                        echo "✅ $FILE:$LINE a comment already reports this TODO"
+
+                        REACT_DOWN=$(echo "$EXISTING" | jq -r '.reactions["-1"] // 0')
+                        if [ "$REACT_DOWN" -ge 1 ]; then
+                          echo "🔕 Already acknowledged via 👎"
+                        else
+                          FOUND_REMAINING_TODO=$(( FOUND_REMAINING_TODO + 1 ))
+                        fi
+                      else
+                        FOUND_REMAINING_TODO=$(( FOUND_REMAINING_TODO + 1 ))
+
+                        COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
+                        <br> TODO: \`$TEXT\`
+                        <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**</sub>"
+
+                        echo "💬 Commenting on $FILE:$LINE"
+                        gh api \
+                            --method POST \
+                            -H "Accept: application/vnd.github+json" \
+                            -H "X-GitHub-Api-Version: 2022-11-28" \
+                            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
+                            -f "body=$COMMENT_BODY" \
+                            -f "commit_id=${{ github.event.pull_request.head.sha }}" \
+                            -f "path=$FILE" \
+                            -F "line=$LINE" \
+                            -f "side=RIGHT"
+                      fi
+                    done
+
+                    if [ "$FOUND_REMAINING_TODO" -gt 0 ]; then
+                      echo "::error title=Unresolved TODOs::❌ $FOUND_REMAINING_TODO TODO(s) remain unresolved. React with 👎 to suppress reminders."
+                      exit "$FOUND_REMAINING_TODO"
                     fi
-                  done
+                  }
 
-                  FOUND_REMAINING_TODO=$(<"$TODO_COUNT_FILE")
-                  if [ "$FOUND_REMAINING_TODO" -gt 0 ]; then
-                    echo "::error title=Unresolved TODOs::❌ $FOUND_REMAINING_TODO TODO(s) remain unresolved. React with 👎 to suppress reminders."
-                    exit "$FOUND_REMAINING_TODO"
-                  fi
+                  process_todos
