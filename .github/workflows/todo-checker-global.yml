@@ -117,14 +117,14 @@ jobs:
                           .line == env(LINE) and
                           .user.login == "github-actions[bot]" and
                           (.body | contains("A new Todo was discovered"))
-                        )
+                        ) | . // ""
                     ' comments.json)
 
                     SKIP=false
 
-                    if [ "$EXISTING" != "null" ]; then
+                    if [ -n "$EXISTING" ]; then
                       SKIP=true
-                      echo "✅ $FILE:$LINE a comment already reports this TODO"
+                      echo "✅ $FILE:$LINE a comment already reports this TODO: $EXISTING"
 
                       ID=$(echo "$EXISTING" | jq -r '.id')
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || true)
