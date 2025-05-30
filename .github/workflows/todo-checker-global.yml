@@ -140,18 +140,8 @@ jobs:
                       COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
                       <br> TODO: \`$TEXT\`
                       <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
-                      <br><sub>You will need to retry this workflow to reevaluate your todos.</sub>
-                      <br><br>
-                      <a href=\"$WORKFLOW_URL\" target=\"_blank\" style=\"
-                        display:inline-block;
-                        padding:8px 12px;
-                        font-size:14px;
-                        color:#fff;
-                        background-color:#2ea44f;
-                        border-radius:6px;
-                        text-decoration:none;
-                        font-weight:600;
-                      \">Re-evaluate TODOs</a>"
+                      <br>
+                      <a href=\"$WORKFLOW_URL\" target=\"_blank\">Click here to refresh list of TODOs left</a>"
 
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \
