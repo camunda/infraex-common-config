@@ -129,6 +129,7 @@ jobs:
                       ID=$(echo "$EXISTING" | jq -n 'inputs | .id' | head -n1)
                       echo "Checking comment replies ID=$ID"
                       set +e
+                      # TODO: fix this part, find a way to capture answers to comment
                       RESPONSES=$(gh api "repos/${{ github.repository }}/pulls/comments/$ID/replies" || echo '')
                       set -e
                       if [ -z "$RESPONSES" ]; then
