@@ -111,11 +111,11 @@ jobs:
                     echo "✅ $FILE:$LINE is in added lines"
 
                     EXISTING=$(jq --arg file "$FILE" --argjson line "$LINE" \
-                      '[.[] | select(.path == $file and .line == $line and .user.login == "github-actions[bot]" and (.body | contains("A new Todo was discovered")))] | first' comments.json)
+                      '[.[] | select(.path == $file and .line == $line and .user.login == "github-actions[bot]" and (.body | contains("A new Todo was discovered")))] | first // null' comments.json)
 
                     SKIP=false
 
-                    if [ -n "$EXISTING" ]; then
+                    if [ "$EXISTING" != "null" ]; then
                       SKIP=true
                       echo "✅ $FILE:$LINE a comment already reports this TODO"
 
