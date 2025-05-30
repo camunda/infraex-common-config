@@ -91,8 +91,6 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  yq comments.json
-
                   FOUND_REMAINING_TODO=false
 
                   echo "🔁 Processing TODOs"
@@ -117,9 +115,7 @@ jobs:
                       .[]
                       | select(
                           .path == env(FILE) and
-                          (.line | tostring) == env(LINE) and
-                          .user.login == "github-actions[bot]" and
-                          (.body | contains("A new Todo was discovered"))
+                          .line == env(LINE)
                         )
                       | first
                     ' comments.json)
