@@ -110,14 +110,14 @@ jobs:
 
                     export FILE="$FILE"
                     export LINE="$LINE"
-
                     EXISTING=$(yq e '
                       .[]
                       | select(
                           .path == env(FILE) and
-                          .line == env(LINE)
+                          .line == env(LINE) and
+                          .user.login == "github-actions[bot]" and
+                          (.body | contains("A new Todo was discovered"))
                         )
-                      | first
                     ' comments.json)
 
                     SKIP=false
