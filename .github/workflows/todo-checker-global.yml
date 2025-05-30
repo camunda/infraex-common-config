@@ -50,6 +50,7 @@ jobs:
                   path: ${{ steps.cache-key.outputs.cache_path }}
                   key: ${{ steps.cache-key.outputs.cache_key }}
 
+
             - name: Get PR diff and TODOs
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -90,19 +91,16 @@ jobs:
                   echo "📥 Getting existing comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  # If a todo is unresolved, exit with error
                   FOUND_REMAINING_TODO=false
 
                   echo "🔁 Processing TODOs"
-                  # shellcheck disable=SC2002
-                  cat todos.json | while read -r todo; do
+                  while read -r todo; do
                     FILE=$(echo "$todo" | jq -r '.path')
                     LINE=$(echo "$todo" | jq -r '.line')
                     TEXT=$(echo "$todo" | jq -r '.text')
 
                     echo "Checking $FILE:$LINE"
 
-                    # Only comment if line was added in PR
                     if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
                       echo "❌ $FILE:$LINE not in added lines"
                       continue
@@ -110,7 +108,6 @@ jobs:
 
                     echo "✅ $FILE:$LINE is in added lines"
 
-                    # Check for existing comment on same line
                     EXISTING=$(jq -r --arg file "$FILE" --argjson line "$LINE" \
                       '.[] | select(.path == $file and .line == $line)' comments.json)
 
@@ -123,7 +120,6 @@ jobs:
                         echo "🔕 Already acknowledged or ignored"
                         SKIP=true
                       else
-                        # The comment already exists, but we need to track it's not resolved yet
                         FOUND_REMAINING_TODO=true
                       fi
                     fi
@@ -135,20 +131,20 @@ jobs:
 
                       FOUND_REMAINING_TODO=true
                       echo "💬 Commenting on $FILE:$LINE"
-                        gh api \
-                            --method POST \
-                            -H "Accept: application/vnd.github+json" \
-                            -H "X-GitHub-Api-Version: 2022-11-28" \
-                            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
-                            -f "body=$COMMENT_BODY" \
-                            -f "commit_id=${{ github.event.pull_request.head.sha }}" \
-                            -f "path=$FILE" \
-                            -F "line=$LINE" \
-                            -f "side=RIGHT"
+                      gh api \
+                          --method POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "X-GitHub-Api-Version: 2022-11-28" \
+                          "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
+                          -f "body=$COMMENT_BODY" \
+                          -f "commit_id=${{ github.event.pull_request.head.sha }}" \
+                          -f "path=$FILE" \
+                          -F "line=$LINE" \
+                          -f "side=RIGHT"
                     fi
-                  done
+                  done < todos.json
 
-                  if [[ "$FOUND_REMAINING_TODO" == "true" ]]; then
+                  if [ "$FOUND_REMAINING_TODO" = true ]; then
                     echo "There are still unresolved todos remaining. Reply \"Ignore\" if you want to ignore them."
                     exit 1
                   fi
