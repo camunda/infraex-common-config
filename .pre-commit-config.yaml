@@ -18,6 +18,7 @@ repos:
       rev: v1.7.7
       hooks:
           - id: actionlint
+            args: [-ignore=SC2155]
 
     - repo: https://github.com/renovatebot/pre-commit-hooks
       rev: 40.36.8
