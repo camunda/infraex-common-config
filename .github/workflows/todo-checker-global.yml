@@ -1,0 +1,184 @@
+---
+name: todo-checker-global
+
+# This reusable workflow scans newly added lines in a pull request for TODO comments.
+# For each TODO found that hasn't been marked as acknowledged (via 👎 reaction), it posts a comment on the corresponding line.
+# This helps ensure TODOs are not forgotten or left unintentionally in production code.
+#
+# If a TODO is no longer relevant or needs no further reminders, reacting with 👎 on the comment suppresses future alerts.
+# Developers can trigger a manual refresh by commenting `update todos` on the PR.
+#
+# This workflow is designed to be used across multiple repositories via `workflow_call` (see `todo-checker.yml`).
+
+
+on:
+    workflow_call:
+
+env:
+    # renovate: datasource=github-releases depName=ianlewis/todos
+    TODOS_VERSION: v0.13.0
+
+jobs:
+    check-todos:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: write
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+              with:
+                  fetch-depth: 0 # capture all history
+
+            - name: Compute todos cache key
+              id: cache-key
+              run: |
+                  export os_key=$(uname | tr '[:upper:]' '[:lower:]')
+                  echo "cache_key=todos-$os_key-${{ env.TODOS_VERSION }}" | tee -a "$GITHUB_OUTPUT"
+                  echo "cache_path=$(go env GOPATH)/bin/todos" >> "$GITHUB_OUTPUT"
+                  echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+            - name: Restore todos cache
+              uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+              id: cache-tools
+              with:
+                  path: ${{ steps.cache-key.outputs.cache_path }}
+                  key: ${{ steps.cache-key.outputs.cache_key }}
+
+            - name: Install todos CLI if not present
+              if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
+              run: |
+                  go install "github.com/ianlewis/todos/cmd/todos@${TODOS_VERSION}"
+
+            - name: Save todos cache
+              if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
+              uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+              with:
+                  path: ${{ steps.cache-key.outputs.cache_path }}
+                  key: ${{ steps.cache-key.outputs.cache_key }}
+
+
+            - name: Get PR diff and TODOs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              run: |
+                  set -euo pipefail
+
+                  echo "📌 Workflow triggered by Pull Request #${PR_NUMBER}"
+                  PR_DATA=$(gh pr view "$PR_NUMBER" --json title,url,author -q '{title: .title, url: .url, author: .author.login}')
+                  PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+                  PR_URL=$(echo "$PR_DATA" | jq -r '.url')
+                  PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author')
+
+                  echo "➡️  Title: $PR_TITLE"
+                  echo "🔗 URL: $PR_URL"
+                  echo "🙋 Author: @$PR_AUTHOR"
+
+                  echo "🔍 Getting diff from base branch"
+                  BASE_SHA=$(git merge-base origin/main HEAD)
+                  git diff "$BASE_SHA"...HEAD > pr.diff
+
+                  echo "📄 Parsing added lines"
+                  awk '
+                  /^diff --git / { file="" }
+                  /^+++ b\//     { file=substr($0,7) }
+                  /^@@ / {
+                    split($0, a, " ")
+                    split(a[3], new, ",")
+                    new_start = substr(new[1], 2)
+                    curr = new_start
+                  }
+                  /^+/ && !/^\+\+\+/ {
+                    print file ":" curr
+                    curr++
+                  }
+                  /^[^-+]/ { curr++ }
+                  ' pr.diff > added_lines.txt
+
+                  echo "🧠 Running todos"
+                  set +e
+                  todos -o json > todos.json
+                  code=$?
+                  if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+                    exit $code
+                  fi
+                  set -e
+
+                  echo "📥 Getting existing comments"
+                  gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
+
+                  echo "🔁 Processing TODOs"
+                  echo "0" > todo_count.txt
+                  jq -c '.' todos.json | while IFS= read -r todo; do
+                    FILE=$(echo "$todo" | jq -r '.path')
+                    LINE=$(echo "$todo" | jq -r '.line')
+                    TEXT=$(echo "$todo" | jq -r '.text')
+
+                    echo "Checking $FILE:$LINE"
+
+                    if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
+                      echo "⏭️ $FILE:$LINE skipped as not in added lines, this file is not part of this PR"
+                      continue
+                    fi
+
+                    echo "✅ $FILE:$LINE is in added lines, the file has been identified to be part of this PR"
+
+                    export FILE="$FILE"
+                    export LINE="$LINE"
+                    EXISTING=$(yq e '
+                      .[]
+                      | select(
+                          .path == env(FILE) and
+                          .line == env(LINE) and
+                          .user.login == "github-actions[bot]" and
+                          (.body | contains("A new Todo was discovered"))
+                        ) | . // ""
+                    ' comments.json)
+
+                    if [ -n "$EXISTING" ]; then
+                      echo "✅ $FILE:$LINE a comment already reports this TODO"
+
+                      # EXISTING may return multiple comments, we take the first
+                      REACT_DOWN=$(echo "$EXISTING" | yq -I=0 -o=json -p=json 'select(documentIndex == 0) | .reactions["-1"] // 0' )
+                      if [ "$REACT_DOWN" -ge 1 ]; then
+                        echo "🔕 Already acknowledged via 👎"
+                      else
+                        count=$(cat todo_count.txt)
+                        count=$((count + 1))
+                        echo "$count" > todo_count.txt
+                      fi
+                    else
+                      count=$(cat todo_count.txt)
+                      count=$((count + 1))
+                      echo "$count" > todo_count.txt
+
+                      COMMENT_BODY="A new Todo was discovered. If it is not a priority right now, consider marking it for later attention.
+                      <br> TODO: \`$TEXT\`
+                      <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
+                      <br>
+                      Comment with \`update todos\` or <a href=\"$WORKFLOW_URL\" target=\"_blank\">click here to retry and refresh the list of remaining TODOs</a>"
+
+                      echo "💬 Commenting on $FILE:$LINE"
+                      gh api \
+                          --method POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "X-GitHub-Api-Version: 2022-11-28" \
+                          "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
+                          -f "body=$COMMENT_BODY" \
+                          -f "commit_id=${{ github.event.pull_request.head.sha }}" \
+                          -f "path=$FILE" \
+                          -F "line=$LINE" \
+                          -f "side=RIGHT"
+                    fi
+                  done
+
+                  found_remaining_todos=$(cat todo_count.txt)
+                  echo "$found_remaining_todos"
+
+                  if [ "$found_remaining_todos" -gt 0 ]; then
+                    echo "::error title=Unresolved TODOs::❌ $found_remaining_todos TODO(s) remain unresolved. React with 👎 to suppress reminders."
+                    exit "$found_remaining_todos"
+                  fi
