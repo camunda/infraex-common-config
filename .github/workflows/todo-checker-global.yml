@@ -109,8 +109,12 @@ jobs:
                       continue
                     fi
 
-                    # Get blamed commit for the specific line
-                    blamed_commit=$(git blame -L "$LINE","$LINE" --porcelain "$FILE" | grep "^commit " | head -n1 | cut -d' ' -f2)
+                    blamed_commit=$(git blame -L "$LINE","$LINE" --porcelain "$FILE" | grep "^commit " | head -n1 | cut -d' ' -f2 || true)
+
+                    if [ -z "$blamed_commit" ]; then
+                      echo "⏭️ Could not determine commit for $FILE:$LINE"
+                      continue
+                    fi
 
                     # Check if blamed_commit is strictly inside PR commits:
                     # 1) BASE_SHA is ancestor of blamed_commit (blamed_commit is after base)
