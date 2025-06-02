@@ -73,7 +73,7 @@ jobs:
                   PR_URL=$(echo "$PR_DATA" | jq -r '.url')
                   PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author')
 
-                  echo "➡️  Title: $PR_TITLE"
+                  echo "➡️ Title: $PR_TITLE"
                   echo "🔗 URL: $PR_URL"
                   echo "🙋 Author: @$PR_AUTHOR"
 
@@ -103,13 +103,12 @@ jobs:
 
                     echo "Checking $FILE:$LINE"
 
-                    # Skip if file doesn't exist
                     if [ ! -f "$FILE" ]; then
                       echo "⏭️ $FILE does not exist, skipping"
                       continue
                     fi
 
-                    blamed_commit=$(git blame -L "$LINE","$LINE" --porcelain "$FILE" | grep "^commit " | head -n1 | cut -d' ' -f2 || true)
+                    blamed_commit=$(git blame -L "$LINE","$LINE" --porcelain "$FILE" | head -n1 | cut -d' ' -f1)
 
                     if [ -z "$blamed_commit" ]; then
                       echo "⏭️ Could not determine commit for $FILE:$LINE"
