@@ -100,8 +100,8 @@ jobs:
 
             # For PR purposes we're overwriting the setting and enable dry run
             - name: Set DRY_RUN for PR
-              # TODO: revert before merge
-              if: github.event_name != 'pull_request'
+              # TODO: debug todos
+              if: github.event_name == 'pull_request'
               run: |
                   echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
                   echo "CLOUD_NUKE_EXTRA_ARGS=--dry-run" | tee -a "$GITHUB_ENV"

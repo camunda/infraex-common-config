@@ -98,6 +98,8 @@ jobs:
                   /^[^-+]/ { curr++ }
                   ' pr.diff > added_lines.txt
 
+                  cat added_lines.txt
+
                   echo "🧠 Running todos"
                   set +e
                   todos -o json > todos.json
