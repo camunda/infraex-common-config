@@ -1,15 +1,22 @@
 ---
 name: Check TODOs via global workflow
 
+# TODO: add a nice description so everyone understand the usage
+
 on:
-    pull_request_review_comment:
-        types: [created, edited, deleted]
     issue_comment:
-        types: [created, edited, deleted]
     pull_request:
         types: [opened, synchronize, reopened]
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     call-todo-checker:
+        if: |
+            github.event_name == 'pull_request' ||
+            (github.event_name == 'issue_comment' &&
+            contains(github.event.comment.body, 'todo trigger'))
         uses: ./.github/workflows/todo-checker-global.yml
         secrets: inherit

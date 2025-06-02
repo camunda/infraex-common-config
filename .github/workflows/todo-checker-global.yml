@@ -59,6 +59,16 @@ jobs:
               run: |
                   set -euo pipefail
 
+                  echo "📌 Workflow triggered by Pull Request #${PR_NUMBER}"
+                  PR_DATA=$(gh pr view "$PR_NUMBER" --json title,url,author -q '{title: .title, url: .url, author: .author.login}')
+                  PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+                  PR_URL=$(echo "$PR_DATA" | jq -r '.url')
+                  PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author')
+
+                  echo "➡️  Title: $PR_TITLE"
+                  echo "🔗 URL: $PR_URL"
+                  echo "🙋 Author: @$PR_AUTHOR"
+
                   echo "🔍 Getting diff from base branch"
                   BASE_SHA=$(git merge-base origin/main HEAD)
                   git diff "$BASE_SHA"...HEAD > pr.diff
@@ -102,11 +112,11 @@ jobs:
                     echo "Checking $FILE:$LINE"
 
                     if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
-                      echo "❌ $FILE:$LINE not in added lines"
+                      echo "⏭️ $FILE:$LINE skipped as not in added lines, this file is not part of this PR"
                       continue
                     fi
 
-                    echo "✅ $FILE:$LINE is in added lines"
+                    echo "✅ $FILE:$LINE is in added lines, the file has been identified to be part of this PR"
 
                     export FILE="$FILE"
                     export LINE="$LINE"
@@ -141,7 +151,7 @@ jobs:
                       <br> TODO: \`$TEXT\`
                       <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
                       <br>
-                      <a href=\"$WORKFLOW_URL\" target=\"_blank\">Click here to retry and refresh the list of remaining TODOs</a>"
+                      Comment with \`todo trigger\` or <a href=\"$WORKFLOW_URL\" target=\"_blank\">click here to retry and refresh the list of remaining TODOs</a>"
 
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \
