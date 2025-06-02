@@ -6,7 +6,6 @@ name: todo-checker-global
 # This helps ensure TODOs are not forgotten or left unintentionally in production code.
 #
 # If a TODO is no longer relevant or needs no further reminders, reacting with 👎 on the comment suppresses future alerts.
-# Developers can trigger a manual refresh by commenting `update todos` on the PR.
 #
 # This workflow is designed to be used across multiple repositories via `workflow_call` (see `todo-checker.yml`).
 
@@ -160,7 +159,7 @@ jobs:
                       <br> TODO: \`$TEXT\`
                       <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
                       <br>
-                      Comment with \`update todos\` in the main thread or <a href=\"$WORKFLOW_URL\" target=\"_blank\">click here to retry and refresh the list of remaining TODOs</a>"
+                      <a href=\"$WORKFLOW_URL\" target=\"_blank\">Click here to retry and refresh the list of remaining TODOs</a>"
 
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \
