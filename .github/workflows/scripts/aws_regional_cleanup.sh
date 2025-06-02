@@ -68,13 +68,13 @@ if [ -n "$oidc_providers" ]; then
     for oidc_provider in "${oidc_providers_array[@]}"
     do
         echo "Deleting OIDC Provider: $oidc_provider"
-        execute_or_simulate "aws iam delete-open-id-connect-provider --open-id-connect-provider-arn \"$oidc_provider\""
+        execute_or_simulate "aws iam delete-open-id-connect-provider --open-id-connect-provider-arn $oidc_provider"
     done
 fi
 
 echo "Deleting VPC Peering Connections"
 # Delete VPC Peering Connection
-peering_connection_ids=$(paginate "aws ec2 describe-vpc-peering-connections --region \"$region\"" "VpcPeeringConnections[?Status.Code == 'active'].VpcPeeringConnectionId")
+peering_connection_ids=$(paginate "aws ec2 describe-vpc-peering-connections --region $region" "VpcPeeringConnections[?Status.Code == 'active'].VpcPeeringConnectionId")
 
 if [ -n "$peering_connection_ids" ]; then
     read -r -a peering_connection_ids_array <<< "$peering_connection_ids"
@@ -82,13 +82,13 @@ if [ -n "$peering_connection_ids" ]; then
     for peering_connection_id in "${peering_connection_ids_array[@]}"
     do
         echo "Deleting VPC Peering Connection: $peering_connection_id"
-        execute_or_simulate "aws ec2 delete-vpc-peering-connection --region \"$region\" --vpc-peering-connection-id \"$peering_connection_id\""
+        execute_or_simulate "aws ec2 delete-vpc-peering-connection --region $region --vpc-peering-connection-id $peering_connection_id"
     done
 fi
 
 echo "Deleting Client VPN Endpoints"
 # List all Client VPN endpoints
-client_vpn_endpoint_ids=$(paginate "aws ec2 describe-client-vpn-endpoints --region \"$region\"" "ClientVpnEndpoints[].ClientVpnEndpointId")
+client_vpn_endpoint_ids=$(paginate "aws ec2 describe-client-vpn-endpoints --region $region" "ClientVpnEndpoints[].ClientVpnEndpointId")
 
 if [ -n "$client_vpn_endpoint_ids" ]; then
     read -r -a client_vpn_ids_array <<< "$client_vpn_endpoint_ids"
@@ -109,7 +109,7 @@ if [ -n "$client_vpn_endpoint_ids" ]; then
             for assoc_id in "${assoc_ids[@]}"
             do
                 echo "Disassociating target network: $assoc_id"
-                execute_or_simulate "aws ec2 disassociate-client-vpn-target-network --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\" --association-id \"$assoc_id\""
+                execute_or_simulate "aws ec2 disassociate-client-vpn-target-network --region $region --client-vpn-endpoint-id $cvpn_id --association-id $assoc_id"
             done
         fi
 
@@ -125,12 +125,12 @@ if [ -n "$client_vpn_endpoint_ids" ]; then
             for rule_id in "${rule_ids[@]}"
             do
                 echo "Revoking authorization rule: $rule_id"
-                execute_or_simulate "aws ec2 revoke-client-vpn-authorization-rule --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\" --authorization-rule-id \"$rule_id\""
+                execute_or_simulate "aws ec2 revoke-client-vpn-authorization-rule --region $region --client-vpn-endpoint-id $cvpn_id --authorization-rule-id $rule_id"
             done
         fi
 
         # Delete the Client VPN endpoint
         echo "Deleting Client VPN Endpoint: $cvpn_id"
-        execute_or_simulate "aws ec2 delete-client-vpn-endpoint --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\""
+        execute_or_simulate "aws ec2 delete-client-vpn-endpoint --region $region --client-vpn-endpoint-id $cvpn_id"
     done
 fi
