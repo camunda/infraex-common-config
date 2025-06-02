@@ -64,6 +64,7 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   PR_NUMBER: ${{ github.event.pull_request.number }}
                   WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                  BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
               run: |
                   set -euo pipefail
 
@@ -77,8 +78,8 @@ jobs:
                   echo "🔗 URL: $PR_URL"
                   echo "🙋 Author: @$PR_AUTHOR"
 
-                  echo "🔍 Getting diff from base branch"
-                  BASE_SHA=$(git merge-base origin/main HEAD)
+                  echo "🔍 Getting diff from base branch $BASE_BRANCH"
+                  BASE_SHA=$(git merge-base "origin/$BASE_BRANCH" HEAD)
                   git diff "$BASE_SHA"...HEAD > pr.diff
 
                   echo "📄 Parsing added lines"
