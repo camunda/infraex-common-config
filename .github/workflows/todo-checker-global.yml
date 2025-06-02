@@ -1,7 +1,15 @@
 ---
 name: todo-checker-global
 
-# This workflow is reused accross our repositories to check TODOs in PRs
+# This reusable workflow scans newly added lines in a pull request for TODO comments.
+# For each TODO found that hasn't been marked as acknowledged (via 👎 reaction), it posts a comment on the corresponding line.
+# This helps ensure TODOs are not forgotten or left unintentionally in production code.
+#
+# If a TODO is no longer relevant or needs no further reminders, reacting with 👎 on the comment suppresses future alerts.
+# Developers can trigger a manual refresh by commenting `update todos` on the PR.
+#
+# This workflow is designed to be used across multiple repositories via `workflow_call` (see `todo-checker.yml`).
+
 
 on:
     workflow_call:
@@ -151,7 +159,7 @@ jobs:
                       <br> TODO: \`$TEXT\`
                       <br>**🔕 React with 👎 (thumbs down) to this comment to acknowledge and prevent further reminders.**
                       <br>
-                      Comment with \`todo trigger\` or <a href=\"$WORKFLOW_URL\" target=\"_blank\">click here to retry and refresh the list of remaining TODOs</a>"
+                      Comment with \`update todos\` or <a href=\"$WORKFLOW_URL\" target=\"_blank\">click here to retry and refresh the list of remaining TODOs</a>"
 
                       echo "💬 Commenting on $FILE:$LINE"
                       gh api \

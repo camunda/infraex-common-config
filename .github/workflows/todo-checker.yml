@@ -1,7 +1,10 @@
 ---
+# This workflow triggers a scan of TODOs in the current pull request.
+# For each TODO that is not marked to be ignored, it posts a comment.
+# It helps ensure that no TODOs are accidentally left behind in merged PRs.
+
 name: Check TODOs via global workflow
 
-# TODO: add a nice description so everyone understand the usage
 
 on:
     issue_comment:
@@ -17,6 +20,6 @@ jobs:
         if: |
             github.event_name == 'pull_request' ||
             (github.event_name == 'issue_comment' &&
-            contains(github.event.comment.body, 'todo trigger'))
+            contains(github.event.comment.body, 'update todos'))
         uses: ./.github/workflows/todo-checker-global.yml
         secrets: inherit
