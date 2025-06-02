@@ -8,6 +8,7 @@ name: Check TODOs via global workflow
 
 on:
     issue_comment:
+        types: [created, edited]
     pull_request:
         types: [opened, synchronize, reopened]
 
