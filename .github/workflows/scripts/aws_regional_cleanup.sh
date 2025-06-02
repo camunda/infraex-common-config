@@ -86,30 +86,51 @@ if [ -n "$peering_connection_ids" ]; then
     done
 fi
 
-echo "Deleting VPN Connections"
-# Delete VPN Connections
-vpn_connection_ids=$(paginate "aws ec2 describe-vpn-connections --region \"$region\"" "VpnConnections[?State=='available'].VpnConnectionId")
+echo "Deleting Client VPN Endpoints"
+# List all Client VPN endpoints
+client_vpn_endpoint_ids=$(paginate "aws ec2 describe-client-vpn-endpoints --region \"$region\"" "ClientVpnEndpoints[].ClientVpnEndpointId")
 
-if [ -n "$vpn_connection_ids" ]; then
-    read -r -a vpn_connection_ids_array <<< "$vpn_connection_ids"
+if [ -n "$client_vpn_endpoint_ids" ]; then
+    read -r -a client_vpn_ids_array <<< "$client_vpn_endpoint_ids"
 
-    for vpn_connection_id in "${vpn_connection_ids_array[@]}"
+    for cvpn_id in "${client_vpn_ids_array[@]}"
     do
-        echo "Deleting VPN Connection: $vpn_connection_id"
-        execute_or_simulate "aws ec2 delete-vpn-connection --region \"$region\" --vpn-connection-id \"$vpn_connection_id\""
-    done
-fi
+        echo "Processing Client VPN Endpoint: $cvpn_id"
 
-echo "Deleting Customer Gateways"
-# Delete Customer Gateways
-customer_gateway_ids=$(paginate "aws ec2 describe-customer-gateways --region \"$region\"" "CustomerGateways[?State=='available'].CustomerGatewayId")
+        # Disassociate target networks
+        associations=$(aws ec2 describe-client-vpn-target-networks \
+            --region "$region" \
+            --client-vpn-endpoint-id "$cvpn_id" \
+            --query 'ClientVpnTargetNetworks[].AssociationId' \
+            --output text)
 
-if [ -n "$customer_gateway_ids" ]; then
-    read -r -a customer_gateway_ids_array <<< "$customer_gateway_ids"
+        if [ -n "$associations" ]; then
+            read -r -a assoc_ids <<< "$associations"
+            for assoc_id in "${assoc_ids[@]}"
+            do
+                echo "Disassociating target network: $assoc_id"
+                execute_or_simulate "aws ec2 disassociate-client-vpn-target-network --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\" --association-id \"$assoc_id\""
+            done
+        fi
 
-    for customer_gateway_id in "${customer_gateway_ids_array[@]}"
-    do
-        echo "Deleting Customer Gateway: $customer_gateway_id"
-        execute_or_simulate "aws ec2 delete-customer-gateway --region \"$region\" --customer-gateway-id \"$customer_gateway_id\""
+        # Revoke all authorization rules
+        auth_rules=$(aws ec2 describe-client-vpn-authorization-rules \
+            --region "$region" \
+            --client-vpn-endpoint-id "$cvpn_id" \
+            --query 'AuthorizationRules[].AuthorizationRuleId' \
+            --output text)
+
+        if [ -n "$auth_rules" ]; then
+            read -r -a rule_ids <<< "$auth_rules"
+            for rule_id in "${rule_ids[@]}"
+            do
+                echo "Revoking authorization rule: $rule_id"
+                execute_or_simulate "aws ec2 revoke-client-vpn-authorization-rule --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\" --authorization-rule-id \"$rule_id\""
+            done
+        fi
+
+        # Delete the Client VPN endpoint
+        echo "Deleting Client VPN Endpoint: $cvpn_id"
+        execute_or_simulate "aws ec2 delete-client-vpn-endpoint --region \"$region\" --client-vpn-endpoint-id \"$cvpn_id\""
     done
 fi
