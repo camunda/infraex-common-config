@@ -85,3 +85,31 @@ if [ -n "$peering_connection_ids" ]; then
         execute_or_simulate "aws ec2 delete-vpc-peering-connection --region \"$region\" --vpc-peering-connection-id \"$peering_connection_id\""
     done
 fi
+
+echo "Deleting VPN Connections"
+# Delete VPN Connections
+vpn_connection_ids=$(paginate "aws ec2 describe-vpn-connections --region \"$region\"" "VpnConnections[?State=='available'].VpnConnectionId")
+
+if [ -n "$vpn_connection_ids" ]; then
+    read -r -a vpn_connection_ids_array <<< "$vpn_connection_ids"
+
+    for vpn_connection_id in "${vpn_connection_ids_array[@]}"
+    do
+        echo "Deleting VPN Connection: $vpn_connection_id"
+        execute_or_simulate "aws ec2 delete-vpn-connection --region \"$region\" --vpn-connection-id \"$vpn_connection_id\""
+    done
+fi
+
+echo "Deleting Customer Gateways"
+# Delete Customer Gateways
+customer_gateway_ids=$(paginate "aws ec2 describe-customer-gateways --region \"$region\"" "CustomerGateways[?State=='available'].CustomerGatewayId")
+
+if [ -n "$customer_gateway_ids" ]; then
+    read -r -a customer_gateway_ids_array <<< "$customer_gateway_ids"
+
+    for customer_gateway_id in "${customer_gateway_ids_array[@]}"
+    do
+        echo "Deleting Customer Gateway: $customer_gateway_id"
+        execute_or_simulate "aws ec2 delete-customer-gateway --region \"$region\" --customer-gateway-id \"$customer_gateway_id\""
+    done
+fi
