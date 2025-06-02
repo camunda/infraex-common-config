@@ -83,19 +83,20 @@ jobs:
 
                   echo "📄 Parsing added lines"
                   awk '
-                  /^diff --git / { file="" }
-                  /^+++ b\//     { file=substr($0,7) }
-                  /^@@ / {
-                    split($0, a, " ")
-                    split(a[3], new, ",")
-                    new_start = substr(new[1], 2)
-                    curr = new_start
-                  }
-                  /^+/ && !/^\+\+\+/ {
-                    print file ":" curr
-                    curr++
-                  }
-                  /^[^-+]/ { curr++ }
+                    /^diff --git / { file="" }
+                    /^\+\+\+ b\//     { file=substr($0,7) }
+                    /^@@ / {
+                      split($0, a, " ")
+                      split(a[3], new, ",")
+                      new_start = substr(new[1], 2)
+                      curr = new_start
+                    }
+                    /^\+/ && !/^\+\+\+/ {
+                      print file ":" curr
+                      curr++
+                      next
+                    }
+                    /^[^-+]/ { curr++ }
                   ' pr.diff > added_lines.txt
 
                   cat pr.diff
