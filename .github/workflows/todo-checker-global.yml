@@ -73,32 +73,15 @@ jobs:
                   PR_URL=$(echo "$PR_DATA" | jq -r '.url')
                   PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author')
 
-                  echo "➡️  Title: $PR_TITLE"
+                  echo "➡️ Title: $PR_TITLE"
                   echo "🔗 URL: $PR_URL"
                   echo "🙋 Author: @$PR_AUTHOR"
 
-                  echo "🔍 Getting diff from base branch $BASE_BRANCH"
+                  echo "🔍 Getting merge base SHA with base branch $BASE_BRANCH"
                   BASE_SHA=$(git merge-base "origin/$BASE_BRANCH" HEAD)
-                  git diff "$BASE_SHA"...HEAD > pr.diff
+                  HEAD_SHA=$(git rev-parse HEAD)
 
-                  echo "📄 Parsing added lines"
-                  awk '
-                  /^diff --git / { file="" }
-                  /^+++ b\//     { file=substr($0,7) }
-                  /^@@ / {
-                    split($0, a, " ")
-                    split(a[3], new, ",")
-                    new_start = substr(new[1], 2)
-                    curr = new_start
-                  }
-                  /^+/ && !/^\+\+\+/ {
-                    print file ":" curr
-                    curr++
-                  }
-                  /^[^-+]/ { curr++ }
-                  ' pr.diff > added_lines.txt
-
-                  echo "🧠 Running todos"
+                  echo "🧠 Running todos tool"
                   set +e
                   todos -o json > todos.json
                   code=$?
@@ -107,11 +90,12 @@ jobs:
                   fi
                   set -e
 
-                  echo "📥 Getting existing comments"
+                  echo "📥 Getting existing PR comments"
                   gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
 
-                  echo "🔁 Processing TODOs"
+                  echo "🔁 Processing TODOs with git blame verification"
                   echo "0" > todo_count.txt
+
                   jq -c '.' todos.json | while IFS= read -r todo; do
                     FILE=$(echo "$todo" | jq -r '.path')
                     LINE=$(echo "$todo" | jq -r '.line')
@@ -119,12 +103,27 @@ jobs:
 
                     echo "Checking $FILE:$LINE"
 
-                    if ! grep -q "^$FILE:$LINE$" added_lines.txt; then
-                      echo "⏭️ $FILE:$LINE skipped as not in added lines, this file is not part of this PR"
+                    if [ ! -f "$FILE" ]; then
+                      echo "⏭️ $FILE does not exist, skipping"
                       continue
                     fi
 
-                    echo "✅ $FILE:$LINE is in added lines, the file has been identified to be part of this PR"
+                    blamed_commit=$(git blame -L "$LINE","$LINE" --porcelain "$FILE" | head -n1 | cut -d' ' -f1)
+
+                    if [ -z "$blamed_commit" ]; then
+                      echo "⏭️ Could not determine commit for $FILE:$LINE"
+                      continue
+                    fi
+
+                    # Check if blamed_commit is strictly inside PR commits:
+                    # 1) BASE_SHA is ancestor of blamed_commit (blamed_commit is after base)
+                    # 2) blamed_commit is ancestor of HEAD_SHA (blamed_commit is in PR branch history)
+                    if git merge-base --is-ancestor "$BASE_SHA" "$blamed_commit" && git merge-base --is-ancestor "$blamed_commit" "$HEAD_SHA"; then
+                      echo "✅ $FILE:$LINE is strictly part of the PR (commit $blamed_commit)"
+                    else
+                      echo "⏭️ $FILE:$LINE ignored, blamed_commit $blamed_commit not strictly in PR"
+                      continue
+                    fi
 
                     export FILE="$FILE"
                     export LINE="$LINE"
@@ -139,12 +138,11 @@ jobs:
                     ' comments.json)
 
                     if [ -n "$EXISTING" ]; then
-                      echo "✅ $FILE:$LINE a comment already reports this TODO"
+                      echo "✅ $FILE:$LINE already has a TODO comment"
 
-                      # EXISTING may return multiple comments, we take the first
-                      REACT_DOWN=$(echo "$EXISTING" | yq -I=0 -o=json -p=json 'select(documentIndex == 0) | .reactions["-1"] // 0' )
+                      REACT_DOWN=$(echo "$EXISTING" | yq -I=0 -o=json -p=json 'select(documentIndex == 0) | .reactions["-1"] // 0')
                       if [ "$REACT_DOWN" -ge 1 ]; then
-                        echo "🔕 Already acknowledged via 👎"
+                        echo "🔕 Already acknowledged via 👎 reaction"
                       else
                         count=$(cat todo_count.txt)
                         count=$((count + 1))
@@ -173,6 +171,7 @@ jobs:
                           -F "line=$LINE" \
                           -f "side=RIGHT"
                     fi
+
                   done
 
                   found_remaining_todos=$(cat todo_count.txt)
