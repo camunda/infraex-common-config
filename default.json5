@@ -43,6 +43,7 @@
     addLabels: ['security'], // Security alerts should be handled manually to assess the consequences.
     enabled: true,
   },
+  // Runs every Monday before 4 am, hard-coded by Renovate
   lockFileMaintenance: {
     enabled: true,
   },
@@ -76,7 +77,6 @@
     {
       description: 'Only update patch versions on Sundays.',
       matchUpdateTypes: [
-        'lockFileMaintenance',
         'pin',
         'digest',
         'patch',
