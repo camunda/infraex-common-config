@@ -109,7 +109,7 @@ jobs:
             - name: Import Secrets
               id: secrets
               if: ${{ env.should_run == 'true' }}
-              uses: hashicorp/vault-action@7709c609789c5e27b757a85817483caadbb5939a # v3
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
               with:
                   url: ${{ secrets.VAULT_ADDR }}
                   method: approle
@@ -148,7 +148,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@82286449dbae62e2edc91806a376da9a2d0eeac9 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@96d2582c14dc5c3c4c680435f48bdb952234b910 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
