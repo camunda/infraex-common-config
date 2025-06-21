@@ -22,7 +22,7 @@ on:
 env:
     AWS_PROFILE: infex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.40.0
+    CLOUD_NUKE_VERSION: v0.41.0
 
 # Limit workflow to a single execution per ref
 concurrency:
