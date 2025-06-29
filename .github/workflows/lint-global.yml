@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@c14fc2f96b40e93e931eec38d0cd9106b9b697c1 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@2859a21a3c3f4930156dd7b3325eb3709bd4074f # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -53,7 +53,7 @@ jobs:
               if: env.autofix_pr == 'false'
 
             - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@c14fc2f96b40e93e931eec38d0cd9106b9b697c1 # main
+              uses: camunda/infra-global-github-actions/actionlint@2859a21a3c3f4930156dd7b3325eb3709bd4074f # main
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
@@ -63,7 +63,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@d0b1d5e182380299c16ea63709b6b6949736b36f # 1.4.4
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@6493c4661ae26f7c81689994c4c75e8f42b67f6a # 1.4.5
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
