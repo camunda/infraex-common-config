@@ -44,9 +44,10 @@ jobs:
                     - region: eu-west-3
                       day: All
                       cleanup_older_than: 12h
-                    - region: eu-north-1
-                      day: Saturday
-                      cleanup_older_than: 0h
+                    # TODO: revert when https://camunda.slack.com/archives/C08QY4SREGY is solved
+                    # - region: eu-north-1
+                    #   day: Saturday
+                    #   cleanup_older_than: 0h
                     - region: us-east-1
                       day: Saturday
                       cleanup_older_than: 0h
