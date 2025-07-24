@@ -10,7 +10,7 @@
     'helpers:pinGitHubActionDigests',
     ':pinDevDependencies',
   ],
-  baseBranches: [
+  baseBranchPatterns: [
     'main',
     '/^stable\\/8\\..*/',
   ],
