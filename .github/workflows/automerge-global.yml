@@ -36,8 +36,8 @@ jobs:
                   fi
 
                   labels_json=$(gh pr view ${{ github.event.pull_request.number }} --json labels)
-                  if echo "$labels_json" | jq -e '.labels[] | select(.name == "upgrade:major")' > /dev/null; then
-                    echo "This PR is related to major changes. Skipping approval and auto-merge."
+                  if echo "$labels_json" | jq -e '.labels[] | select(.name == "upgrade:major" or .name == "no merge")' > /dev/null; then
+                    echo "This PR has a blocking label. Skipping approval and auto-merge."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
                     exit 0
                   else
