@@ -1,0 +1,149 @@
+---
+name: GHA Failure Log Analyzer
+description: |
+    Analyzes GitHub Actions failure logs and posts results to a Slack thread.
+
+inputs:
+    run_url:
+        description: GitHub Actions run URL to analyze
+        required: true
+    slack_thread_ts:
+        description: Slack thread ts to post the analysis result
+        required: false
+    slack_channel_id:
+        description: Slack channel ID to post the analysis result
+        required: false
+    slack_token:
+        description: Slack Token for posting messages
+        required: false
+    gh_token:
+        description: GitHub Token for authentication
+        required: true
+    max_tokens:
+        description: Maximum tokens for AI model response
+        required: false
+        default: '600'
+    model:
+        description: AI model to use for analysis
+        required: false
+        default: openai/gpt-4o
+
+outputs:
+    response:
+        description: AI analysis response
+        value: ${{ steps.analyze.outputs.response }}
+
+runs:
+    using: composite
+    steps:
+        - name: Parse GitHub Actions URL
+          shell: bash
+          id: parse-url
+          run: |
+              # Extract owner, repo, and run_id from the URL
+              # Expected format: https://github.com/owner/repo/actions/runs/run_id
+              url="${{ inputs.run_url }}"
+
+              if [[ ! "$url" =~ ^https://github\.com/([^/]+)/([^/]+)/actions/runs/([0-9]+) ]]; then
+                echo "Error: Invalid GitHub Actions URL format"
+                echo "Expected format: https://github.com/owner/repo/actions/runs/run_id"
+                exit 1
+              fi
+
+              owner="${BASH_REMATCH[1]}"
+              repo="${BASH_REMATCH[2]}"
+              run_id="${BASH_REMATCH[3]}"
+
+              echo "owner=$owner" >> $GITHUB_OUTPUT
+              echo "repo=$repo" >> $GITHUB_OUTPUT
+              echo "run_id=$run_id" >> $GITHUB_OUTPUT
+
+              echo "Parsed URL:"
+              echo "  Owner: $owner"
+              echo "  Repository: $repo"
+              echo "  Run ID: $run_id"
+
+        - name: Fetch GitHub Actions Logs
+          shell: bash
+          id: fetch-logs
+          run: |
+              # Download logs using GitHub CLI
+              echo "Fetching logs for run ${{ steps.parse-url.outputs.run_id }} from ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}"
+
+              # Create logs directory
+              mkdir -p logs
+
+              gh run view ${{ steps.parse-url.outputs.run_id }} \
+                --repo ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }} \
+                --log-failed > logs/failed.log
+
+              echo "removing timestamps and downsizing logs"
+              sed -E 's/.*[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z[[:space:]]*//' logs/failed.log > logs/trimmed.log
+              echo "Filtering logs for errors, failures, and exceptions"
+              cat logs/trimmed.log | grep -iC 5 -E 'error|fail|exception' > logs/errors.log
+              echo "Downsizing log file to 50KB"
+              head -c 51200 logs/errors.log > logs/trimmed_50kb.log
+
+              echo "Listing logs directory contents:"
+              ls -lh logs
+
+              LOG_CONTENT="$(cat logs/trimmed_50kb.log | tr -d '\n')"
+              echo "Downsized log file size: $(echo "$LOG_CONTENT" | wc -l) lines"
+              echo "log-file=$LOG_CONTENT" >> "$GITHUB_OUTPUT"
+          env:
+              GH_TOKEN: ${{ inputs.gh_token }}
+
+        - name: Analyze Logs with AI
+          id: analyze
+          uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9 # v1.2.8
+          with:
+              model: ${{ inputs.model }}
+              max-tokens: ${{ inputs.max_tokens }}
+              prompt: |
+                  You are an expert GitHub Actions troubleshooting assistant. Please analyze the following GitHub Actions workflow logs and provide:
+
+                  1. **Issues Found**: Any errors, failures, or problems identified
+                  2. **Root Cause Analysis**: If there are failures, identify the likely root causes
+                  3. **Recommendations**: Specific actionable steps to fix any issues
+                  4. **Best Practices**: Any suggestions for improving the workflow
+
+                  Please be concise but thorough in your analysis. Focus on actionable insights.
+                  For the markdown output you are only allowed to use the following:
+                    bold *text*
+                    italic _text_
+                    strikethrough ~text~
+                    code `text`
+                    blockquote > text
+                    code block with triple backticks ```text```
+                    ordered list 1. item
+                    unordered list - item
+                    links [text](url)
+                  Under no circumstances use double asterisks for bold text, it's single asterisks only.
+                  Under no circumstances try to wrap the whole output in a code block.
+
+                  Here are the logs to analyze:
+
+                  ${{ steps.fetch-logs.outputs.log-file }}
+        - name: Post Analysis Result
+          if: ${{ inputs.slack_thread_ts != '' }}
+          uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+          with:
+              method: chat.postMessage
+              token: ${{ inputs.slack_token }}
+              payload: |
+                  {
+                    "channel": "${{ inputs.slack_channel_id }}",
+                    "text": "GitHub Actions Analysis Result",
+                    "thread_ts": "${{ inputs.slack_thread_ts }}",
+                    "icon_emoji": ":robot_face:",
+                    "username": "GitHub Actions Analyzer",
+                    "blocks": [
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": ${{ toJSON(steps.analyze.outputs.response) }}
+                        }
+                      }
+                    ]
+                  }
