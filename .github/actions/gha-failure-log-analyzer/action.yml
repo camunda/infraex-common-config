@@ -109,6 +109,7 @@ runs:
           with:
               model: ${{ inputs.model }}
               max-tokens: ${{ inputs.max_tokens }}
+              token: ${{ inputs.gh_token }}
               prompt: |
                   You are an expert GitHub Actions troubleshooting assistant. Please analyze the following GitHub Actions workflow logs and provide:
 
