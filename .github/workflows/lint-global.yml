@@ -52,8 +52,9 @@ jobs:
             - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
               if: env.autofix_pr == 'false'
 
-            - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@4c0c3611b80ac8e147f7991092a0e282b52c48fa # main
+            # TODO: Renable when switching back to upstream actionlint
+            # - name: Centralized Actionlint
+            #   uses: camunda/infra-global-github-actions/actionlint@4c0c3611b80ac8e147f7991092a0e282b52c48fa # main
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
