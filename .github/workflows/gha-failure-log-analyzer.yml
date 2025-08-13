@@ -1,0 +1,66 @@
+---
+name: GHA Failure Log Analyzer
+
+on:
+    workflow_dispatch:
+        inputs:
+            run_url:
+                description: GitHub Actions run URL to analyze
+                required: true
+                type: string
+            slack_channel_id:
+                description: Slack channel ID to post the analysis result
+                required: false
+                type: string
+                default: C07E4FF6YMB
+            slack_thread_ts:
+                description: Slack thread ts to post the analysis result
+                required: false
+                type: string
+
+jobs:
+    analyze-logs:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            models: read
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@16a58ec264aba7d6f610b93dea782995d4f16963 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.vault_role_id }}
+                  vault-auth-secret-id: ${{ secrets.vault_secret_id }}
+                  vault-url: ${{ secrets.vault_addr }}
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+              with:
+                  url: ${{ secrets.vault_addr }}
+                  method: approle
+                  roleId: ${{ secrets.vault_role_id }}
+                  secretId: ${{ secrets.vault_secret_id }}
+                  exportEnv: false
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+            - name: GHA Failure Log Analyzer
+              id: analyze-logs
+              uses: ./.github/workflows/actions/gha-failure-log-analyzer
+              with:
+                  run_url: ${{ github.event.inputs.run_url }}
+                  slack_thread_ts: ${{ github.event.inputs.slack_thread_ts }}
+                  slack_channel_id: ${{ github.event.inputs.slack_channel_id }}
+                  gh_token: ${{ steps.generate-github-token.outputs.token }}
+                  slack_token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+            - name: Set Results as step output
+              id: set-output
+              run: echo "${{ steps.analyze-logs.outputs.response }}" >> "$GITHUB_STEP_SUMMARY"

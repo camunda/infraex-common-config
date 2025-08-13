@@ -107,3 +107,20 @@ runs:
                   }
           env:
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        - name: Trigger GHA Failure Log Analyzer
+          id: trigger-analyzer
+          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
+          shell: bash
+          run: |
+              echo "Triggering GHA Failure Log Analyzer workflow..."
+              gh workflow run "GHA Failure Log Analyzer" \
+                --repo camunda/infraex-common-config \
+                --field run_url="${{ env.WORKFLOW_URL }}" \
+                --field slack_channel_id="${{ inputs.slack_channel_id }}" \
+                --field slack_thread_ts="${{ steps.slack-notification.outputs.ts }}"
+
+              echo "GHA Failure Log Analyzer triggered successfully"
+          env:
+              GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+              WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
