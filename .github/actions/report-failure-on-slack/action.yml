@@ -46,6 +46,9 @@ runs:
               vault-auth-role-id: ${{ inputs.vault_role_id }}
               vault-auth-secret-id: ${{ inputs.vault_secret_id }}
               vault-url: ${{ inputs.vault_addr }}
+              # we generate a token with access to all assigned repos for the analyzer trigger
+              owner: camunda
+              repositories: '!all'
 
         - name: Check for Silence Issue
           id: silence-check
