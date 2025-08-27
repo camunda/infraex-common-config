@@ -16,8 +16,11 @@ inputs:
     slack_token:
         description: Slack Token for posting messages
         required: false
+    remote_gh_access:
+        description: Remote GitHub access token to fetch logs from another repository
+        required: false
     gh_token:
-        description: GitHub Token for authentication
+        description: GitHub Token for authentication with the models / interference
         required: true
     max_tokens:
         description: Maximum tokens for AI model response
@@ -70,7 +73,7 @@ runs:
               gh run watch "${RUN_ID}"
           env:
               GH_REPO: ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}
-              GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+              GH_TOKEN: ${{ inputs.gh_token }}
               RUN_ID: ${{ steps.parse-url.outputs.run_id }}
 
         - name: Fetch GitHub Actions Logs

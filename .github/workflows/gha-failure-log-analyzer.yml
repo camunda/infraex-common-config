@@ -59,8 +59,10 @@ jobs:
                   run_url: ${{ github.event.inputs.run_url }}
                   slack_thread_ts: ${{ github.event.inputs.slack_thread_ts }}
                   slack_channel_id: ${{ github.event.inputs.slack_channel_id }}
-                  gh_token: ${{ steps.generate-github-token.outputs.token }}
+                  remote_gh_access: ${{ steps.generate-github-token.outputs.token }}
+                  gh_token: ${{ secrets.GITHUB_TOKEN}}
                   slack_token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
             - name: Set Results as step output
               id: set-output
+              continue-on-error: true # may fail depending on the response output size
               run: echo "${{ steps.analyze-logs.outputs.response }}" >> "$GITHUB_STEP_SUMMARY"
