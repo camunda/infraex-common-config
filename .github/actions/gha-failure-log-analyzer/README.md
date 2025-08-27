@@ -16,7 +16,7 @@ Analyzes GitHub Actions failure logs and posts results to a Slack thread.
 | `remote_gh_access` | <p>Remote GitHub access token to fetch logs from another repository</p> | `false` | `""` |
 | `gh_token` | <p>GitHub Token for authentication with the models / interference</p> | `true` | `""` |
 | `max_tokens` | <p>Maximum tokens for AI model response</p> | `false` | `600` |
-| `model` | <p>AI model to use for analysis</p> | `false` | `openai/gpt-5` |
+| `model` | <p>AI model to use for analysis</p> | `false` | `openai/gpt-4o` |
 
 
 ## Outputs
@@ -81,5 +81,5 @@ This action is a `composite` action.
     # AI model to use for analysis
     #
     # Required: false
-    # Default: openai/gpt-5
+    # Default: openai/gpt-4o
 ```
