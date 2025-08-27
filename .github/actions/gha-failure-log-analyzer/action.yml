@@ -70,7 +70,7 @@ runs:
               gh run watch "${RUN_ID}"
           env:
               GH_REPO: ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}
-              GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+              GH_TOKEN: ${{ inputs.gh_token }}
               RUN_ID: ${{ steps.parse-url.outputs.run_id }}
 
         - name: Fetch GitHub Actions Logs
