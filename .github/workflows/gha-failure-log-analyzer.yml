@@ -54,7 +54,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
             - name: GHA Failure Log Analyzer
               id: analyze-logs
-              uses: ./.github/workflows/actions/gha-failure-log-analyzer
+              uses: ./.github/actions/gha-failure-log-analyzer
               with:
                   run_url: ${{ github.event.inputs.run_url }}
                   slack_thread_ts: ${{ github.event.inputs.slack_thread_ts }}
