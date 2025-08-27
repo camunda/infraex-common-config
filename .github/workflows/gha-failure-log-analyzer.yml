@@ -64,4 +64,5 @@ jobs:
                   slack_token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
             - name: Set Results as step output
               id: set-output
+              continue-on-error: true # may fail depending on the response output size
               run: echo "${{ steps.analyze-logs.outputs.response }}" >> "$GITHUB_STEP_SUMMARY"
