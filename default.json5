@@ -269,6 +269,10 @@
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/opensearch_versions.txt',
       'format': 'plain',
     },
+    'aurora-pg-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_postgres_versions.txt',
+      'format': 'plain',
+    },
   },
   customManagers: [
     {
