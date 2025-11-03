@@ -30,7 +30,7 @@
   prHourlyLimit: 6,
   prConcurrentLimit: 20,
   commitBodyTable: true,
-  separateMajorMinor: false,
+  separateMajorMinor: true,
   recreateWhen: 'always', // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
   prBodyNotes: [
     '{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}',
