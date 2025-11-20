@@ -60,6 +60,16 @@
   },
   packageRules: [
     {
+      // Disable Helm updates from asdf manager to use custom datasource instead
+      matchManagers: [
+        'asdf',
+      ],
+      matchPackageNames: [
+        'helm/helm',
+      ],
+      enabled: false,
+    },
+    {
       // temporarily ignoring trivy updates to stick with 0.60.0
       // see https://github.com/camunda/team-infrastructure-experience/issues/680
       matchPackageNames: [
@@ -278,6 +288,13 @@
     'aurora-pg-camunda': {
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_postgres_versions.txt',
       'format': 'plain',
+    },
+    'helm-camunda': {
+      'defaultRegistryUrlTemplate': 'https://raw.githubusercontent.com/camunda/camunda-platform-helm/refs/heads/main/.tool-versions',
+      'format': 'plain',
+      'transformTemplates': [
+        '{ "releases": $map(releases, function($v) { { "version": $replace($v.version, /^helm\\s+/, "") } }) }'
+      ],
     },
   },
   customManagers: [
