@@ -28,7 +28,7 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
             - name: Generate token for GitHub
               id: generate-github-token
               uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@83dd3777b573878a73ea4b9a0547ad42c5bd8500 # main
