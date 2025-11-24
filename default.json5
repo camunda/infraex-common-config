@@ -296,6 +296,14 @@
         '{ "releases": $map(releases, function($v) { { "version": $replace($v.version, /^helm\\s+/, "") } }) }'
       ],
     },
+    'teleport-camunda': {
+      // Latest version for us == current one used in Camunda Teleport SaaS:
+      // curl -s https://camunda.teleport.sh/webapi/ping | jq -r '.server_version'
+      "defaultRegistryUrlTemplate": "https://camunda.teleport.sh/webapi/ping",
+      "transformTemplates": [
+        "{\"releases\": [{\"version\": $$.server_version}]}"
+      ]
+    }
   },
   customManagers: [
     {
