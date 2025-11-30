@@ -108,7 +108,7 @@ runs:
 
         - name: Analyze Logs with AI
           id: analyze
-          uses: actions/ai-inference@a1c11829223a786afe3b5663db904a3aa1eac3a2 # v2.0.1
+          uses: actions/ai-inference@02c6cc30ae592ce65ee356387748dfc2fd5f7993 # v2.0.3
           with:
               model: ${{ inputs.model }}
               max-tokens: ${{ inputs.max_tokens }}
