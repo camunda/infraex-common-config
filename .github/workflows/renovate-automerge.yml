@@ -7,7 +7,7 @@ on:
 # limit to a single execution per ref of this workflow
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+    cancel-in-progress: false
 
 jobs:
     renovate-automerge:
