@@ -18,7 +18,7 @@ on:
 # finish before the next automerge attempt starts.
 # See example: https://github.com/camunda/camunda-deployment-references/pull/1352
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
+    group: a-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: false
 
 jobs:
