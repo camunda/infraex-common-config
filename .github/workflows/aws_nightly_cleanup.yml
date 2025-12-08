@@ -56,7 +56,7 @@ jobs:
                       cleanup_older_than: 0h
 
         steps:
-            - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
             - name: Determine AWS_REGION and CLEANUP_OLDER_THAN
               id: determine-values
@@ -149,7 +149,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@b0fe528f9157c18a19402e23f1185a9bc28e2e8a # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@c7794826624039d8cb9ddeaa38c9dfb2781e34ba # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -210,7 +210,7 @@ jobs:
         needs:
             - aws-cleanup
         steps:
-            - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
             - name: Notify in Slack in case of failure
               id: slack-notification
