@@ -76,7 +76,7 @@ runs:
         - name: Check if asdf cache exists
           id: cache-asdf-check
           if: ${{ inputs.cache == 'true' }}
-          uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+          uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v5
           with:
               path: |
                   ${{ steps.cache-key.outputs.cache_asdf_path }}
@@ -177,7 +177,7 @@ runs:
         - name: Cache installed tools
           id: cache-tools
           if: ${{ steps.cache-asdf-check.outputs.cache-hit != 'true' }}
-          uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+          uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5
           with:
               path: |
                   ${{ steps.cache-key.outputs.cache_asdf_path }}
