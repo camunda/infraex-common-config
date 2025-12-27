@@ -15,7 +15,7 @@ on:
 
 env:
     # renovate: datasource=github-releases depName=ianlewis/todos
-    TODOS_VERSION: v0.13.0
+    TODOS_VERSION: v0.14.0
 
 jobs:
     check-todos:
