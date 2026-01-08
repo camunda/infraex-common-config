@@ -85,13 +85,17 @@ runs:
               key: ${{ steps.cache-key.outputs.cache_key }}
 
         # Some ASDF packages require Python to be compiled with lzma support
-        # including e.g. azure cli
+        # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
         - name: Install library preqrequisites
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
               sudo apt-get update
-              sudo apt-get install -y liblzma-dev libbz2-dev libreadline-dev
+
+              sudo apt-get install -y build-essential git libexpat1-dev libssl-dev zlib1g-dev \
+                  libncurses5-dev libbz2-dev liblzma-dev \
+                  libsqlite3-dev libffi-dev tcl-dev linux-headers-generic libgdbm-dev \
+                  libreadline-dev tk tk-dev
 
         - name: Install asdf when no cache hit
           id: install
