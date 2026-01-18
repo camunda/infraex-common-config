@@ -39,7 +39,7 @@ jobs:
                   echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
             - name: Restore todos cache
-              uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v5
+              uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
               id: cache-tools
               with:
                   path: ${{ steps.cache-key.outputs.cache_path }}
@@ -52,7 +52,7 @@ jobs:
 
             - name: Save todos cache
               if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
-              uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5
+              uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
               with:
                   path: ${{ steps.cache-key.outputs.cache_path }}
                   key: ${{ steps.cache-key.outputs.cache_key }}
