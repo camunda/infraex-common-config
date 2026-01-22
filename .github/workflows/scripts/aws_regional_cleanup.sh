@@ -134,3 +134,41 @@ if [ -n "$client_vpn_endpoint_ids" ]; then
         execute_or_simulate "aws ec2 delete-client-vpn-endpoint --region $region --client-vpn-endpoint-id $cvpn_id"
     done
 fi
+
+echo "Deleting Cognito User Pools"
+# Delete Cognito User Pools (must delete domains first)
+user_pool_ids=$(aws cognito-idp list-user-pools --region "$region" --max-results 60 --query 'UserPools[].Id' --output text || true)
+
+if [ -n "$user_pool_ids" ]; then
+    read -r -a user_pool_ids_array <<< "$user_pool_ids"
+
+    for user_pool_id in "${user_pool_ids_array[@]}"
+    do
+        echo "Processing Cognito User Pool: $user_pool_id"
+
+        # Get and delete the domain first (required before deleting the User Pool)
+        domain=$(aws cognito-idp describe-user-pool --region "$region" --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text 2>/dev/null || true)
+
+        if [ -n "$domain" ] && [ "$domain" != "None" ]; then
+            echo "Deleting Cognito User Pool Domain: $domain"
+            execute_or_simulate "aws cognito-idp delete-user-pool-domain --region $region --user-pool-id $user_pool_id --domain $domain"
+        fi
+
+        echo "Deleting Cognito User Pool: $user_pool_id"
+        execute_or_simulate "aws cognito-idp delete-user-pool --region $region --user-pool-id $user_pool_id"
+    done
+fi
+
+echo "Deleting Cognito Identity Pools"
+# Delete Cognito Identity Pools
+identity_pool_ids=$(aws cognito-identity list-identity-pools --region "$region" --max-results 60 --query 'IdentityPools[].IdentityPoolId' --output text || true)
+
+if [ -n "$identity_pool_ids" ]; then
+    read -r -a identity_pool_ids_array <<< "$identity_pool_ids"
+
+    for identity_pool_id in "${identity_pool_ids_array[@]}"
+    do
+        echo "Deleting Cognito Identity Pool: $identity_pool_id"
+        execute_or_simulate "aws cognito-identity delete-identity-pool --region $region --identity-pool-id $identity_pool_id"
+    done
+fi
