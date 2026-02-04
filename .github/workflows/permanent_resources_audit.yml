@@ -25,7 +25,7 @@ env:
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.46.0
     # Slack channel for internal notifications (FYI)
-    SLACK_CHANNEL_ID: C05S0M7KG6A
+    SLACK_CHANNEL_ID: C076N4G1162
     # Slack channel for PR tests
     SLACK_CHANNEL_ID_PR: C07E4FF6YMB
 
@@ -215,8 +215,8 @@ jobs:
                       RESOURCE_LIST="${RESOURCE_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
                     fi
 
-                    # Escape for JSON and use single line
-                    printf "status_text=*⚠️ Non-whitelisted resources (%s):*\n\`\`\`\n%s\n\`\`\`\n" "$UNWHITELISTED" "$RESOURCE_LIST" >> "$GITHUB_OUTPUT"
+                    # Use printf %s to output literal string without interpreting escapes
+                    printf '%s\n' "status_text=*⚠️ Non-whitelisted resources ($UNWHITELISTED):*\n\`\`\`\n${RESOURCE_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
                   else
                     echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
                     echo "status_text=*✅ All $TOTAL resources are whitelisted*" >> "$GITHUB_OUTPUT"
@@ -261,6 +261,13 @@ jobs:
                             "text": {
                               "type": "mrkdwn",
                               "text": "${{ steps.slack-message.outputs.status_text }}"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "<!subteam^S05RZ2YKZCY> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
@@ -423,7 +430,8 @@ jobs:
                       RG_LIST="${RG_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
                     fi
 
-                    printf "status_text=*⚠️ Non-whitelisted Resource Groups (%s):*\n\`\`\`\n%s\n\`\`\`\n" "$UNWHITELISTED" "$RG_LIST" >> "$GITHUB_OUTPUT"
+                    # Use printf %s to output literal string without interpreting escapes
+                    printf '%s\n' "status_text=*⚠️ Non-whitelisted Resource Groups ($UNWHITELISTED):*\n\`\`\`\n${RG_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
                   else
                     echo "status_text=*✅ All $TOTAL Resource Groups are whitelisted*" >> "$GITHUB_OUTPUT"
                   fi
@@ -467,6 +475,13 @@ jobs:
                             "text": {
                               "type": "mrkdwn",
                               "text": "${{ steps.slack-message.outputs.status_text }}"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "<!subteam^S05RZ2YKZCY> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
