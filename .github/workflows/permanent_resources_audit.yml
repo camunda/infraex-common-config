@@ -203,31 +203,27 @@ jobs:
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
                     echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
-                    # Use EOF for multiline output
-                    # Format: [type] resource_name (region)
-                    {
-                      echo "status_text<<EOF"
-                      echo "*⚠️ Non-whitelisted resources ($UNWHITELISTED):*"
-                      echo "\`\`\`"
-                      head -$MAX_DISPLAY unwhitelisted_resources.txt | while IFS= read -r line; do
-                        # Parse: "type region name ..." -> "[type] name (region)"
-                        type=$(echo "$line" | awk '{print $1}')
-                        region=$(echo "$line" | awk '{print $2}')
-                        name=$(echo "$line" | awk '{print $3}')
-                        echo "[$type] $name ($region)"
-                      done
-                      if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
-                        echo "... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
-                      fi
-                      echo "\`\`\`"
-                      echo "EOF"
-                    } >> "$GITHUB_OUTPUT"
+                    # Build resource list as single line with \n for JSON
+                    RESOURCE_LIST=$(head -$MAX_DISPLAY unwhitelisted_resources.txt | while IFS= read -r line; do
+                      type=$(echo "$line" | awk '{print $1}')
+                      region=$(echo "$line" | awk '{print $2}')
+                      name=$(echo "$line" | awk '{print $3}')
+                      echo "[$type] $name ($region)"
+                    done | tr '\n' '§' | sed 's/§/\\n/g')
+
+                    if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
+                      RESOURCE_LIST="${RESOURCE_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                    fi
+
+                    # Escape for JSON and use single line
+                    printf "status_text=*⚠️ Non-whitelisted resources (%s):*\n\`\`\`\n%s\n\`\`\`\n" "$UNWHITELISTED" "$RESOURCE_LIST" >> "$GITHUB_OUTPUT"
                   else
                     echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
                     echo "status_text=*✅ All $TOTAL resources are whitelisted*" >> "$GITHUB_OUTPUT"
                   fi
 
             - name: Post Audit Report to Slack
+              if: steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
@@ -420,23 +416,20 @@ jobs:
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
-                    # Build resource group list
-                    {
-                      echo "status_text<<EOF"
-                      echo "*⚠️ Non-whitelisted Resource Groups ($UNWHITELISTED):*"
-                      echo "\`\`\`"
-                      head -$MAX_DISPLAY unwhitelisted_rgs.txt
-                      if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
-                        echo "... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
-                      fi
-                      echo "\`\`\`"
-                      echo "EOF"
-                    } >> "$GITHUB_OUTPUT"
+                    # Build resource group list as single line with \n for JSON
+                    RG_LIST=$(head -$MAX_DISPLAY unwhitelisted_rgs.txt | tr '\n' '§' | sed 's/§/\\n/g')
+
+                    if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
+                      RG_LIST="${RG_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                    fi
+
+                    printf "status_text=*⚠️ Non-whitelisted Resource Groups (%s):*\n\`\`\`\n%s\n\`\`\`\n" "$UNWHITELISTED" "$RG_LIST" >> "$GITHUB_OUTPUT"
                   else
                     echo "status_text=*✅ All $TOTAL Resource Groups are whitelisted*" >> "$GITHUB_OUTPUT"
                   fi
 
             - name: Post Azure Audit Report to Slack
+              if: steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
