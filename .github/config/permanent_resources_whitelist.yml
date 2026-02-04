@@ -10,12 +10,17 @@ aws:
             - general-purpose-bucket-that-will-not-be-deleted
             - infraex-terraform-state
             - infraex-artifacts
+            - tests-eks-tf-state-eu-central-1
+            - tests-c8-multi-region-es-eu-central-1
+            - tests-rosa-tf-state-eu-central-1
+            - tests-ra-aws-rosa-hcp-tf-state-eu-central-1
+            - tf-state-multi-reg
+            - camunda.ie
         # Lambda functions
         lambda:
-            - infraex-*
+            - medicAbsenceFormToJsonData
         # IAM roles
         iam_role:
-            - infraex-*
             - AWSServiceRole*
         # VPCs
         vpc:
@@ -24,18 +29,18 @@ aws:
         eks_cluster: []
         # RDS instances
         rds: []
+        # Security Hub
+        security-hub:
+            - arn:aws:securityhub:*:*:hub/default
+        # CloudFormation StackSets
+        cloudformation-stack:
+            - StackSet-expel-*
+            - StackSet-Wiz-*
 
     eu-west-1:
-        # Reference architectures
-        s3:
-            - camunda-reference-*
-        vpc:
-            - reference-*
-        eks_cluster:
-            - reference-*
-        lambda: []
-        iam_role:
-            - AWSServiceRole*
+        cloudformation-stack:
+            - StackSet-expel-*
+            - StackSet-Wiz-*
 
 azure:
     westeurope:
