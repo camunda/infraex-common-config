@@ -191,10 +191,28 @@ jobs:
               run: |
                   UNWHITELISTED="${{ steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT }}"
                   TOTAL="${{ steps.cloud-nuke-audit.outputs.TOTAL_RESOURCES }}"
+                  RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+
+                  echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
                     echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
-                    echo "status_text=*⚠️ Non-whitelisted resources:* $UNWHITELISTED" >> "$GITHUB_OUTPUT"
+                    # Use EOF for multiline output
+                    # Format: [type] resource_name (region)
+                    {
+                      echo "status_text<<EOF"
+                      echo "*⚠️ Non-whitelisted resources ($UNWHITELISTED):*"
+                      echo "\`\`\`"
+                      while IFS= read -r line; do
+                        # Parse: "type region name ..." -> "[type] name (region)"
+                        type=$(echo "$line" | awk '{print $1}')
+                        region=$(echo "$line" | awk '{print $2}')
+                        name=$(echo "$line" | awk '{print $3}')
+                        echo "[$type] $name ($region)"
+                      done < unwhitelisted_resources.txt
+                      echo "\`\`\`"
+                      echo "EOF"
+                    } >> "$GITHUB_OUTPUT"
                   else
                     echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
                     echo "status_text=*✅ All $TOTAL resources are whitelisted*" >> "$GITHUB_OUTPUT"
@@ -252,7 +270,7 @@ jobs:
                             "elements": [
                               {
                                 "type": "mrkdwn",
-                                "text": "Run date: $(date -u '+%Y-%m-%d %H:%M UTC')"
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
                               }
                             ]
                           }
@@ -348,30 +366,29 @@ jobs:
                       echo "Total: $WHITELISTED_RG_COUNT"
                       echo ""
                       echo "#### ⚠️ Non-whitelisted Resource Groups (review required):"
-                  } >> audit_report.txt
-                  if [[ -s unwhitelisted_rgs.txt ]]; then
-                      while IFS= read -r rg; do
-                          echo "  - $rg"
-                      done < unwhitelisted_rgs.txt
-                  else
-                      echo "  None"
-                  fi >> audit_report.txt
-
-                  {
+                      if [[ -s unwhitelisted_rgs.txt ]]; then
+                          while IFS= read -r rg; do
+                              echo "  - $rg"
+                          done < unwhitelisted_rgs.txt
+                      else
+                          echo "  None"
+                      fi
                       echo "Total: $UNWHITELISTED_RG_COUNT"
                       echo ""
                       echo "### Resources by type:"
                   } >> audit_report.txt
 
                   # Get a summary of resources by type
-                  az resource list --query "[?location=='westeurope'] | [].type" -o json | jq -r 'group_by(.) | map({type: .[0], count: length}) | sort_by(-.count) | .[] | "\(.type): \(.count)"' | tee -a audit_report.txt || echo "Unable to list resources" >> audit_report.txt
+                  az resource list --query "[?location=='westeurope'] | [].type" -o json | jq -r 'group_by(.) | map({type: .[0], count: length}) | sort_by(-.count) | .[] | "\(.type): \(.count)"' >> audit_report.txt || echo "Unable to list resources" >> audit_report.txt
 
                   cat audit_report.txt
 
                   # Save counts for Slack
-                  echo "WHITELISTED_RG_COUNT=$WHITELISTED_RG_COUNT" >> "$GITHUB_OUTPUT"
-                  echo "UNWHITELISTED_RG_COUNT=$UNWHITELISTED_RG_COUNT" >> "$GITHUB_OUTPUT"
-                  echo "TOTAL_RG_COUNT=$((WHITELISTED_RG_COUNT + UNWHITELISTED_RG_COUNT))" >> "$GITHUB_OUTPUT"
+                  {
+                      echo "WHITELISTED_RG_COUNT=$WHITELISTED_RG_COUNT"
+                      echo "UNWHITELISTED_RG_COUNT=$UNWHITELISTED_RG_COUNT"
+                      echo "TOTAL_RG_COUNT=$((WHITELISTED_RG_COUNT + UNWHITELISTED_RG_COUNT))"
+                  } >> "$GITHUB_OUTPUT"
 
             - name: Determine Slack channel
               id: slack-channel
@@ -387,9 +404,20 @@ jobs:
               run: |
                   UNWHITELISTED="${{ steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT }}"
                   TOTAL="${{ steps.azure-audit.outputs.TOTAL_RG_COUNT }}"
+                  RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+
+                  echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
-                    echo "status_text=*⚠️ Non-whitelisted Resource Groups:* $UNWHITELISTED" >> "$GITHUB_OUTPUT"
+                    # Build resource group list
+                    {
+                      echo "status_text<<EOF"
+                      echo "*⚠️ Non-whitelisted Resource Groups ($UNWHITELISTED):*"
+                      echo "\`\`\`"
+                      cat unwhitelisted_rgs.txt
+                      echo "\`\`\`"
+                      echo "EOF"
+                    } >> "$GITHUB_OUTPUT"
                   else
                     echo "status_text=*✅ All $TOTAL Resource Groups are whitelisted*" >> "$GITHUB_OUTPUT"
                   fi
@@ -446,7 +474,7 @@ jobs:
                             "elements": [
                               {
                                 "type": "mrkdwn",
-                                "text": "Run date: $(date -u '+%Y-%m-%d %H:%M UTC')"
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
                               }
                             ]
                           }
