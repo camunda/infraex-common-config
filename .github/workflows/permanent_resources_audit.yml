@@ -18,7 +18,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/permanent_resources_audit.yml
-            - .github/config/permanent_resources_whitelist.yml
+            - .github/config/permanent_resources_allowlist.yml
 
 env:
     AWS_PROFILE: infraex
@@ -83,20 +83,21 @@ jobs:
                     https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
                   chmod +x cloud-nuke_linux_amd64
 
-            - name: Load whitelist for region
-              id: whitelist
+            - name: Load allowlist for region
+              id: allowlist
               run: |
-                  WHITELIST_FILE=".github/config/permanent_resources_whitelist.yml"
+                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
                   REGION="${{ matrix.config.region }}"
 
-                  # Extract whitelisted patterns for this region
-                  echo "Loading whitelist for AWS region: $REGION"
+                  # Extract allowlisted patterns for this region with resource type prefix
+                  echo "Loading allowlist for AWS region: $REGION"
 
-                  # Create grep patterns file for filtering
-                  yq -r ".aws.\"$REGION\" // {} | to_entries | .[] | .value[]? // empty" "$WHITELIST_FILE" 2>/dev/null | sort -u > whitelist_patterns.txt || touch whitelist_patterns.txt
+                  # Create patterns file: "resource_type pattern" format to match against extracted resources
+                  # Output format: "s3 bucket-name" or "cloudformation-stack StackSet-Wiz-*"
+                  yq -r ".aws.\"$REGION\" | to_entries | .[] | .key as \$type | .value[]? | \"\(\$type) \(.)\"" "$ALLOWLIST_FILE" 2>/dev/null | grep -v ' $' | sort -u > allowlist_patterns.txt || touch allowlist_patterns.txt
 
-                  echo "Whitelist patterns loaded:"
-                  cat whitelist_patterns.txt
+                  echo "Allowlist patterns loaded:"
+                  cat allowlist_patterns.txt
 
             - name: Run Cloud Nuke in Dry-Run mode
               id: cloud-nuke-audit
@@ -119,14 +120,14 @@ jobs:
                     --exclude-resource-type ec2_dhcp_option \
                     --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
 
-                  # Filter out whitelisted resources
-                  echo "### Whitelisted resources (approved):" >> audit_report.txt
-                  WHITELISTED_COUNT=0
-                  UNWHITELISTED_COUNT=0
+                  # Filter out allowlisted resources
+                  echo "### Allowlisted resources (approved):" >> audit_report.txt
+                  ALLOWLISTED_COUNT=0
+                  UNALLOWLISTED_COUNT=0
 
                   # Initialize output files
-                  true > unwhitelisted_resources.txt
-                  true > whitelisted_resources.txt
+                  true > unallowlisted_resources.txt
+                  true > allowlisted_resources.txt
 
                   # Extract resource lines from cloud-nuke table output
                   # The table format has: | resource_type | region | identifier | nukable |
@@ -143,43 +144,54 @@ jobs:
 
                   while IFS= read -r line; do
                       [[ -z "$line" ]] && continue
-                      is_whitelisted=false
+                      # Extract type and name from the resource line (format: "type region name")
+                      res_type=$(echo "$line" | awk '{print $1}')
+                      res_name=$(echo "$line" | awk '{print $3}')
+
+                      is_allowlisted=false
                       while IFS= read -r pattern; do
                           # Skip empty patterns
                           [[ -z "$pattern" ]] && continue
-                          # Convert glob pattern to regex and check
-                          regex_pattern=${pattern//\*/.*}
-                          if echo "$line" | grep -qE "$regex_pattern"; then
-                              is_whitelisted=true
-                              break
-                          fi
-                      done < whitelist_patterns.txt
+                          # Pattern format: "type pattern_value"
+                          pattern_type=$(echo "$pattern" | awk '{print $1}')
+                          pattern_value=$(echo "$pattern" | awk '{print $2}')
 
-                      if $is_whitelisted; then
-                          echo "$line" >> whitelisted_resources.txt
-                          ((WHITELISTED_COUNT++)) || true
+                          # Check if resource type matches pattern type
+                          if [[ "$res_type" == "$pattern_type" ]]; then
+                              # Convert glob pattern to regex and check against resource name
+                              regex_pattern=${pattern_value//\*/.*}
+                              if echo "$res_name" | grep -qE "^${regex_pattern}$"; then
+                                  is_allowlisted=true
+                                  break
+                              fi
+                          fi
+                      done < allowlist_patterns.txt
+
+                      if $is_allowlisted; then
+                          echo "$line" >> allowlisted_resources.txt
+                          ((ALLOWLISTED_COUNT++)) || true
                       else
-                          echo "$line" >> unwhitelisted_resources.txt
-                          ((UNWHITELISTED_COUNT++)) || true
+                          echo "$line" >> unallowlisted_resources.txt
+                          ((UNALLOWLISTED_COUNT++)) || true
                       fi
                   done < extracted_resources.txt
 
                   {
-                      head -50 whitelisted_resources.txt || echo "None"
+                      head -50 allowlisted_resources.txt || echo "None"
                       echo ""
-                      echo "Total whitelisted: $WHITELISTED_COUNT"
+                      echo "Total allowlisted: $ALLOWLISTED_COUNT"
                       echo ""
-                      echo "### ⚠️ Non-whitelisted resources (review required):"
-                      head -100 unwhitelisted_resources.txt || echo "None"
+                      echo "### ⚠️ Non-allowlisted resources (review required):"
+                      head -100 unallowlisted_resources.txt || echo "None"
                       echo ""
-                      echo "Total non-whitelisted: $UNWHITELISTED_COUNT"
+                      echo "Total non-allowlisted: $UNALLOWLISTED_COUNT"
                   } >> audit_report.txt
 
                   cat audit_report.txt
 
                   # Save counts for Slack message
-                  echo "UNWHITELISTED_COUNT=$UNWHITELISTED_COUNT" >> "$GITHUB_OUTPUT"
-                  echo "TOTAL_RESOURCES=$((WHITELISTED_COUNT + UNWHITELISTED_COUNT))" >> "$GITHUB_OUTPUT"
+                  echo "UNALLOWLISTED_COUNT=$UNALLOWLISTED_COUNT" >> "$GITHUB_OUTPUT"
+                  echo "TOTAL_RESOURCES=$((ALLOWLISTED_COUNT + UNALLOWLISTED_COUNT))" >> "$GITHUB_OUTPUT"
 
             - name: Determine Slack channel
               id: slack-channel
@@ -193,7 +205,7 @@ jobs:
             - name: Prepare Slack message
               id: slack-message
               run: |
-                  UNWHITELISTED="${{ steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT }}"
+                  UNALLOWLISTED="${{ steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT }}"
                   TOTAL="${{ steps.cloud-nuke-audit.outputs.TOTAL_RESOURCES }}"
                   RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
                   # Slack block text limit is 3000 chars, limit to 20 resources
@@ -201,24 +213,24 @@ jobs:
 
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
-                  if [[ "$UNWHITELISTED" -gt 0 ]]; then
+                  if [[ "$UNALLOWLISTED" -gt 0 ]]; then
                     echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
                     # Build resource list as single line with literal \n for Slack mrkdwn
-                    RESOURCE_LIST=$(head -$MAX_DISPLAY unwhitelisted_resources.txt | awk '{type=$1; region=$2; name=$3; line="[" type "] " name " (" region ")"; if (NR>1) printf "\\n"; printf "%s", line}')
+                    RESOURCE_LIST=$(head -$MAX_DISPLAY unallowlisted_resources.txt | awk '{type=$1; region=$2; name=$3; line="[" type "] " name " (" region ")"; if (NR>1) printf "\\n"; printf "%s", line}')
 
-                    if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
-                      RESOURCE_LIST="${RESOURCE_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                    if [[ "$UNALLOWLISTED" -gt $MAX_DISPLAY ]]; then
+                      RESOURCE_LIST="${RESOURCE_LIST}... and $((UNALLOWLISTED - MAX_DISPLAY)) more (see full report)"
                     fi
 
                     # Use printf %s to output literal string without interpreting escapes
-                    printf '%s\n' "status_text=*⚠️ Non-whitelisted resources ($UNWHITELISTED):*\n\`\`\`\n${RESOURCE_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
+                    printf '%s\n' "status_text=*⚠️ Non-allowlisted resources ($UNALLOWLISTED):*\n\`\`\`\n${RESOURCE_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
                   else
                     echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
-                    echo "status_text=*✅ All $TOTAL resources are whitelisted*" >> "$GITHUB_OUTPUT"
+                    echo "status_text=*✅ All $TOTAL resources are allowlisted*" >> "$GITHUB_OUTPUT"
                   fi
 
             - name: Post Audit Report to Slack
-              if: steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT > 0
+              if: steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
@@ -262,7 +274,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
@@ -323,7 +335,7 @@ jobs:
               env:
                   AZURE_REGION: westeurope
               run: |
-                  WHITELIST_FILE=".github/config/permanent_resources_whitelist.yml"
+                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
 
                   {
                       echo "## Azure Permanent Resources Audit - westeurope"
@@ -332,10 +344,10 @@ jobs:
                       echo ""
                   } > audit_report.txt
 
-                  # Load whitelisted resource groups
-                  yq -r '.azure.westeurope.resource_groups[]? // empty' "$WHITELIST_FILE" 2>/dev/null > whitelisted_rgs.txt || touch whitelisted_rgs.txt
-                  echo "Whitelisted resource groups:"
-                  cat whitelisted_rgs.txt
+                  # Load allowlisted resource groups
+                  yq -r '.azure.westeurope.resource_groups[]? // empty' "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
+                  echo "Allowlisted resource groups:"
+                  cat allowlisted_rgs.txt
 
                   {
                       echo "### Resource Groups in westeurope:"
@@ -345,42 +357,42 @@ jobs:
                   # List all resource groups and categorize them
                   az group list --query "[?location=='westeurope']" -o json > all_rgs.json
 
-                  echo "#### ✅ Whitelisted Resource Groups:" >> audit_report.txt
-                  WHITELISTED_RG_COUNT=0
-                  UNWHITELISTED_RG_COUNT=0
+                  echo "#### ✅ Allowlisted Resource Groups:" >> audit_report.txt
+                  ALLOWLISTED_RG_COUNT=0
+                  UNALLOWLISTED_RG_COUNT=0
 
                   while IFS= read -r rg_name; do
-                      is_whitelisted=false
+                      is_allowlisted=false
                       while IFS= read -r pattern; do
                           [[ -z "$pattern" ]] && continue
                           regex_pattern=${pattern//\*/.*}
                           if echo "$rg_name" | grep -qE "^${regex_pattern}$"; then
-                              is_whitelisted=true
+                              is_allowlisted=true
                               break
                           fi
-                      done < whitelisted_rgs.txt
+                      done < allowlisted_rgs.txt
 
-                      if $is_whitelisted; then
+                      if $is_allowlisted; then
                           echo "  - $rg_name" >> audit_report.txt
-                          ((WHITELISTED_RG_COUNT++)) || true
+                          ((ALLOWLISTED_RG_COUNT++)) || true
                       else
-                          echo "$rg_name" >> unwhitelisted_rgs.txt
-                          ((UNWHITELISTED_RG_COUNT++)) || true
+                          echo "$rg_name" >> unallowlisted_rgs.txt
+                          ((UNALLOWLISTED_RG_COUNT++)) || true
                       fi
                   done < <(jq -r '.[].name' all_rgs.json)
 
                   {
-                      echo "Total: $WHITELISTED_RG_COUNT"
+                      echo "Total: $ALLOWLISTED_RG_COUNT"
                       echo ""
-                      echo "#### ⚠️ Non-whitelisted Resource Groups (review required):"
-                      if [[ -s unwhitelisted_rgs.txt ]]; then
+                      echo "#### ⚠️ Non-allowlisted Resource Groups (review required):"
+                      if [[ -s unallowlisted_rgs.txt ]]; then
                           while IFS= read -r rg; do
                               echo "  - $rg"
-                          done < unwhitelisted_rgs.txt
+                          done < unallowlisted_rgs.txt
                       else
                           echo "  None"
                       fi
-                      echo "Total: $UNWHITELISTED_RG_COUNT"
+                      echo "Total: $UNALLOWLISTED_RG_COUNT"
                       echo ""
                       echo "### Resources by type:"
                   } >> audit_report.txt
@@ -392,9 +404,9 @@ jobs:
 
                   # Save counts for Slack
                   {
-                      echo "WHITELISTED_RG_COUNT=$WHITELISTED_RG_COUNT"
-                      echo "UNWHITELISTED_RG_COUNT=$UNWHITELISTED_RG_COUNT"
-                      echo "TOTAL_RG_COUNT=$((WHITELISTED_RG_COUNT + UNWHITELISTED_RG_COUNT))"
+                      echo "ALLOWLISTED_RG_COUNT=$ALLOWLISTED_RG_COUNT"
+                      echo "UNALLOWLISTED_RG_COUNT=$UNALLOWLISTED_RG_COUNT"
+                      echo "TOTAL_RG_COUNT=$((ALLOWLISTED_RG_COUNT + UNALLOWLISTED_RG_COUNT))"
                   } >> "$GITHUB_OUTPUT"
 
             - name: Determine Slack channel
@@ -409,7 +421,7 @@ jobs:
             - name: Prepare Slack message
               id: slack-message
               run: |
-                  UNWHITELISTED="${{ steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT }}"
+                  UNALLOWLISTED="${{ steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT }}"
                   TOTAL="${{ steps.azure-audit.outputs.TOTAL_RG_COUNT }}"
                   RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
                   # Slack block text limit is 3000 chars, limit to 20 items
@@ -417,22 +429,22 @@ jobs:
 
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
-                  if [[ "$UNWHITELISTED" -gt 0 ]]; then
+                  if [[ "$UNALLOWLISTED" -gt 0 ]]; then
                     # Build resource group list as single line with literal \n for Slack mrkdwn
-                    RG_LIST=$(head -$MAX_DISPLAY unwhitelisted_rgs.txt | awk '{if (NR>1) printf "\\n"; printf "%s", $0}')
+                    RG_LIST=$(head -$MAX_DISPLAY unallowlisted_rgs.txt | awk '{if (NR>1) printf "\\n"; printf "%s", $0}')
 
-                    if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
-                      RG_LIST="${RG_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                    if [[ "$UNALLOWLISTED" -gt $MAX_DISPLAY ]]; then
+                      RG_LIST="${RG_LIST}... and $((UNALLOWLISTED - MAX_DISPLAY)) more (see full report)"
                     fi
 
                     # Use printf %s to output literal string without interpreting escapes
-                    printf '%s\n' "status_text=*⚠️ Non-whitelisted Resource Groups ($UNWHITELISTED):*\n\`\`\`\n${RG_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
+                    printf '%s\n' "status_text=*⚠️ Non-allowlisted Resource Groups ($UNALLOWLISTED):*\n\`\`\`\n${RG_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
                   else
-                    echo "status_text=*✅ All $TOTAL Resource Groups are whitelisted*" >> "$GITHUB_OUTPUT"
+                    echo "status_text=*✅ All $TOTAL Resource Groups are allowlisted*" >> "$GITHUB_OUTPUT"
                   fi
 
             - name: Post Azure Audit Report to Slack
-              if: steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT > 0
+              if: steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
@@ -476,7 +488,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
