@@ -345,7 +345,7 @@ jobs:
                   } > audit_report.txt
 
                   # Load allowlisted resource groups
-                  yq -r '.azure.westeurope.resource_groups[]? // empty' "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
+                  yq -r '.azure.westeurope.resource_groups[]' "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
                   echo "Allowlisted resource groups:"
                   cat allowlisted_rgs.txt
 
