@@ -266,3 +266,50 @@ if [ -n "$identity_providers" ]; then
         execute_or_simulate "aws iam delete-open-id-connect-provider --open-id-connect-provider-arn $provider"
     done
 fi
+
+echo "Deleting orphaned Route53 Hosted Zones"
+# Delete Route53 Hosted Zones that appear to be orphaned from deleted clusters
+# Patterns: *.hypershift.local, rosa.*.openshiftapps.com (but NOT camunda.ie or other legitimate zones)
+# Skip zones with DO_NOT_DELETE in their name
+hosted_zones=$(aws route53 list-hosted-zones --query 'HostedZones[].{Id:Id,Name:Name}' --output json || true)
+
+if [ -n "$hosted_zones" ] && [ "$hosted_zones" != "[]" ]; then
+    echo "$hosted_zones" | jq -c '.[]' | while read -r zone; do
+        zone_id=$(echo "$zone" | jq -r '.Id' | sed 's|/hostedzone/||')
+        zone_name=$(echo "$zone" | jq -r '.Name')
+
+        # Skip zones that don't match orphan patterns
+        if [[ ! "$zone_name" =~ \.hypershift\.local\.$ ]] && [[ ! "$zone_name" =~ ^rosa\..+\.openshiftapps\.com\.$ ]]; then
+            echo "Skipping hosted zone: $zone_name (not matching orphan patterns)"
+            continue
+        fi
+
+        # Skip protected zones
+        if [[ "$zone_name" == *DO_NOT_DELETE* ]]; then
+            echo "Skipping hosted zone: $zone_name (protected)"
+            continue
+        fi
+
+        echo "Processing orphaned hosted zone: $zone_name ($zone_id)"
+
+        # Delete all record sets except NS and SOA (required before zone deletion)
+        record_sets=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone_id" --query "ResourceRecordSets[?Type != 'NS' && Type != 'SOA']" --output json || true)
+
+        if [ -n "$record_sets" ] && [ "$record_sets" != "[]" ]; then
+            # Create a change batch to delete all non-NS/SOA records
+            change_batch=$(echo "$record_sets" | jq '{Changes: [.[] | {Action: "DELETE", ResourceRecordSet: .}]}')
+
+            if [ "$(echo "$change_batch" | jq '.Changes | length')" -gt 0 ]; then
+                echo "Deleting record sets in hosted zone: $zone_name"
+                if [ "$DRY_RUN" = true ]; then
+                    echo "[DRY RUN] Would delete $(echo "$change_batch" | jq '.Changes | length') record sets"
+                else
+                    aws route53 change-resource-record-sets --hosted-zone-id "$zone_id" --change-batch "$change_batch" || true
+                fi
+            fi
+        fi
+
+        echo "Deleting hosted zone: $zone_name"
+        execute_or_simulate "aws route53 delete-hosted-zone --id $zone_id"
+    done
+fi
