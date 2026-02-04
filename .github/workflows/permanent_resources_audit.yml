@@ -203,13 +203,8 @@ jobs:
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
                     echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
-                    # Build resource list as single line with \n for JSON
-                    RESOURCE_LIST=$(head -$MAX_DISPLAY unwhitelisted_resources.txt | while IFS= read -r line; do
-                      type=$(echo "$line" | awk '{print $1}')
-                      region=$(echo "$line" | awk '{print $2}')
-                      name=$(echo "$line" | awk '{print $3}')
-                      echo "[$type] $name ($region)"
-                    done | tr '\n' '§' | sed 's/§/\\n/g')
+                    # Build resource list as single line with literal \n for Slack mrkdwn
+                    RESOURCE_LIST=$(head -$MAX_DISPLAY unwhitelisted_resources.txt | awk '{type=$1; region=$2; name=$3; line="[" type "] " name " (" region ")"; if (NR>1) printf "\\n"; printf "%s", line}')
 
                     if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
                       RESOURCE_LIST="${RESOURCE_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
@@ -267,7 +262,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "<!subteam^S05RZ2YKZCY> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
@@ -423,8 +418,8 @@ jobs:
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
                   if [[ "$UNWHITELISTED" -gt 0 ]]; then
-                    # Build resource group list as single line with \n for JSON
-                    RG_LIST=$(head -$MAX_DISPLAY unwhitelisted_rgs.txt | tr '\n' '§' | sed 's/§/\\n/g')
+                    # Build resource group list as single line with literal \n for Slack mrkdwn
+                    RG_LIST=$(head -$MAX_DISPLAY unwhitelisted_rgs.txt | awk '{if (NR>1) printf "\\n"; printf "%s", $0}')
 
                     if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
                       RG_LIST="${RG_LIST}... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
@@ -481,7 +476,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "<!subteam^S05RZ2YKZCY> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_whitelist.yml|whitelist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
