@@ -192,6 +192,8 @@ jobs:
                   UNWHITELISTED="${{ steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT }}"
                   TOTAL="${{ steps.cloud-nuke-audit.outputs.TOTAL_RESOURCES }}"
                   RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+                  # Slack block text limit is 3000 chars, limit to 20 resources
+                  MAX_DISPLAY=20
 
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
@@ -203,13 +205,16 @@ jobs:
                       echo "status_text<<EOF"
                       echo "*⚠️ Non-whitelisted resources ($UNWHITELISTED):*"
                       echo "\`\`\`"
-                      while IFS= read -r line; do
+                      head -$MAX_DISPLAY unwhitelisted_resources.txt | while IFS= read -r line; do
                         # Parse: "type region name ..." -> "[type] name (region)"
                         type=$(echo "$line" | awk '{print $1}')
                         region=$(echo "$line" | awk '{print $2}')
                         name=$(echo "$line" | awk '{print $3}')
                         echo "[$type] $name ($region)"
-                      done < unwhitelisted_resources.txt
+                      done
+                      if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
+                        echo "... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                      fi
                       echo "\`\`\`"
                       echo "EOF"
                     } >> "$GITHUB_OUTPUT"
@@ -405,6 +410,8 @@ jobs:
                   UNWHITELISTED="${{ steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT }}"
                   TOTAL="${{ steps.azure-audit.outputs.TOTAL_RG_COUNT }}"
                   RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+                  # Slack block text limit is 3000 chars, limit to 20 items
+                  MAX_DISPLAY=20
 
                   echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
 
@@ -414,7 +421,10 @@ jobs:
                       echo "status_text<<EOF"
                       echo "*⚠️ Non-whitelisted Resource Groups ($UNWHITELISTED):*"
                       echo "\`\`\`"
-                      cat unwhitelisted_rgs.txt
+                      head -$MAX_DISPLAY unwhitelisted_rgs.txt
+                      if [[ "$UNWHITELISTED" -gt $MAX_DISPLAY ]]; then
+                        echo "... and $((UNWHITELISTED - MAX_DISPLAY)) more (see full report)"
+                      fi
                       echo "\`\`\`"
                       echo "EOF"
                     } >> "$GITHUB_OUTPUT"
