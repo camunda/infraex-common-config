@@ -1,3 +1,4 @@
+---
 # Whitelist of approved permanent resources
 # These resources are expected to exist and will be excluded from the audit report
 # Format: resource_type/resource_identifier or patterns
