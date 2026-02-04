@@ -80,3 +80,12 @@ All configurations are maintained in [Terraform](https://github.com/camunda/infr
 | Region         | Identifier   | Use Case                |
 |----------------|--------------|-------------------------|
 | West Europe    | westeurope   | Permanent resources     |
+
+##### Weekly Permanent Resources Audit
+
+A weekly audit runs every **Sunday at 22:00 UTC** to identify all resources in permanent regions. This audit:
+- Runs cleanup tools in **dry-run mode** (no resources are deleted)
+- Posts a summary of discovered resources to Slack channel `#internal` (C05S0M7KG6A)
+- Helps track resource growth and identify potential orphaned resources
+
+This provides visibility into the permanent infrastructure without affecting any resources.

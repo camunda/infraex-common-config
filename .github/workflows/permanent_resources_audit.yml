@@ -1,0 +1,427 @@
+---
+name: Weekly Audit of Permanent Resources
+
+on:
+    schedule:
+        # Every Sunday at 22:00 UTC
+        - cron: 0 22 * * 0
+    workflow_dispatch:
+        inputs:
+            provider:
+                description: Cloud provider to audit
+                type: choice
+                options:
+                    - all
+                    - aws
+                    - azure
+                default: all
+    pull_request:
+        paths:
+            - .github/workflows/permanent_resources_audit.yml
+            - .github/workflows/config/permanent_resources_whitelist.yml
+
+env:
+    AWS_PROFILE: infraex
+    # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
+    CLOUD_NUKE_VERSION: v0.46.0
+    # Slack channel for internal notifications (FYI)
+    SLACK_CHANNEL_ID: C05S0M7KG6A
+    # Slack channel for PR tests
+    SLACK_CHANNEL_ID_PR: C07E4FF6YMB
+
+# Limit workflow to a single execution per ref
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    aws-permanent-audit:
+        runs-on: ubuntu-latest
+        if: github.event.inputs.provider == 'all' || github.event.inputs.provider == 'aws' || github.event.inputs.provider == ''
+        strategy:
+            fail-fast: false
+            matrix:
+                # Permanent AWS regions as defined in README.md
+                config:
+                    - region: eu-central-1
+                      use_case: Permanent resources
+                    - region: eu-west-1
+                      use_case: Reference architectures
+
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Install asdf tools
+              uses: ./.github/actions/asdf-install-tooling
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: false
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
+                      secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+            - name: Add profile credentials to ~/.aws/credentials
+              run: |
+                  aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
+                  aws configure set aws_secret_access_key ${{ steps.secrets.outputs.AWS_SECRET_KEY }} --profile ${{ env.AWS_PROFILE }}
+                  aws configure set region ${{ matrix.config.region }} --profile ${{ env.AWS_PROFILE }}
+
+            - name: Install Cloud Nuke
+              run: |
+                  curl -LO \
+                    --retry 5 \
+                    --max-time 15 \
+                    --retry-delay 30 \
+                    https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
+                  chmod +x cloud-nuke_linux_amd64
+
+            - name: Load whitelist for region
+              id: whitelist
+              run: |
+                  WHITELIST_FILE=".github/workflows/config/permanent_resources_whitelist.yml"
+                  REGION="${{ matrix.config.region }}"
+
+                  # Extract whitelisted patterns for this region
+                  echo "Loading whitelist for AWS region: $REGION"
+
+                  # Create grep patterns file for filtering
+                  yq -r ".aws.\"$REGION\" // {} | to_entries | .[] | .value[]? // empty" "$WHITELIST_FILE" 2>/dev/null | sort -u > whitelist_patterns.txt || touch whitelist_patterns.txt
+
+                  echo "Whitelist patterns loaded:"
+                  cat whitelist_patterns.txt
+
+            - name: Run Cloud Nuke in Dry-Run mode
+              id: cloud-nuke-audit
+              timeout-minutes: 60
+              env:
+                  DISABLE_TELEMETRY: 'true'
+              run: |
+                  echo "## AWS Permanent Resources Audit - ${{ matrix.config.region }}" > audit_report.txt
+                  echo "Use case: ${{ matrix.config.use_case }}" >> audit_report.txt
+                  echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  # Run cloud-nuke in dry-run mode and capture output
+                  ./cloud-nuke_linux_amd64 aws --dry-run \
+                    --region ${{ matrix.config.region }} \
+                    --force \
+                    --older-than 0h \
+                    --exclude-resource-type ec2_dhcp_option \
+                    --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
+
+                  # Filter out whitelisted resources
+                  echo "### Whitelisted resources (approved):" >> audit_report.txt
+                  WHITELISTED_COUNT=0
+                  UNWHITELISTED_COUNT=0
+
+                  # Process each line and check against whitelist
+                  > unwhitelisted_resources.txt
+                  > whitelisted_resources.txt
+
+                  while IFS= read -r line; do
+                      is_whitelisted=false
+                      while IFS= read -r pattern; do
+                          # Skip empty patterns
+                          [[ -z "$pattern" ]] && continue
+                          # Convert glob pattern to regex and check
+                          regex_pattern=$(echo "$pattern" | sed 's/\*/.*'/g)
+                          if echo "$line" | grep -qE "$regex_pattern"; then
+                              is_whitelisted=true
+                              break
+                          fi
+                      done < whitelist_patterns.txt
+
+                      if $is_whitelisted; then
+                          echo "$line" >> whitelisted_resources.txt
+                          ((WHITELISTED_COUNT++)) || true
+                      else
+                          echo "$line" >> unwhitelisted_resources.txt
+                          ((UNWHITELISTED_COUNT++)) || true
+                      fi
+                  done < <(grep -E "^\[" cloud_nuke_output.txt || true)
+
+                  head -50 whitelisted_resources.txt >> audit_report.txt || echo "None" >> audit_report.txt
+                  echo "" >> audit_report.txt
+                  echo "Total whitelisted: $WHITELISTED_COUNT" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  echo "### ⚠️ Non-whitelisted resources (review required):" >> audit_report.txt
+                  head -100 unwhitelisted_resources.txt >> audit_report.txt || echo "None" >> audit_report.txt
+                  echo "" >> audit_report.txt
+                  echo "Total non-whitelisted: $UNWHITELISTED_COUNT" >> audit_report.txt
+
+                  cat audit_report.txt
+
+                  # Save counts for Slack message
+                  echo "UNWHITELISTED_COUNT=$UNWHITELISTED_COUNT" >> "$GITHUB_OUTPUT"
+
+            - name: Determine Slack channel
+              id: slack-channel
+              run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "channel=${{ env.SLACK_CHANNEL_ID_PR }}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "channel=${{ env.SLACK_CHANNEL_ID }}" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Post Audit Report to Slack
+              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "📋 Weekly AWS Permanent Resources Audit - ${{ matrix.config.region }}",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "📋 Weekly AWS Permanent Resources Audit",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Region:*\n${{ matrix.config.region }}"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Use Case:*\n${{ matrix.config.use_case }}"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*⚠️ Non-whitelisted resources:*\n${{ steps.cloud-nuke-audit.outputs.UNWHITELISTED_COUNT }}"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is a *dry-run* audit of permanent resources. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: <!date^${{ github.run_id }}^{date_short_pretty} at {time}|$(date -u '+%Y-%m-%d %H:%M UTC')>"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+    azure-permanent-audit:
+        runs-on: ubuntu-latest
+        if: github.event.inputs.provider == 'all' || github.event.inputs.provider == 'azure' || github.event.inputs.provider == ''
+        permissions:
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Install asdf tools
+              uses: ./.github/actions/asdf-install-tooling
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: true
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_TENANT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_SUBSCRIPTION_ID;
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+            - name: Azure Login with OIDC
+              uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+              with:
+                  client-id: ${{ steps.secrets.outputs.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ steps.secrets.outputs.AZURE_TENANT_ID }}
+                  subscription-id: ${{ steps.secrets.outputs.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Audit Azure Permanent Resources
+              id: azure-audit
+              env:
+                  AZURE_REGION: westeurope
+              run: |
+                  WHITELIST_FILE=".github/workflows/config/permanent_resources_whitelist.yml"
+
+                  echo "## Azure Permanent Resources Audit - westeurope" > audit_report.txt
+                  echo "Use case: Permanent resources" >> audit_report.txt
+                  echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  # Load whitelisted resource groups
+                  yq -r '.azure.westeurope.resource_groups[]? // empty' "$WHITELIST_FILE" 2>/dev/null > whitelisted_rgs.txt || touch whitelisted_rgs.txt
+                  echo "Whitelisted resource groups:"
+                  cat whitelisted_rgs.txt
+
+                  echo "### Resource Groups in westeurope:" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  # List all resource groups and categorize them
+                  az group list --query "[?location=='westeurope']" -o json > all_rgs.json
+
+                  echo "#### ✅ Whitelisted Resource Groups:" >> audit_report.txt
+                  WHITELISTED_RG_COUNT=0
+                  UNWHITELISTED_RG_COUNT=0
+
+                  while IFS= read -r rg_name; do
+                      is_whitelisted=false
+                      while IFS= read -r pattern; do
+                          [[ -z "$pattern" ]] && continue
+                          regex_pattern=$(echo "$pattern" | sed 's/\*/.*'/g)
+                          if echo "$rg_name" | grep -qE "^${regex_pattern}$"; then
+                              is_whitelisted=true
+                              break
+                          fi
+                      done < whitelisted_rgs.txt
+
+                      if $is_whitelisted; then
+                          echo "  - $rg_name" >> audit_report.txt
+                          ((WHITELISTED_RG_COUNT++)) || true
+                      else
+                          echo "$rg_name" >> unwhitelisted_rgs.txt
+                          ((UNWHITELISTED_RG_COUNT++)) || true
+                      fi
+                  done < <(jq -r '.[].name' all_rgs.json)
+
+                  echo "Total: $WHITELISTED_RG_COUNT" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  echo "#### ⚠️ Non-whitelisted Resource Groups (review required):" >> audit_report.txt
+                  if [[ -s unwhitelisted_rgs.txt ]]; then
+                      while IFS= read -r rg; do
+                          echo "  - $rg" >> audit_report.txt
+                      done < unwhitelisted_rgs.txt
+                  else
+                      echo "  None" >> audit_report.txt
+                  fi
+                  echo "Total: $UNWHITELISTED_RG_COUNT" >> audit_report.txt
+                  echo "" >> audit_report.txt
+
+                  echo "### Resources by type:" >> audit_report.txt
+
+                  # Get a summary of resources by type
+                  az resource list --query "[?location=='westeurope'] | [].type" -o json | jq -r 'group_by(.) | map({type: .[0], count: length}) | sort_by(-.count) | .[] | "\(.type): \(.count)"' | tee -a audit_report.txt || echo "Unable to list resources" >> audit_report.txt
+
+                  cat audit_report.txt
+
+                  # Save counts for Slack
+                  echo "UNWHITELISTED_RG_COUNT=$UNWHITELISTED_RG_COUNT" >> "$GITHUB_OUTPUT"
+
+            - name: Determine Slack channel
+              id: slack-channel
+              run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "channel=${{ env.SLACK_CHANNEL_ID_PR }}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "channel=${{ env.SLACK_CHANNEL_ID }}" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Post Azure Audit Report to Slack
+              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "📋 Weekly Azure Permanent Resources Audit - westeurope",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "📋 Weekly Azure Permanent Resources Audit",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Region:*\nwesteurope"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Use Case:*\nPermanent resources"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*⚠️ Non-whitelisted Resource Groups:*\n${{ steps.azure-audit.outputs.UNWHITELISTED_RG_COUNT }}"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is an audit of permanent resources in Azure. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: <!date^${{ github.run_id }}^{date_short_pretty} at {time}|$(date -u '+%Y-%m-%d %H:%M UTC')>"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+    notify-on-failure:
+        runs-on: ubuntu-latest
+        if: failure()
+        needs:
+            - aws-permanent-audit
+            - azure-permanent-audit
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Notify in Slack in case of failure
+              id: slack-notification
+              if: github.event_name == 'schedule'
+              uses: ./.github/actions/report-failure-on-slack
+              with:
+                  vault_addr: ${{ secrets.VAULT_ADDR }}
+                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}

@@ -20,7 +20,7 @@ on:
             - .github/workflows/scripts/aws_regional_cleanup.sh
 
 env:
-    AWS_PROFILE: infex
+    AWS_PROFILE: infraex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.46.0
 

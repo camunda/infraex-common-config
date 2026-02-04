@@ -1,0 +1,48 @@
+# Whitelist of approved permanent resources
+# These resources are expected to exist and will be excluded from the audit report
+# Format: resource_type/resource_identifier or patterns
+
+aws:
+    eu-central-1:
+        # S3 buckets
+        s3:
+            - general-purpose-bucket-that-will-not-be-deleted
+            - infraex-terraform-state
+            - infraex-artifacts
+        # Lambda functions
+        lambda:
+            - infraex-*
+        # IAM roles
+        iam_role:
+            - infraex-*
+            - AWSServiceRole*
+        # VPCs
+        vpc:
+            - infraex-permanent-vpc
+        # EKS clusters
+        eks_cluster: []
+        # RDS instances
+        rds: []
+
+    eu-west-1:
+        # Reference architectures
+        s3:
+            - camunda-reference-*
+        vpc:
+            - reference-*
+        eks_cluster:
+            - reference-*
+        lambda: []
+        iam_role:
+            - AWSServiceRole*
+
+azure:
+    westeurope:
+        # Resource groups
+        resource_groups:
+            - infraex-permanent-rg
+            - NetworkWatcherRG
+        # Specific resources by type
+        resources:
+            - Microsoft.Storage/storageAccounts:infraex*
+            - Microsoft.KeyVault/vaults:infraex-*
