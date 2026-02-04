@@ -41,7 +41,7 @@ azure:
     westeurope:
         # Resource groups
         resource_groups:
-            - rg-infraex-*-permanent
+            - rg-infraex-global-permanent
             - NetworkWatcherRG
         # Specific resources by type
         resources:
