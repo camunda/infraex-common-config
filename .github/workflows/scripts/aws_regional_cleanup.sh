@@ -246,6 +246,6 @@ if [ -n "$log_groups" ]; then
         fi
 
         echo "Deleting CloudWatch Log Group: $log_group"
-        execute_or_simulate "aws logs delete-log-group --region $region --log-group-name '$log_group'"
+        execute_or_simulate "aws logs delete-log-group --region $region --log-group-name $log_group"
     done
 fi
