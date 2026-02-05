@@ -217,7 +217,7 @@ fi
 echo "Deleting unattached Elastic IPs"
 # Delete Elastic IPs that are not associated with any instance or network interface
 # Unattached EIPs cost ~$3.65/month each
-eip_allocations=$(aws ec2 describe-addresses --region "$region" --query 'Addresses[?AssociationId==`null`].AllocationId' --output text || true)
+eip_allocations=$(aws ec2 describe-addresses --region "$region" --query 'Addresses[?!AssociationId].AllocationId' --output text || true)
 
 if [ -n "$eip_allocations" ]; then
     read -r -a eip_allocations_array <<< "$eip_allocations"
