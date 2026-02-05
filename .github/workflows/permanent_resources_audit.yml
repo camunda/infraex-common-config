@@ -1,0 +1,544 @@
+---
+name: Weekly Audit of Permanent Resources
+
+on:
+    schedule:
+        # Every Sunday at 22:00 UTC
+        - cron: 0 22 * * 0
+    workflow_dispatch:
+        inputs:
+            provider:
+                description: Cloud provider to audit
+                type: choice
+                options:
+                    - all
+                    - aws
+                    - azure
+                default: all
+    pull_request:
+        paths:
+            - .github/workflows/permanent_resources_audit.yml
+            - .github/config/permanent_resources_allowlist.yml
+
+env:
+    AWS_PROFILE: infraex
+    # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
+    CLOUD_NUKE_VERSION: v0.46.0
+    # Slack channel for internal notifications (FYI)
+    SLACK_CHANNEL_ID: C076N4G1162
+    # Slack channel for PR tests
+    SLACK_CHANNEL_ID_PR: C07E4FF6YMB
+
+    PROVIDER: ${{ github.event.inputs.provider || 'all' }}
+
+# Limit workflow to a single execution per ref
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    triage:
+        runs-on: ubuntu-latest
+        outputs:
+            run_aws: ${{ github.event.inputs.provider == 'all' || github.event.inputs.provider == 'aws' || github.event.inputs.provider == null }}
+            run_azure: ${{ github.event.inputs.provider == 'all' || github.event.inputs.provider == 'azure' || github.event.inputs.provider == null }}
+        steps:
+            - run: echo "Triage complete - AWS:${{ github.event.inputs.provider != 'azure' }} Azure:${{ github.event.inputs.provider != 'aws' }}"
+
+    aws-permanent-audit:
+        runs-on: ubuntu-latest
+        needs: triage
+        if: needs.triage.outputs.run_aws == 'true'
+        strategy:
+            fail-fast: false
+            matrix:
+                # Permanent AWS regions as defined in README.md
+                config:
+                    - region: eu-central-1
+                      use_case: Permanent resources
+                    - region: eu-west-1
+                      use_case: Reference architectures
+
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Install asdf tools
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@193a21e1e56c9a65517a822224ac3b4ffa4d6ae4 # 1.5.9
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: false
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
+                      secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+            - name: Configure AWS CLI
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@3dcad0fc66fa0f8bc85efb7870030f86608d0111 # main
+              with:
+                  vault-addr: ${{ secrets.VAULT_ADDR }}
+                  vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  aws-profile: ${{ env.AWS_PROFILE }}
+                  aws-region: ${{ matrix.config.region }}
+
+            - name: Install Cloud Nuke
+              run: |
+                  curl -LO \
+                    --retry 5 \
+                    --max-time 15 \
+                    --retry-delay 30 \
+                    https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
+                  chmod +x cloud-nuke_linux_amd64
+
+            - name: Load allowlist for region
+              id: allowlist
+              run: |
+                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
+                  REGION="${{ matrix.config.region }}"
+
+                  # Extract allowlisted patterns for this region with resource type prefix
+                  echo "Loading allowlist for AWS region: $REGION"
+
+                  # Create patterns file: "resource_type pattern" format to match against extracted resources
+                  # Output format: "s3 bucket-name" or "cloudformation-stack StackSet-Wiz-*"
+                  yq -r ".aws.\"$REGION\" | to_entries | .[] | .key as \$type | .value[]? | \"\(\$type) \(.)\"" "$ALLOWLIST_FILE" 2>/dev/null | grep -v ' $' | sort -u > allowlist_patterns.txt || touch allowlist_patterns.txt
+
+                  echo "Allowlist patterns loaded:"
+                  cat allowlist_patterns.txt
+
+            - name: Run Cloud Nuke in Dry-Run mode
+              id: cloud-nuke-audit
+              timeout-minutes: 60
+              env:
+                  DISABLE_TELEMETRY: 'true'
+              run: |
+                  {
+                      echo "## AWS Permanent Resources Audit - ${{ matrix.config.region }}"
+                      echo "Use case: ${{ matrix.config.use_case }}"
+                      echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+                      echo ""
+                  } > audit_report.txt
+
+                  # Run cloud-nuke in dry-run mode and capture output
+                  ./cloud-nuke_linux_amd64 aws --dry-run \
+                    --region ${{ matrix.config.region }} \
+                    --force \
+                    --older-than 0h \
+                    --exclude-resource-type ec2_dhcp_option \
+                    --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
+
+                  # Filter out allowlisted resources
+                  echo "### Allowlisted resources (approved):" >> audit_report.txt
+                  ALLOWLISTED_COUNT=0
+                  UNALLOWLISTED_COUNT=0
+
+                  # Initialize output files
+                  true > unallowlisted_resources.txt
+                  true > allowlisted_resources.txt
+
+                  # Extract resource lines from cloud-nuke table output
+                  # The table format has: | resource_type | region | identifier | nukable |
+                  # We need to strip ANSI codes and extract lines starting with | that contain resource data
+                  sed 's/\x1b\[[0-9;]*m//g' cloud_nuke_output.txt | grep '^|' | grep -v -- '---' | grep -v 'Resource Type' | while IFS= read -r line; do
+                      # Extract resource type and identifier from the table line
+                      resource_info=$(echo "$line" | tr -d '|' | tr -s ' ' | sed 's/^ //;s/ $//')
+                      echo "$resource_info"
+                  done > extracted_resources.txt
+
+                  # Debug: show extracted resources count
+                  echo "DEBUG: Extracted $(wc -l < extracted_resources.txt) resources"
+                  head -5 extracted_resources.txt || true
+
+                  while IFS= read -r line; do
+                      [[ -z "$line" ]] && continue
+                      # Extract type and name from the resource line (format: "type region name")
+                      res_type=$(echo "$line" | awk '{print $1}')
+                      res_name=$(echo "$line" | awk '{print $3}')
+
+                      is_allowlisted=false
+                      while IFS= read -r pattern; do
+                          # Skip empty patterns
+                          [[ -z "$pattern" ]] && continue
+                          # Pattern format: "type pattern_value"
+                          pattern_type=$(echo "$pattern" | awk '{print $1}')
+                          pattern_value=$(echo "$pattern" | awk '{print $2}')
+
+                          # Check if resource type matches pattern type
+                          if [[ "$res_type" == "$pattern_type" ]]; then
+                              # Convert glob pattern to regex and check against resource name
+                              regex_pattern=${pattern_value//\*/.*}
+                              if echo "$res_name" | grep -qE "^${regex_pattern}$"; then
+                                  is_allowlisted=true
+                                  break
+                              fi
+                          fi
+                      done < allowlist_patterns.txt
+
+                      if $is_allowlisted; then
+                          echo "$line" >> allowlisted_resources.txt
+                          ((ALLOWLISTED_COUNT++)) || true
+                      else
+                          echo "$line" >> unallowlisted_resources.txt
+                          ((UNALLOWLISTED_COUNT++)) || true
+                      fi
+                  done < extracted_resources.txt
+
+                  {
+                      head -50 allowlisted_resources.txt || echo "None"
+                      echo ""
+                      echo "Total allowlisted: $ALLOWLISTED_COUNT"
+                      echo ""
+                      echo "### ⚠️ Non-allowlisted resources (review required):"
+                      head -100 unallowlisted_resources.txt || echo "None"
+                      echo ""
+                      echo "Total non-allowlisted: $UNALLOWLISTED_COUNT"
+                  } >> audit_report.txt
+
+                  cat audit_report.txt
+
+                  # Save counts for Slack message
+                  echo "UNALLOWLISTED_COUNT=$UNALLOWLISTED_COUNT" >> "$GITHUB_OUTPUT"
+                  echo "TOTAL_RESOURCES=$((ALLOWLISTED_COUNT + UNALLOWLISTED_COUNT))" >> "$GITHUB_OUTPUT"
+
+            - name: Determine Slack channel
+              id: slack-channel
+              run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "channel=${{ env.SLACK_CHANNEL_ID_PR }}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "channel=${{ env.SLACK_CHANNEL_ID }}" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Prepare Slack message
+              id: slack-message
+              run: |
+                  UNALLOWLISTED="${{ steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT }}"
+                  TOTAL="${{ steps.cloud-nuke-audit.outputs.TOTAL_RESOURCES }}"
+                  RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+                  # Slack block text limit is 3000 chars, limit to 20 resources
+                  MAX_DISPLAY=20
+
+                  echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
+
+                  if [[ "$UNALLOWLISTED" -gt 0 ]]; then
+                    echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
+                    # Build resource list as single line with literal \n for Slack mrkdwn
+                    RESOURCE_LIST=$(head -$MAX_DISPLAY unallowlisted_resources.txt | awk '{type=$1; region=$2; name=$3; line="[" type "] " name " (" region ")"; if (NR>1) printf "\\n"; printf "%s", line}')
+
+                    if [[ "$UNALLOWLISTED" -gt $MAX_DISPLAY ]]; then
+                      RESOURCE_LIST="${RESOURCE_LIST}... and $((UNALLOWLISTED - MAX_DISPLAY)) more (see full report)"
+                    fi
+
+                    # Use printf %s to output literal string without interpreting escapes
+                    printf '%s\n' "status_text=*⚠️ Non-allowlisted resources ($UNALLOWLISTED):*\n\`\`\`\n${RESOURCE_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
+                    echo "status_text=*✅ All $TOTAL resources are allowlisted*" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Post Audit Report to Slack
+              if: steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
+              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "📋 Weekly AWS Permanent Resources Audit - ${{ matrix.config.region }}",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "📋 Weekly AWS Permanent Resources Audit",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Region:*\n${{ matrix.config.region }}"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Use Case:*\n${{ matrix.config.use_case }}"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "${{ steps.slack-message.outputs.status_text }}"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is a *dry-run* audit of permanent resources. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+    azure-permanent-audit:
+        runs-on: ubuntu-latest
+        needs: triage
+        if: needs.triage.outputs.run_azure == 'true'
+        permissions:
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Install asdf tools
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@193a21e1e56c9a65517a822224ac3b4ffa4d6ae4 # 1.5.9
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: true
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_TENANT_ID;
+                      secret/data/products/infrastructure-experience/ci/common AZURE_SUBSCRIPTION_ID;
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+            - name: Azure Login with OIDC
+              uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+              with:
+                  client-id: ${{ steps.secrets.outputs.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ steps.secrets.outputs.AZURE_TENANT_ID }}
+                  subscription-id: ${{ steps.secrets.outputs.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Audit Azure Permanent Resources
+              id: azure-audit
+              env:
+                  AZURE_REGION: westeurope
+              run: |
+                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
+
+                  {
+                      echo "## Azure Permanent Resources Audit - westeurope"
+                      echo "Use case: Permanent resources"
+                      echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+                      echo ""
+                  } > audit_report.txt
+
+                  # Load allowlisted resource groups
+                  yq -r '.azure.westeurope.resource_groups[]' "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
+                  echo "Allowlisted resource groups:"
+                  cat allowlisted_rgs.txt
+
+                  {
+                      echo "### Resource Groups in westeurope:"
+                      echo ""
+                  } >> audit_report.txt
+
+                  # List all resource groups and categorize them
+                  az group list --query "[?location=='westeurope']" -o json > all_rgs.json
+
+                  echo "#### ✅ Allowlisted Resource Groups:" >> audit_report.txt
+                  ALLOWLISTED_RG_COUNT=0
+                  UNALLOWLISTED_RG_COUNT=0
+
+                  while IFS= read -r rg_name; do
+                      is_allowlisted=false
+                      while IFS= read -r pattern; do
+                          [[ -z "$pattern" ]] && continue
+                          regex_pattern=${pattern//\*/.*}
+                          if echo "$rg_name" | grep -qE "^${regex_pattern}$"; then
+                              is_allowlisted=true
+                              break
+                          fi
+                      done < allowlisted_rgs.txt
+
+                      if $is_allowlisted; then
+                          echo "  - $rg_name" >> audit_report.txt
+                          ((ALLOWLISTED_RG_COUNT++)) || true
+                      else
+                          echo "$rg_name" >> unallowlisted_rgs.txt
+                          ((UNALLOWLISTED_RG_COUNT++)) || true
+                      fi
+                  done < <(jq -r '.[].name' all_rgs.json)
+
+                  {
+                      echo "Total: $ALLOWLISTED_RG_COUNT"
+                      echo ""
+                      echo "#### ⚠️ Non-allowlisted Resource Groups (review required):"
+                      if [[ -s unallowlisted_rgs.txt ]]; then
+                          while IFS= read -r rg; do
+                              echo "  - $rg"
+                          done < unallowlisted_rgs.txt
+                      else
+                          echo "  None"
+                      fi
+                      echo "Total: $UNALLOWLISTED_RG_COUNT"
+                      echo ""
+                      echo "### Resources by type:"
+                  } >> audit_report.txt
+
+                  # Get a summary of resources by type
+                  az resource list --query "[?location=='westeurope'] | [].type" -o json | jq -r 'group_by(.) | map({type: .[0], count: length}) | sort_by(-.count) | .[] | "\(.type): \(.count)"' >> audit_report.txt || echo "Unable to list resources" >> audit_report.txt
+
+                  cat audit_report.txt
+
+                  # Save counts for Slack
+                  {
+                      echo "ALLOWLISTED_RG_COUNT=$ALLOWLISTED_RG_COUNT"
+                      echo "UNALLOWLISTED_RG_COUNT=$UNALLOWLISTED_RG_COUNT"
+                      echo "TOTAL_RG_COUNT=$((ALLOWLISTED_RG_COUNT + UNALLOWLISTED_RG_COUNT))"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Determine Slack channel
+              id: slack-channel
+              run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "channel=${{ env.SLACK_CHANNEL_ID_PR }}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "channel=${{ env.SLACK_CHANNEL_ID }}" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Prepare Slack message
+              id: slack-message
+              run: |
+                  UNALLOWLISTED="${{ steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT }}"
+                  TOTAL="${{ steps.azure-audit.outputs.TOTAL_RG_COUNT }}"
+                  RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+                  # Slack block text limit is 3000 chars, limit to 20 items
+                  MAX_DISPLAY=20
+
+                  echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
+
+                  if [[ "$UNALLOWLISTED" -gt 0 ]]; then
+                    # Build resource group list as single line with literal \n for Slack mrkdwn
+                    RG_LIST=$(head -$MAX_DISPLAY unallowlisted_rgs.txt | awk '{if (NR>1) printf "\\n"; printf "%s", $0}')
+
+                    if [[ "$UNALLOWLISTED" -gt $MAX_DISPLAY ]]; then
+                      RG_LIST="${RG_LIST}... and $((UNALLOWLISTED - MAX_DISPLAY)) more (see full report)"
+                    fi
+
+                    # Use printf %s to output literal string without interpreting escapes
+                    printf '%s\n' "status_text=*⚠️ Non-allowlisted Resource Groups ($UNALLOWLISTED):*\n\`\`\`\n${RG_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "status_text=*✅ All $TOTAL Resource Groups are allowlisted*" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Post Azure Audit Report to Slack
+              if: steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
+              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "📋 Weekly Azure Permanent Resources Audit - westeurope",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "📋 Weekly Azure Permanent Resources Audit",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Region:*\nwesteurope"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Use Case:*\nPermanent resources"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "${{ steps.slack-message.outputs.status_text }}"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "<!subteam^S06NTRBMWUD> please either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is an audit of permanent resources in Azure. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+    notify-on-failure:
+        runs-on: ubuntu-latest
+        if: failure()
+        needs:
+            - aws-permanent-audit
+            - azure-permanent-audit
+        steps:
+            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+            - name: Notify in Slack in case of failure
+              id: slack-notification
+              if: github.event_name == 'schedule'
+              uses: ./.github/actions/report-failure-on-slack
+              with:
+                  vault_addr: ${{ secrets.VAULT_ADDR }}
+                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}

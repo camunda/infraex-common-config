@@ -20,7 +20,7 @@ on:
             - .github/workflows/scripts/aws_regional_cleanup.sh
 
 env:
-    AWS_PROFILE: infex
+    AWS_PROFILE: infraex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
     CLOUD_NUKE_VERSION: v0.46.0
 
@@ -119,14 +119,15 @@ jobs:
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
-
-            # Official action does not support profiles
-            - name: Add profile credentials to ~/.aws/credentials
+            - name: Configure AWS CLI
               if: ${{ env.should_run == 'true' }}
-              run: |
-                  aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
-                  aws configure set aws_secret_access_key ${{ steps.secrets.outputs.AWS_SECRET_KEY }} --profile ${{ env.AWS_PROFILE }}
-                  aws configure set region ${{ env.AWS_REGION }} --profile ${{ env.AWS_PROFILE }}
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@3dcad0fc66fa0f8bc85efb7870030f86608d0111 # main
+              with:
+                  vault-addr: ${{ secrets.VAULT_ADDR }}
+                  vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  aws-profile: ${{ env.AWS_PROFILE }}
+                  aws-region: ${{ matrix.config.region }}
 
             - name: Install Cloud Nuke
               if: ${{ env.should_run == 'true' }}

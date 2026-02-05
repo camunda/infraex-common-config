@@ -1,0 +1,54 @@
+---
+# Allowlist of approved permanent resources
+# These resources are expected to exist and will be excluded from the audit report
+# Format: resource_type/resource_identifier or patterns
+
+aws:
+    eu-central-1:
+        # S3 buckets
+        s3:
+            - general-purpose-bucket-that-will-not-be-deleted
+            - infraex-terraform-state
+            - infraex-artifacts
+            - tests-eks-tf-state-eu-central-1
+            - tests-c8-multi-region-es-eu-central-1
+            - tests-rosa-tf-state-eu-central-1
+            - tests-ra-aws-rosa-hcp-tf-state-eu-central-1
+            - tf-state-multi-reg
+            - camunda.ie
+        # Lambda functions
+        lambda:
+            - medicAbsenceFormToJsonData
+        # IAM roles
+        iam_role:
+            - AWSServiceRole*
+        # VPCs
+        vpc:
+            - infraex-permanent-vpc
+        # EKS clusters
+        eks_cluster: []
+        # RDS instances
+        rds: []
+        # Security Hub
+        security-hub:
+            - arn:aws:securityhub:*:*:hub/default
+        # CloudFormation StackSets
+        cloudformation-stack:
+            - StackSet-expel-*
+            - StackSet-Wiz-*
+
+    eu-west-1:
+        cloudformation-stack:
+            - StackSet-expel-*
+            - StackSet-Wiz-*
+
+azure:
+    westeurope:
+        # Resource groups
+        resource_groups:
+            - rg-infraex-global-permanent
+            - NetworkWatcherRG
+        # Specific resources by type
+        resources:
+            - Microsoft.Storage/storageAccounts:infraex*
+            - Microsoft.KeyVault/vaults:infraex-*
