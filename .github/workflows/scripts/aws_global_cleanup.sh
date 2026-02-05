@@ -271,10 +271,10 @@ echo "Deleting orphaned Route53 Hosted Zones"
 # Delete Route53 Hosted Zones that appear to be orphaned from deleted clusters
 # Patterns: *.hypershift.local, rosa.*.openshiftapps.com (but NOT camunda.ie or other legitimate zones)
 # Skip zones with DO_NOT_DELETE in their name
-hosted_zones=$(aws route53 list-hosted-zones --query 'HostedZones[].{Id:Id,Name:Name}' --output json || true)
+hosted_zones=$(paginate "aws route53 list-hosted-zones" "HostedZones[].{Id:Id,Name:Name}" || true)
 
-if [ -n "$hosted_zones" ] && [ "$hosted_zones" != "[]" ]; then
-    echo "$hosted_zones" | jq -c '.[]' | while read -r zone; do
+if [ -n "$hosted_zones" ]; then
+    echo "$hosted_zones" | while read -r zone; do
         zone_id=$(echo "$zone" | jq -r '.Id' | sed 's|/hostedzone/||')
         zone_name=$(echo "$zone" | jq -r '.Name')
 
