@@ -195,7 +195,7 @@ if [ -n "$pca_arns" ]; then
 
         # Delete the CA (permanently after 7-30 day waiting period, or immediately with --permanent-deletion-time-in-days 7)
         echo "Deleting Private CA: $pca_arn"
-        execute_or_simulate "aws acm-pca delete-certificate-authority --region $region --certificate-authority-arn $pca_arn --permanent-deletion-time-in-days 7"
+        execute_or_simulate "aws acm-pca delete-certificate-authority --region $region --certificate-authority-arn $pca_arn --permanent-deletion-time-in-days 7" || true
     done
 fi
 
