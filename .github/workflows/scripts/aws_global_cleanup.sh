@@ -71,7 +71,7 @@ paginate() {
         # Get the next token from the command output
         next_token=$($command --output text --query 'NextToken' || true)
 
-        if [ "$next_token" == "None" ] || [ -z "$next_token" ]; then
+        if [ "$next_token" = "None" ] || [ -z "$next_token" ]; then
             break
         fi
     done
@@ -264,5 +264,65 @@ if [ -n "$identity_providers" ]; then
 
         echo "Deleting identity provider: $provider"
         execute_or_simulate "aws iam delete-open-id-connect-provider --open-id-connect-provider-arn $provider"
+    done
+fi
+
+echo "Deleting orphaned Route53 Hosted Zones"
+# Delete Route53 Hosted Zones that appear to be orphaned from deleted clusters
+# Patterns: *.hypershift.local, rosa.*.openshiftapps.com (but NOT camunda.ie or other legitimate zones)
+# Note: The .+ in the regex requires at least one character (e.g., rosa.abc123.openshiftapps.com),
+#       ensuring we don't accidentally match "rosa.openshiftapps.com" if it existed.
+# Skip zones with DO_NOT_DELETE in their name
+hosted_zones=$(paginate "aws route53 list-hosted-zones" "HostedZones[].{Id:Id,Name:Name}" || true)
+
+if [ -n "$hosted_zones" ]; then
+    echo "$hosted_zones" | while read -r zone_id zone_name; do
+        # Remove /hostedzone/ prefix from zone_id
+        zone_id=$(echo "$zone_id" | sed 's|/hostedzone/||')
+
+        # Skip zones that don't match orphan patterns
+        if [[ ! "$zone_name" =~ \.hypershift\.local\.$ ]] && [[ ! "$zone_name" =~ ^rosa\..+\.openshiftapps\.com\.$ ]]; then
+            echo "Skipping hosted zone: $zone_name (not matching orphan patterns)"
+            continue
+        fi
+
+        # Skip protected zones
+        if [[ "$zone_name" == *DO_NOT_DELETE* ]]; then
+            echo "Skipping hosted zone: $zone_name (protected)"
+            continue
+        fi
+
+        echo "Processing orphaned hosted zone: $zone_name ($zone_id)"
+
+        # Delete all record sets except NS and SOA (required before zone deletion)
+        record_sets=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone_id" --query "ResourceRecordSets[?Type != 'NS' && Type != 'SOA']" --output json || true)
+
+        if [ -n "$record_sets" ] && [ "$record_sets" != "[]" ]; then
+            # Create a change batch to delete all non-NS/SOA records
+            change_batch=$(echo "$record_sets" | jq '{Changes: [.[] | {Action: "DELETE", ResourceRecordSet: .}]}')
+
+            if [ "$(echo "$change_batch" | jq '.Changes | length')" -gt 0 ]; then
+                echo "Deleting record sets in hosted zone: $zone_name"
+                if [ "$DRY_RUN" = true ]; then
+                    echo "[DRY RUN] Would delete $(echo "$change_batch" | jq '.Changes | length') record sets"
+                else
+                    if ! aws route53 change-resource-record-sets --hosted-zone-id "$zone_id" --change-batch "$change_batch"; then
+                        echo "Warning: failed to delete some record sets in hosted zone: $zone_name ($zone_id)"
+                        echo "The hosted zone may not be ready for deletion."
+                    fi
+                fi
+            fi
+        fi
+
+        # Verify that no non-NS/SOA records remain before attempting to delete the hosted zone
+        if [ "$DRY_RUN" != true ]; then
+            remaining_record_sets=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone_id" --query "ResourceRecordSets[?Type != 'NS' && Type != 'SOA']" --output json || true)
+            if [ -n "$remaining_record_sets" ] && [ "$remaining_record_sets" != "[]" ]; then
+                echo "Skipping deletion of hosted zone: $zone_name ($zone_id) - non-NS/SOA record sets still present"
+                continue
+            fi
+        fi
+        echo "Deleting hosted zone: $zone_name"
+        execute_or_simulate "aws route53 delete-hosted-zone --id $zone_id"
     done
 fi
