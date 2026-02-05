@@ -71,7 +71,7 @@ paginate() {
         # Get the next token from the command output
         next_token=$($command --output text --query 'NextToken' || true)
 
-        if [ "$next_token" == "None" ] || [ -z "$next_token" ]; then
+        if [ "$next_token" = "None" ] || [ -z "$next_token" ]; then
             break
         fi
     done
@@ -270,6 +270,8 @@ fi
 echo "Deleting orphaned Route53 Hosted Zones"
 # Delete Route53 Hosted Zones that appear to be orphaned from deleted clusters
 # Patterns: *.hypershift.local, rosa.*.openshiftapps.com (but NOT camunda.ie or other legitimate zones)
+# Note: The .+ in the regex requires at least one character (e.g., rosa.abc123.openshiftapps.com),
+#       ensuring we don't accidentally match "rosa.openshiftapps.com" if it existed.
 # Skip zones with DO_NOT_DELETE in their name
 hosted_zones=$(paginate "aws route53 list-hosted-zones" "HostedZones[].{Id:Id,Name:Name}" || true)
 

@@ -52,7 +52,7 @@ paginate() {
         # Get the next token from the command output
         next_token=$($command --output text --query 'NextToken' || true)
 
-        if [ "$next_token" == "None" ] || [ -z "$next_token" ]; then
+        if [ "$next_token" = "None" ] || [ -z "$next_token" ]; then
             break
         fi
     done
@@ -173,8 +173,24 @@ if [ -n "$identity_pool_ids" ]; then
     done
 fi
 
+echo "Deleting ACM Certificates"
+# Delete ACM certificates (public and private) - must be deleted before Private CAs
+cert_arns=$(paginate "aws acm list-certificates --region $region" "CertificateSummaryList[].CertificateArn")
+
+if [ -n "$cert_arns" ]; then
+    read -r -a cert_arns_array <<< "$cert_arns"
+
+    for cert_arn in "${cert_arns_array[@]}"
+    do
+        echo "Deleting ACM Certificate: $cert_arn"
+        # Note: This will fail if the certificate is in use by another AWS resource
+        execute_or_simulate "aws acm delete-certificate --region $region --certificate-arn $cert_arn" || true
+    done
+fi
+
 echo "Deleting ACM Private Certificate Authorities"
 # Delete ACM Private CAs (must disable first, then delete)
+# Note: Certificates issued by a Private CA should be deleted first
 pca_arns=$(paginate "aws acm-pca list-certificate-authorities --region \"$region\" --query 'CertificateAuthorities[?Status!=`DELETED`].Arn' --output text") || true
 
 if [ -n "$pca_arns" ]; then
@@ -188,7 +204,7 @@ if [ -n "$pca_arns" ]; then
         pca_status=$(aws acm-pca describe-certificate-authority --region "$region" --certificate-authority-arn "$pca_arn" --query 'CertificateAuthority.Status' --output text || true)
 
         # Disable the CA first if it's active (required before deletion)
-        if [ "$pca_status" == "ACTIVE" ]; then
+        if [ "$pca_status" = "ACTIVE" ]; then
             echo "Disabling Private CA: $pca_arn"
             execute_or_simulate "aws acm-pca update-certificate-authority --region $region --certificate-authority-arn $pca_arn --status DISABLED"
         fi
@@ -196,21 +212,6 @@ if [ -n "$pca_arns" ]; then
         # Delete the CA (permanently after 7-30 day waiting period, or immediately with --permanent-deletion-time-in-days 7)
         echo "Deleting Private CA: $pca_arn"
         execute_or_simulate "aws acm-pca delete-certificate-authority --region $region --certificate-authority-arn $pca_arn --permanent-deletion-time-in-days 7" || true
-    done
-fi
-
-echo "Deleting ACM Certificates"
-# Delete ACM certificates (public and private)
-cert_arns=$(aws acm list-certificates --region "$region" --query 'CertificateSummaryList[].CertificateArn' --output text || true)
-
-if [ -n "$cert_arns" ]; then
-    read -r -a cert_arns_array <<< "$cert_arns"
-
-    for cert_arn in "${cert_arns_array[@]}"
-    do
-        echo "Deleting ACM Certificate: $cert_arn"
-        # Note: This will fail if the certificate is in use by another AWS resource
-        execute_or_simulate "aws acm delete-certificate --region $region --certificate-arn $cert_arn" || true
     done
 fi
 
@@ -232,7 +233,7 @@ fi
 echo "Deleting CloudWatch Log Groups"
 # Delete CloudWatch Log Groups (can accumulate storage costs)
 # Skip log groups that contain 'DO_NOT_DELETE' or are AWS-managed
-log_groups=$(aws logs describe-log-groups --region "$region" --query 'logGroups[].logGroupName' --output text || true)
+log_groups=$(paginate "aws logs describe-log-groups --region $region" "logGroups[].logGroupName")
 
 if [ -n "$log_groups" ]; then
     read -r -a log_groups_array <<< "$log_groups"
