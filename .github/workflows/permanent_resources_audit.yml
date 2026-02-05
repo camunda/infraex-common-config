@@ -40,26 +40,10 @@ jobs:
     triage:
         runs-on: ubuntu-latest
         outputs:
-            run_aws: ${{ steps.set-providers.outputs.run_aws }}
-            run_azure: ${{ steps.set-providers.outputs.run_azure }}
+            run_aws: ${{ github.event.inputs.provider == 'all' || github.event.inputs.provider == 'aws' || github.event.inputs.provider == null }}
+            run_azure: ${{ github.event.inputs.provider == 'all' || github.event.inputs.provider == 'azure' || github.event.inputs.provider == null }}
         steps:
-            - name: Determine providers to audit
-              id: set-providers
-              run: |
-                  PROVIDER="${{ github.event.inputs.provider || 'all' }}"
-                  echo "Provider selected: $PROVIDER"
-
-                  if [[ "$PROVIDER" == "all" || "$PROVIDER" == "aws" ]]; then
-                    echo "run_aws=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "run_aws=false" >> "$GITHUB_OUTPUT"
-                  fi
-
-                  if [[ "$PROVIDER" == "all" || "$PROVIDER" == "azure" ]]; then
-                    echo "run_azure=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "run_azure=false" >> "$GITHUB_OUTPUT"
-                  fi
+            - run: echo "Triage complete - AWS:${{ github.event.inputs.provider != 'azure' }} Azure:${{ github.event.inputs.provider != 'aws' }}"
 
     aws-permanent-audit:
         runs-on: ubuntu-latest
