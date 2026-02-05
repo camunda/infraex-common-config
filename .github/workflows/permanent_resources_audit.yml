@@ -29,15 +29,42 @@ env:
     # Slack channel for PR tests
     SLACK_CHANNEL_ID_PR: C07E4FF6YMB
 
+    PROVIDER: ${{ github.event.inputs.provider || 'all' }}
+
 # Limit workflow to a single execution per ref
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
 jobs:
+    triage:
+        runs-on: ubuntu-latest
+        outputs:
+            run_aws: ${{ steps.set-providers.outputs.run_aws }}
+            run_azure: ${{ steps.set-providers.outputs.run_azure }}
+        steps:
+            - name: Determine providers to audit
+              id: set-providers
+              run: |
+                  PROVIDER="${{ github.event.inputs.provider || 'all' }}"
+                  echo "Provider selected: $PROVIDER"
+
+                  if [[ "$PROVIDER" == "all" || "$PROVIDER" == "aws" ]]; then
+                    echo "run_aws=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "run_aws=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+                  if [[ "$PROVIDER" == "all" || "$PROVIDER" == "azure" ]]; then
+                    echo "run_azure=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "run_azure=false" >> "$GITHUB_OUTPUT"
+                  fi
+
     aws-permanent-audit:
         runs-on: ubuntu-latest
-        if: github.event.inputs.provider == 'all' || github.event.inputs.provider == 'aws' || github.event.inputs.provider == ''
+        needs: triage
+        if: needs.triage.outputs.run_aws == 'true'
         strategy:
             fail-fast: false
             matrix:
@@ -52,7 +79,7 @@ jobs:
             - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
             - name: Install asdf tools
-              uses: ./.github/actions/asdf-install-tooling
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@193a21e1e56c9a65517a822224ac3b4ffa4d6ae4 # 1.5.9
 
             - name: Import Secrets
               id: secrets
@@ -68,11 +95,14 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
-            - name: Add profile credentials to ~/.aws/credentials
-              run: |
-                  aws configure set aws_access_key_id ${{ steps.secrets.outputs.AWS_ACCESS_KEY }} --profile ${{ env.AWS_PROFILE }}
-                  aws configure set aws_secret_access_key ${{ steps.secrets.outputs.AWS_SECRET_KEY }} --profile ${{ env.AWS_PROFILE }}
-                  aws configure set region ${{ matrix.config.region }} --profile ${{ env.AWS_PROFILE }}
+            - name: Configure AWS CLI
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@3dcad0fc66fa0f8bc85efb7870030f86608d0111 # main
+              with:
+                  vault-addr: ${{ secrets.VAULT_ADDR }}
+                  vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  aws-profile: ${{ env.AWS_PROFILE }}
+                  aws-region: ${{ matrix.config.region }}
 
             - name: Install Cloud Nuke
               run: |
@@ -298,7 +328,8 @@ jobs:
 
     azure-permanent-audit:
         runs-on: ubuntu-latest
-        if: github.event.inputs.provider == 'all' || github.event.inputs.provider == 'azure' || github.event.inputs.provider == ''
+        needs: triage
+        if: needs.triage.outputs.run_azure == 'true'
         permissions:
             id-token: write
 
@@ -306,7 +337,7 @@ jobs:
             - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
             - name: Install asdf tools
-              uses: ./.github/actions/asdf-install-tooling
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@193a21e1e56c9a65517a822224ac3b4ffa4d6ae4 # 1.5.9
 
             - name: Import Secrets
               id: secrets
