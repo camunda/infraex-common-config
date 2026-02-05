@@ -240,7 +240,11 @@ if [ -n "$log_groups" ]; then
     for log_group in "${log_groups_array[@]}"
     do
         # Skip AWS-managed log groups and those marked as DO_NOT_DELETE
-        if [[ "$log_group" == /aws/* ]] || [[ "$log_group" == *DO_NOT_DELETE* ]]; then
+        if [[ "$log_group" == /aws/* ]] || \
+           [[ "$log_group" == /aws-* ]] || \
+           [[ "$log_group" == /elasticbeanstalk/* ]] || \
+           [[ "$log_group" == /ecs/* ]] || \
+           [[ "$log_group" == *DO_NOT_DELETE* ]]; then
             echo "Skipping log group: $log_group (AWS-managed or protected)"
             continue
         fi
