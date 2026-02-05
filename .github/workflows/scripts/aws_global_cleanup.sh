@@ -276,9 +276,9 @@ echo "Deleting orphaned Route53 Hosted Zones"
 hosted_zones=$(paginate "aws route53 list-hosted-zones" "HostedZones[].{Id:Id,Name:Name}" || true)
 
 if [ -n "$hosted_zones" ]; then
-    echo "$hosted_zones" | while read -r zone; do
-        zone_id=$(echo "$zone" | jq -r '.Id' | sed 's|/hostedzone/||')
-        zone_name=$(echo "$zone" | jq -r '.Name')
+    echo "$hosted_zones" | while read -r zone_id zone_name; do
+        # Remove /hostedzone/ prefix from zone_id
+        zone_id=$(echo "$zone_id" | sed 's|/hostedzone/||')
 
         # Skip zones that don't match orphan patterns
         if [[ ! "$zone_name" =~ \.hypershift\.local\.$ ]] && [[ ! "$zone_name" =~ ^rosa\..+\.openshiftapps\.com\.$ ]]; then
