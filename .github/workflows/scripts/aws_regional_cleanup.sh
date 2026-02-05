@@ -175,7 +175,7 @@ fi
 
 echo "Deleting ACM Private Certificate Authorities"
 # Delete ACM Private CAs (must disable first, then delete)
-pca_arns=$(aws acm-pca list-certificate-authorities --region "$region" --query 'CertificateAuthorities[?Status!=`DELETED`].Arn' --output text || true)
+pca_arns=$(paginate "aws acm-pca list-certificate-authorities --region \"$region\" --query 'CertificateAuthorities[?Status!=`DELETED`].Arn' --output text") || true
 
 if [ -n "$pca_arns" ]; then
     read -r -a pca_arns_array <<< "$pca_arns"
