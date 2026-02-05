@@ -304,11 +304,22 @@ if [ -n "$hosted_zones" ]; then
                 if [ "$DRY_RUN" = true ]; then
                     echo "[DRY RUN] Would delete $(echo "$change_batch" | jq '.Changes | length') record sets"
                 else
-                    aws route53 change-resource-record-sets --hosted-zone-id "$zone_id" --change-batch "$change_batch" || true
+                    if ! aws route53 change-resource-record-sets --hosted-zone-id "$zone_id" --change-batch "$change_batch"; then
+                        echo "Warning: failed to delete some record sets in hosted zone: $zone_name ($zone_id)"
+                        echo "The hosted zone may not be ready for deletion."
+                    fi
                 fi
             fi
         fi
 
+        # Verify that no non-NS/SOA records remain before attempting to delete the hosted zone
+        if [ "$DRY_RUN" != true ]; then
+            remaining_record_sets=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone_id" --query "ResourceRecordSets[?Type != 'NS' && Type != 'SOA']" --output json || true)
+            if [ -n "$remaining_record_sets" ] && [ "$remaining_record_sets" != "[]" ]; then
+                echo "Skipping deletion of hosted zone: $zone_name ($zone_id) - non-NS/SOA record sets still present"
+                continue
+            fi
+        fi
         echo "Deleting hosted zone: $zone_name"
         execute_or_simulate "aws route53 delete-hosted-zone --id $zone_id"
     done
