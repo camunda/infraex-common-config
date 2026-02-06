@@ -219,11 +219,12 @@ jobs:
                   # Extract resource lines from cloud-nuke table output
                   # The table format has: | resource_type | region | identifier | nukable |
                   # We need to strip ANSI codes and extract lines starting with | that contain resource data
+                  # Also filter out cloud-nuke info lines (Query/Target/Exclude/List) that appear in the table
                   sed 's/\x1b\[[0-9;]*m//g' cloud_nuke_output.txt | grep '^|' | grep -v -- '---' | grep -v 'Resource Type' | while IFS= read -r line; do
                       # Extract resource type and identifier from the table line
                       resource_info=$(echo "$line" | tr -d '|' | tr -s ' ' | sed 's/^ //;s/ $//')
                       echo "$resource_info"
-                  done | grep -v '^\[' > extracted_resources.txt
+                  done | grep -vE '^(Query|Target|Exclude|List) ' > extracted_resources.txt
 
                   # Debug: show extracted resources count
                   echo "DEBUG: Extracted $(wc -l < extracted_resources.txt) resources"
