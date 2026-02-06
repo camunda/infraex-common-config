@@ -58,19 +58,6 @@ jobs:
         steps:
             - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-            - name: Import Secrets
-              id: secrets
-              uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
-              with:
-                  url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
-                  exportEnv: false
-                  secrets: |
-                      secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
-                      secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
-
             - name: Configure AWS CLI
               uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@3dcad0fc66fa0f8bc85efb7870030f86608d0111 # main
               with:
@@ -113,8 +100,6 @@ jobs:
                   secretId: ${{ secrets.VAULT_SECRET_ID }}
                   exportEnv: false
                   secrets: |
-                      secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
-                      secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
