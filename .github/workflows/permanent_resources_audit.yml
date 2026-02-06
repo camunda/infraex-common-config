@@ -180,6 +180,33 @@ jobs:
                     --exclude-resource-type ec2_dhcp_option \
                     --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
 
+                  # Identify default VPC and its associated resources to filter them out
+                  DEFAULT_VPC_ID=$(aws ec2 describe-vpcs \
+                    --region "$REGION" \
+                    --filters "Name=isDefault,Values=true" \
+                    --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "None")
+                  echo "Default VPC in $REGION: $DEFAULT_VPC_ID"
+
+                  # Build list of default VPC resource IDs to ignore
+                  true > default_vpc_resources.txt
+                  if [[ "$DEFAULT_VPC_ID" != "None" && "$DEFAULT_VPC_ID" != "null" ]]; then
+                      echo "$DEFAULT_VPC_ID" >> default_vpc_resources.txt
+                      # Default subnets
+                      aws ec2 describe-subnets --region "$REGION" \
+                        --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=defaultForAz,Values=true" \
+                        --query "Subnets[].SubnetId" --output text 2>/dev/null | tr '\t' '\n' >> default_vpc_resources.txt || true
+                      # Default IGW
+                      aws ec2 describe-internet-gateways --region "$REGION" \
+                        --filters "Name=attachment.vpc-id,Values=$DEFAULT_VPC_ID" \
+                        --query "InternetGateways[].InternetGatewayId" --output text 2>/dev/null | tr '\t' '\n' >> default_vpc_resources.txt || true
+                      # Default security group
+                      aws ec2 describe-security-groups --region "$REGION" \
+                        --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=group-name,Values=default" \
+                        --query "SecurityGroups[].GroupId" --output text 2>/dev/null | tr '\t' '\n' >> default_vpc_resources.txt || true
+                      echo "Default VPC resources to ignore:"
+                      cat default_vpc_resources.txt
+                  fi
+
                   # Filter out allowlisted resources
                   echo "### Allowlisted resources (approved):" >> audit_report.txt
                   ALLOWLISTED_COUNT=0
@@ -207,6 +234,14 @@ jobs:
                       # Extract type and name from the resource line (format: "type region name")
                       res_type=$(echo "$line" | awk '{print $1}')
                       res_name=$(echo "$line" | awk '{print $3}')
+
+                      # Skip default VPC resources (identified by their IDs)
+                      if grep -qxF "$res_name" default_vpc_resources.txt 2>/dev/null; then
+                          echo "Skipping default VPC resource: $res_type $res_name"
+                          echo "$line" >> allowlisted_resources.txt
+                          ((ALLOWLISTED_COUNT++)) || true
+                          continue
+                      fi
 
                       is_allowlisted=false
                       while IFS= read -r pattern; do
