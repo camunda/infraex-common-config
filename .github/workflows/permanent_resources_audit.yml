@@ -235,6 +235,12 @@ jobs:
                       res_type=$(echo "$line" | awk '{print $1}')
                       res_name=$(echo "$line" | awk '{print $3}')
 
+                      # Skip cloud-nuke log/info lines (e.g. [Query], [Target], [Exclude], [List])
+                      if [[ "$res_type" == \[* ]]; then
+                          echo "Skipping cloud-nuke log line: $line"
+                          continue
+                      fi
+
                       # Skip default VPC resources (identified by their IDs)
                       if grep -qxF "$res_name" default_vpc_resources.txt 2>/dev/null; then
                           echo "Skipping default VPC resource: $res_type $res_name"
