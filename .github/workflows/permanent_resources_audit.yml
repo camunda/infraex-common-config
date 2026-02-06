@@ -236,6 +236,16 @@ jobs:
                       fi
                   done < extracted_resources.txt
 
+                  # Ignore a single guardduty detector per region (AWS enables one by default)
+                  GUARDDUTY_COUNT=$(grep -c '^guardduty ' unallowlisted_resources.txt 2>/dev/null || echo 0)
+                  if [[ "$GUARDDUTY_COUNT" -eq 1 ]]; then
+                      echo "Ignoring single default GuardDuty detector"
+                      grep '^guardduty ' unallowlisted_resources.txt >> allowlisted_resources.txt
+                      grep -v '^guardduty ' unallowlisted_resources.txt > unallowlisted_resources.tmp && mv unallowlisted_resources.tmp unallowlisted_resources.txt
+                      ((ALLOWLISTED_COUNT++)) || true
+                      ((UNALLOWLISTED_COUNT--)) || true
+                  fi
+
                   {
                       head -50 allowlisted_resources.txt || echo "None"
                       echo ""
