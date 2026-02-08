@@ -30,7 +30,7 @@ jobs:
             - name: Generate token for GitHub
               id: generate-github-token
               if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8a60c6ac7a1a041dec275e1ef3635dd6bf2b072c # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@317ad657a9766301b0cae99eadfde9dddcffd286 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -41,7 +41,7 @@ jobs:
                   vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
 
-            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
               if: env.autofix_pr == 'true'
               # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
@@ -49,7 +49,7 @@ jobs:
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
                   ref: ${{ github.event.pull_request.head.ref }}
 
-            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
               if: env.autofix_pr == 'false'
 
             # TODO: Renable when switching back to upstream actionlint

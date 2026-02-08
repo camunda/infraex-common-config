@@ -26,7 +26,7 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
               with:
                   fetch-depth: 0 # capture all history
 
@@ -39,7 +39,7 @@ jobs:
                   echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
             - name: Restore todos cache
-              uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+              uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
               id: cache-tools
               with:
                   path: ${{ steps.cache-key.outputs.cache_path }}
@@ -52,7 +52,7 @@ jobs:
 
             - name: Save todos cache
               if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
-              uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+              uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
               with:
                   path: ${{ steps.cache-key.outputs.cache_path }}
                   key: ${{ steps.cache-key.outputs.cache_key }}

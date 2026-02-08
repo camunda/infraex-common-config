@@ -55,7 +55,7 @@ jobs:
                       cleanup_older_than: 0h
 
         steps:
-            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             - name: Determine AWS_REGION and CLEANUP_OLDER_THAN
               id: determine-values
@@ -121,7 +121,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
             - name: Configure AWS CLI
               if: ${{ env.should_run == 'true' }}
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@3dcad0fc66fa0f8bc85efb7870030f86608d0111 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@79ff3a8204e21feb189fb4f9271f3ec8139e34dd # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -149,7 +149,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8a60c6ac7a1a041dec275e1ef3635dd6bf2b072c # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@317ad657a9766301b0cae99eadfde9dddcffd286 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -210,7 +210,7 @@ jobs:
         needs:
             - aws-cleanup
         steps:
-            - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             - name: Notify in Slack in case of failure
               id: slack-notification
