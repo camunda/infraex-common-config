@@ -32,12 +32,17 @@ aws:
         # Security Hub
         security-hub:
             - arn:aws:securityhub:*:*:hub/default
+        # KMS keys
+        kms_customer_managed_key:
+            - wizKey
         # CloudFormation StackSets
         cloudformation-stack:
             - StackSet-expel-*
             - StackSet-Wiz-*
 
     eu-west-1:
+        kms_customer_managed_key:
+            - wizKey
         cloudformation-stack:
             - StackSet-expel-*
             - StackSet-Wiz-*
