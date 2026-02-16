@@ -19,6 +19,9 @@ aws:
         # Lambda functions
         lambda:
             - medicAbsenceFormToJsonData
+        # CloudWatch Log Groups
+        cloudwatch-loggroup:
+            - /aws/lambda/medicAbsenceFormToJsonData
         # IAM roles
         iam_role:
             - AWSServiceRole*
@@ -35,6 +38,7 @@ aws:
         # KMS keys
         kms_customer_managed_key:
             - wizKey
+            - ef599a48-c880-442f-a0bf-f9876009e47e # wizKey (cloud-nuke reports key ID instead of alias)
         # CloudFormation StackSets
         cloudformation-stack:
             - StackSet-expel-*
@@ -43,6 +47,7 @@ aws:
     eu-west-1:
         kms_customer_managed_key:
             - wizKey
+            - 9d765405-e023-4624-81cc-08eb1b7558c4 # wizKey (cloud-nuke reports key ID instead of alias)
         cloudformation-stack:
             - StackSet-expel-*
             - StackSet-Wiz-*
