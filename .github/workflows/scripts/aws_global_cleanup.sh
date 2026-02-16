@@ -69,7 +69,7 @@ paginate() {
         echo "$output"
 
         # Get the next token from the command output
-        next_token=$($command --output text --query 'NextToken' || true)
+        next_token=$($command --output text --query 'NextToken' 2>/dev/null | head -1 || true)
 
         if [ "$next_token" = "None" ] || [ -z "$next_token" ]; then
             break
@@ -219,6 +219,16 @@ if [ -n "$iam_policies" ]; then
         fi
 
         echo "Deleting policy: $iam_policy"
+
+        # Delete all non-default policy versions first (required before policy deletion)
+        policy_versions=$(aws iam list-policy-versions --policy-arn "$iam_policy" --query 'Versions[?!IsDefaultVersion].VersionId' --output text 2>/dev/null || true)
+        if [ -n "$policy_versions" ] && [ "$policy_versions" != "None" ]; then
+            for version_id in $policy_versions; do
+                echo "Deleting policy version $version_id from $iam_policy"
+                execute_or_simulate "aws iam delete-policy-version --policy-arn $iam_policy --version-id $version_id"
+            done
+        fi
+
         execute_or_simulate "aws iam delete-policy --policy-arn $iam_policy"
     done
 fi
