@@ -50,7 +50,7 @@ paginate() {
         echo "$output"
 
         # Get the next token from the command output
-        next_token=$($command --output text --query 'NextToken' || true)
+        next_token=$($command --output text --query 'NextToken' 2>/dev/null | head -1 || true)
 
         if [ "$next_token" = "None" ] || [ -z "$next_token" ]; then
             break
@@ -191,7 +191,7 @@ fi
 echo "Deleting ACM Private Certificate Authorities"
 # Delete ACM Private CAs (must disable first, then delete)
 # Note: Certificates issued by a Private CA should be deleted first
-pca_arns=$(paginate "aws acm-pca list-certificate-authorities --region \"$region\" --query 'CertificateAuthorities[?Status!=`DELETED`].Arn' --output text") || true
+pca_arns=$(paginate "aws acm-pca list-certificate-authorities --region $region" "CertificateAuthorities[?Status!=\`DELETED\`].Arn") || true
 
 if [ -n "$pca_arns" ]; then
     read -r -a pca_arns_array <<< "$pca_arns"
