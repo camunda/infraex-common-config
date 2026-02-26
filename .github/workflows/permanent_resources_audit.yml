@@ -114,7 +114,25 @@ jobs:
                   aws-profile: ${{ env.AWS_PROFILE }}
                   aws-region: ${{ matrix.region }}
 
+            - name: Check region accessibility
+              id: region-check
+              run: |
+                  REGION="${{ matrix.region }}"
+                  OUTPUT=$(aws ec2 describe-availability-zones --region "$REGION" 2>&1) || {
+                      if echo "$OUTPUT" | grep -qiE 'UnauthorizedOperation|AuthFailure|OptInRequired|InvalidClientTokenId|AccessDenied|not enabled|not subscribed'; then
+                          echo "⏭️ Region $REGION is disabled or not accessible (permission denied). Skipping audit."
+                          echo "region_disabled=true" >> "$GITHUB_OUTPUT"
+                          exit 0
+                      fi
+                      echo "❌ Unexpected error checking region $REGION:"
+                      echo "$OUTPUT"
+                      exit 1
+                  }
+                  echo "✅ Region $REGION is accessible"
+                  echo "region_disabled=false" >> "$GITHUB_OUTPUT"
+
             - name: Install Cloud Nuke
+              if: steps.region-check.outputs.region_disabled != 'true'
               run: |
                   curl -LO \
                     --retry 5 \
@@ -124,6 +142,7 @@ jobs:
                   chmod +x cloud-nuke_linux_amd64
 
             - name: Load allowlist for region
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: allowlist
               run: |
                   ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
@@ -148,6 +167,7 @@ jobs:
                   fi
 
             - name: Run Cloud Nuke in Dry-Run mode
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: cloud-nuke-audit
               timeout-minutes: 60
               env:
@@ -298,6 +318,7 @@ jobs:
                   echo "TOTAL_RESOURCES=$((ALLOWLISTED_COUNT + UNALLOWLISTED_COUNT))" >> "$GITHUB_OUTPUT"
 
             - name: Determine Slack channel
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: slack-channel
               run: |
                   if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -307,6 +328,7 @@ jobs:
                   fi
 
             - name: Prepare Slack message
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: slack-message
               run: |
                   UNALLOWLISTED="${{ steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT }}"
@@ -334,7 +356,7 @@ jobs:
                   fi
 
             - name: Post Audit Report to Slack
-              if: steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
+              if: steps.region-check.outputs.region_disabled != 'true' && steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
@@ -479,7 +501,25 @@ jobs:
                   tenant-id: ${{ steps.secrets.outputs.AZURE_TENANT_ID }}
                   subscription-id: ${{ steps.secrets.outputs.AZURE_SUBSCRIPTION_ID }}
 
+            - name: Check region accessibility
+              id: region-check
+              run: |
+                  REGION="${{ matrix.region }}"
+                  OUTPUT=$(az group list --query "[?location=='$REGION']" -o json 2>&1) || {
+                      if echo "$OUTPUT" | grep -qiE 'AuthorizationFailed|AuthenticationFailed|Forbidden|InvalidAuthenticationToken|SubscriptionNotFound|SubscriptionNotRegistered|disabled'; then
+                          echo "⏭️ Region $REGION is disabled or not accessible (permission denied). Skipping audit."
+                          echo "region_disabled=true" >> "$GITHUB_OUTPUT"
+                          exit 0
+                      fi
+                      echo "❌ Unexpected error checking region $REGION:"
+                      echo "$OUTPUT"
+                      exit 1
+                  }
+                  echo "✅ Region $REGION is accessible"
+                  echo "region_disabled=false" >> "$GITHUB_OUTPUT"
+
             - name: Audit Azure Permanent Resources
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: azure-audit
               env:
                   AZURE_REGION: ${{ matrix.region }}
@@ -582,6 +622,7 @@ jobs:
                   } >> "$GITHUB_OUTPUT"
 
             - name: Determine Slack channel
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: slack-channel
               run: |
                   if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -591,6 +632,7 @@ jobs:
                   fi
 
             - name: Prepare Slack message
+              if: steps.region-check.outputs.region_disabled != 'true'
               id: slack-message
               run: |
                   UNALLOWLISTED="${{ steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT }}"
@@ -616,7 +658,7 @@ jobs:
                   fi
 
             - name: Post Azure Audit Report to Slack
-              if: steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
+              if: steps.region-check.outputs.region_disabled != 'true' && steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
               uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
               with:
                   method: chat.postMessage
