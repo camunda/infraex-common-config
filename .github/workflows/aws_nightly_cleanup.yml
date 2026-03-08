@@ -121,7 +121,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
             - name: Configure AWS CLI
               if: ${{ env.should_run == 'true' }}
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@7d62a68fcb7205265905ca87ec6f59f392baf51b # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@54db1b47b31d01b448eec892c4dfc3507f9a2f2f # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
