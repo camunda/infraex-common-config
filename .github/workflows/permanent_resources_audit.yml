@@ -357,7 +357,7 @@ jobs:
 
             - name: Post Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
-              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
@@ -659,7 +659,7 @@ jobs:
 
             - name: Post Azure Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
-              uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+              uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
