@@ -185,7 +185,7 @@ jobs:
                     --region $REGION \
                     --force \
                     --older-than 0h \
-                    --exclude-resource-type ec2_dhcp_option \
+                    --exclude-resource-type ec2-dhcp-option \
                     --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
 
                   # Identify default VPC and its associated resources to filter them out
