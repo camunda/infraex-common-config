@@ -22,7 +22,7 @@ on:
 env:
     AWS_PROFILE: infraex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.46.0
+    CLOUD_NUKE_VERSION: v0.48.0
 
 # Limit workflow to a single execution per ref
 concurrency:
@@ -171,7 +171,7 @@ jobs:
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
             # This is likely to fail, therefore we ignore the error
-            # We're ignoring ec2_dhcp_option as they couldn't be deleted
+            # We're ignoring ec2-dhcp-option as they couldn't be deleted
             # cloudtrail is managed by IT and can't be deleted either
             - name: Run Cloud Nuke
               timeout-minutes: 90
@@ -183,7 +183,7 @@ jobs:
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
-                  --exclude-resource-type ec2_dhcp_option \
+                  --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type s3 \
                   --exclude-resource-type cloudtrail || true
@@ -199,7 +199,7 @@ jobs:
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
-                  --exclude-resource-type ec2_dhcp_option \
+                  --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type cloudtrail \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type s3
