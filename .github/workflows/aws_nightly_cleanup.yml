@@ -185,6 +185,7 @@ jobs:
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
                   --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type ec2-keypairs \
+                  --exclude-resource-type guard-duty \
                   --exclude-resource-type s3 \
                   --exclude-resource-type cloudtrail || true
 
@@ -202,6 +203,7 @@ jobs:
                   --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type cloudtrail \
                   --exclude-resource-type ec2-keypairs \
+                  --exclude-resource-type guard-duty \
                   --exclude-resource-type s3
 
     notify-on-failure:
