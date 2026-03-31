@@ -331,6 +331,9 @@
         // Single-quoted values: default: '2.19'
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?[=:]\\s*\'(?<currentValue>.*)\'',
         'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?( registryUrl=(?<registryUrl>.*?))?\\s.*?[=:]\\s*\'(?<currentValue>.*)\'',
+        // Unquoted Docker image refs: image: docker.io/camunda/keycloak:quay-optimized-26.3.2
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?\\s.*?[=:]\\s*(?<packageName>[^\\s"\']+):(?<currentValue>[^\\s"\']+)',
+        'datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?( registryUrl=(?<registryUrl>.*?))?\\s.*?[=:]\\s*(?<packageName>[^\\s"\']+):(?<currentValue>[^\\s"\']+)',
       ],
       versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}',
     },
