@@ -149,7 +149,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@0c7159498968f2b321f4b86c3c60c8717e35fd75 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@9f6f18860b2e47db8930caadc6c9c50447f055a2 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
