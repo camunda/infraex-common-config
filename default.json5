@@ -123,6 +123,20 @@
       enabled: true,
     },
     {
+      description: 'Allow minor releases of azure-kubernetes-service and amazon-eks on maintenance branches (AKS/EKS versions only have major.minor, so every update is a minor bump).',
+      matchPackageNames: [
+        'azure-kubernetes-service',
+        'amazon-eks',
+      ],
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      matchUpdateTypes: [
+        'minor',
+      ],
+      enabled: true,
+    },
+    {
       groupName: 'minor-grouped',
       matchUpdateTypes: [
         'minor',
