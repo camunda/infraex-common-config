@@ -39,7 +39,7 @@ aws:
         guard-duty:
             - bcca476a1af978e0790122c5bc643db6
         # KMS keys
-        kmscustomerkeys:
+        kms-customer-key:
             - wizKey
             - ef599a48-c880-442f-a0bf-f9876009e47e # wizKey (cloud-nuke reports key ID instead of alias)
         # CloudFormation StackSets
@@ -51,7 +51,7 @@ aws:
         # GuardDuty
         guard-duty:
             - 44ca476c1446ecf0ebf8ceeab186aed4
-        kmscustomerkeys:
+        kms-customer-key:
             - wizKey
             - 9d765405-e023-4624-81cc-08eb1b7558c4 # wizKey (cloud-nuke reports key ID instead of alias)
         cloudformation-stack:
