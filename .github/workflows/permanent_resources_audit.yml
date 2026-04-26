@@ -62,7 +62,7 @@ jobs:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@f8afc00d4db1b416991ee96470f1cdabecc22909 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@02b0ec97682e87084777a6597db4dd00d28291b3 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -106,7 +106,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@f8afc00d4db1b416991ee96470f1cdabecc22909 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@02b0ec97682e87084777a6597db4dd00d28291b3 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -357,7 +357,7 @@ jobs:
 
             - name: Post Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
-              uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
+              uses: slackapi/slack-github-action@03ea5433c137af7c0495bc0cad1af10403fc800c # v3.0.2
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
@@ -659,7 +659,7 @@ jobs:
 
             - name: Post Azure Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
-              uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
+              uses: slackapi/slack-github-action@03ea5433c137af7c0495bc0cad1af10403fc800c # v3.0.2
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
