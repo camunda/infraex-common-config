@@ -171,10 +171,13 @@ jobs:
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
             # This is likely to fail, therefore we ignore the error
+            # (timeout-minutes would otherwise fail the job despite `|| true`,
+            # so we also set continue-on-error to truly tolerate timeouts here)
             # We're ignoring ec2-dhcp-option as they couldn't be deleted
             # cloudtrail is managed by IT and can't be deleted either
             - name: Run Cloud Nuke
               timeout-minutes: 90
+              continue-on-error: true
               env:
                   DISABLE_TELEMETRY: 'true'
               if: ${{ env.should_run == 'true' }}
