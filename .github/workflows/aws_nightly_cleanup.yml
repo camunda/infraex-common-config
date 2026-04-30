@@ -170,11 +170,14 @@ jobs:
                   GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               run: .github/workflows/scripts/aws_global_cleanup.sh
 
-            # This is likely to fail, therefore we ignore the error
+            # This is likely to fail, therefore we ignore the error via
+            # `continue-on-error: true` (which also covers timeout-minutes
+            # killing the step, unlike a shell-level `|| true`).
             # We're ignoring ec2-dhcp-option as they couldn't be deleted
             # cloudtrail is managed by IT and can't be deleted either
-            - name: Run Cloud Nuke
+            - name: Run Cloud Nuke (best-effort)
               timeout-minutes: 90
+              continue-on-error: true
               env:
                   DISABLE_TELEMETRY: 'true'
               if: ${{ env.should_run == 'true' }}
@@ -187,10 +190,10 @@ jobs:
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type guard-duty \
                   --exclude-resource-type s3 \
-                  --exclude-resource-type cloudtrail || true
+                  --exclude-resource-type cloudtrail
 
             # The second run should remove the remaining resources (VPCs) and fail if there's anything left
-            - name: Run Cloud Nuke
+            - name: Run Cloud Nuke (strict)
               timeout-minutes: 90
               env:
                   DISABLE_TELEMETRY: 'true'
