@@ -17,7 +17,7 @@ Use it with `if: failure()`
 | `slack_channel_id` | <p>The Slack channel ID where the notification will be sent.</p> | `false` | `C076N4G1162` |
 | `slack_mention_people` | <p>The Slack people to mention in the notification.</p> | `false` | `@infraex-medic` |
 | `disable_silence_check` | <p>Disable silence check. By default, alerts can be disabled by creating an issue in the repository with the label alert-management and with the title: silence: name of your workflow</p> | `false` | `false` |
-| `branch` | <p>The branch the workflow is testing. Used to add severity context to the Slack alert. Defaults to auto-detection: github.base<em>ref for PRs (target branch), github.ref</em>name for push/schedule events. Alerts on stable/* branches include a prominent severity marker.</p> | `false` | `""` |
+| `branch` | <p>The branch the workflow is testing. Used to add severity context to the Slack alert. Defaults to auto-detection: <code>github.base_ref</code> for PRs (target branch), <code>github.ref_name</code> for push/schedule events. Alerts on <code>stable/*</code> branches include a prominent severity marker.</p> | `false` | `""` |
 
 
 ## Runs
@@ -70,8 +70,9 @@ This action is a `composite` action.
 
     branch:
     # The branch the workflow is testing. Used to add severity context to the Slack alert.
-    # Defaults to auto-detection: github.base_ref for PRs (target branch), github.ref_name for push/schedule events.
-    # Alerts on stable/* branches include a prominent severity marker.
+    # Defaults to auto-detection: `github.base_ref` for PRs (target branch),
+    # `github.ref_name` for push/schedule events.
+    # Alerts on `stable/*` branches include a prominent severity marker.
     #
     # Required: false
     # Default: ""
