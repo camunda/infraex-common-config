@@ -29,6 +29,13 @@ inputs:
             silence: name of your workflow
         required: false
         default: 'false'
+    branch:
+        description: |
+            The branch the workflow is testing. Used to add severity context to the Slack alert.
+            Defaults to auto-detection: github.base_ref for PRs (target branch), github.ref_name for push/schedule events.
+            Alerts on stable/* branches include a prominent severity marker.
+        required: false
+        default: ''
 
 runs:
     using: composite
@@ -72,6 +79,33 @@ runs:
           env:
               GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
+        - name: Prepare notification context
+          id: context
+          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
+          shell: bash
+          run: |
+              # Resolve branch: explicit input > PR base ref (target branch) > current ref
+              BRANCH="${{ inputs.branch }}"
+              if [[ -z "$BRANCH" ]]; then
+                BRANCH="${{ github.base_ref || github.ref_name }}"
+              fi
+              echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+              # Severity prefix for stable/* branches (production-relevant failures)
+              if [[ "$BRANCH" == stable/* ]]; then
+                echo "severity_prefix=:rotating_light: *STABLE BRANCH FAILURE* :rotating_light:" >> "$GITHUB_OUTPUT"
+              else
+                echo "severity_prefix=" >> "$GITHUB_OUTPUT"
+              fi
+
+              # Mention suffix — omit entirely if slack_mention_people is empty
+              MENTION="${{ inputs.slack_mention_people }}"
+              if [[ -n "$MENTION" ]]; then
+                echo "mention_suffix= (cc $MENTION)" >> "$GITHUB_OUTPUT"
+              else
+                echo "mention_suffix=" >> "$GITHUB_OUTPUT"
+              fi
+
         - name: Import Secrets
           id: secrets
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
@@ -97,13 +131,13 @@ runs:
                     "channel" : "${{ inputs.slack_channel_id }}",
                     "unfurl_links": false,
                     "unfurl_media": false,
-                    "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
+                    "text": "${{ steps.context.outputs.severity_prefix != '' && format('{0} ', steps.context.outputs.severity_prefix) || '' }}${{ github.event.repository.name }} workflow: ${{ github.workflow }} failed on ${{ steps.context.outputs.branch_name }}! Please check: ${{ env.WORKFLOW_URL }}${{ steps.context.outputs.mention_suffix }}",
                     "blocks": [
                       {
                         "type": "section",
                         "text": {
                           "type": "mrkdwn",
-                          "text": ":automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> scheduled workflow: ${{ github.workflow }} failed! \n :link: Please check: ${{ env.WORKFLOW_URL }} \n (cc ${{ inputs.slack_mention_people }})"
+                          "text": "${{ steps.context.outputs.severity_prefix != '' && format('{0}\n', steps.context.outputs.severity_prefix) || '' }}:automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> workflow: ${{ github.workflow }} failed!\n:seedling: Branch: `${{ steps.context.outputs.branch_name }}`\n:link: Please check: ${{ env.WORKFLOW_URL }}${{ steps.context.outputs.mention_suffix }}"
                         }
                       }
                     ]
