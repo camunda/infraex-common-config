@@ -29,6 +29,14 @@ inputs:
             silence: name of your workflow
         required: false
         default: 'false'
+    branch:
+        description: |
+            The branch the workflow is testing. Used to add severity context to the Slack alert.
+            Defaults to auto-detection: `github.base_ref` for PRs (target branch),
+            `github.ref_name` for push/schedule events.
+            Alerts on `stable/*` branches include a prominent severity marker.
+        required: false
+        default: ''
 
 runs:
     using: composite
@@ -72,6 +80,63 @@ runs:
           env:
               GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
+        - name: Prepare notification context
+          id: context
+          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
+          shell: bash
+          env:
+              BRANCH_INPUT: ${{ inputs.branch }}
+              DEFAULT_BRANCH: ${{ github.base_ref || github.ref_name }}
+              MENTION: ${{ inputs.slack_mention_people }}
+              REPO_NAME: ${{ github.event.repository.name }}
+              REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+              WORKFLOW_NAME: ${{ github.workflow }}
+              WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          run: |
+              set -euo pipefail
+
+              # Resolve branch: explicit input > PR base ref (target branch) > current ref
+              BRANCH="$BRANCH_INPUT"
+              if [[ -z "$BRANCH" ]]; then
+                BRANCH="$DEFAULT_BRANCH"
+              fi
+
+              # Severity prefix for stable/* branches (production-relevant failures)
+              if [[ "$BRANCH" == stable/* ]]; then
+                SEVERITY_PREFIX=":rotating_light: *STABLE BRANCH FAILURE* :rotating_light:"
+              else
+                SEVERITY_PREFIX=""
+              fi
+
+              # Mention suffix — omit entirely if slack_mention_people is empty
+              if [[ -n "$MENTION" ]]; then
+                MENTION_SUFFIX=" (cc $MENTION)"
+              else
+                MENTION_SUFFIX=""
+              fi
+
+              # Build the final message strings here so the payload step only has to
+              # pass them through toJSON() — no further interpolation, no injection risk.
+              if [[ -n "$SEVERITY_PREFIX" ]]; then
+                TEXT_PLAIN="$SEVERITY_PREFIX $REPO_NAME workflow: $WORKFLOW_NAME failed on $BRANCH! Please check: $WORKFLOW_URL$MENTION_SUFFIX"
+                BLOCK_PREFIX="$SEVERITY_PREFIX"$'\n'
+              else
+                TEXT_PLAIN="$REPO_NAME workflow: $WORKFLOW_NAME failed on $BRANCH! Please check: $WORKFLOW_URL$MENTION_SUFFIX"
+                BLOCK_PREFIX=""
+              fi
+              TEXT_BLOCK="${BLOCK_PREFIX}:automation-platform-failure: :mechanic: <${REPO_URL}|[${REPO_NAME}]> workflow: ${WORKFLOW_NAME} failed!"$'\n'":seedling: Branch: \`${BRANCH}\`"$'\n'":link: Please check: ${WORKFLOW_URL}${MENTION_SUFFIX}"
+
+              {
+                echo "branch_name=$BRANCH"
+                # Multiline-safe output using GitHub Actions delimiters
+                echo "text_plain<<EOF_TEXT_PLAIN"
+                printf '%s\n' "$TEXT_PLAIN"
+                echo "EOF_TEXT_PLAIN"
+                echo "text_block<<EOF_TEXT_BLOCK"
+                printf '%s\n' "$TEXT_BLOCK"
+                echo "EOF_TEXT_BLOCK"
+              } >> "$GITHUB_OUTPUT"
+
         - name: Import Secrets
           id: secrets
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
@@ -94,16 +159,16 @@ runs:
               token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
               payload: |
                   {
-                    "channel" : "${{ inputs.slack_channel_id }}",
+                    "channel": ${{ toJSON(inputs.slack_channel_id) }},
                     "unfurl_links": false,
                     "unfurl_media": false,
-                    "text": "${{ github.event.repository.name }} (${{ github.server_url }}/${{ github.repository }}) scheduled workflow: ${{ github.workflow }} failed! Please check: ${{ env.WORKFLOW_URL }} (cc ${{ inputs.slack_mention_people }})",
+                    "text": ${{ toJSON(steps.context.outputs.text_plain) }},
                     "blocks": [
                       {
                         "type": "section",
                         "text": {
                           "type": "mrkdwn",
-                          "text": ":automation-platform-failure: :mechanic: <${{ github.server_url }}/${{ github.repository }}|[${{ github.event.repository.name }}]> scheduled workflow: ${{ github.workflow }} failed! \n :link: Please check: ${{ env.WORKFLOW_URL }} \n (cc ${{ inputs.slack_mention_people }})"
+                          "text": ${{ toJSON(steps.context.outputs.text_block) }}
                         }
                       }
                     ]
