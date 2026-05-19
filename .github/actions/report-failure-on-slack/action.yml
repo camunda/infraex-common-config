@@ -43,7 +43,7 @@ runs:
         - name: Generate token for GitHub
           id: generate-github-token
           if: ${{ inputs.disable_silence_check == 'false' }}
-          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@960b132e23bf44de9a1f39b90359d127f5004c55 # main
+          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@732a017b858dbc516d87dbe0780fafb770532ed7 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
               github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
@@ -109,7 +109,7 @@ runs:
         - name: Import Secrets
           id: secrets
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+          uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
           with:
               url: ${{ inputs.vault_addr }}
               method: approle
@@ -122,7 +122,7 @@ runs:
         - name: Notify in Slack in case of failure
           id: slack-notification
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: slackapi/slack-github-action@03ea5433c137af7c0495bc0cad1af10403fc800c # v3.0.2
+          uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
           with:
               method: chat.postMessage
               token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
