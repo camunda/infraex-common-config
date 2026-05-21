@@ -37,6 +37,36 @@ inputs:
             Alerts on `stable/*` branches include a prominent severity marker.
         required: false
         default: ''
+    repeat_threshold:
+        description: |
+            Number of consecutive failures at or above which the alert is prefixed with a
+            "REPEATED FAILURE (Nx)" escalation marker. Set to `0` to disable the prefix
+            (the count is still tracked and exposed as the `consecutive_failures` output).
+        required: false
+        default: '3'
+    stale_failure_days:
+        description: |
+            Window (in days) used to decide whether a stored failure count is still
+            "consecutive". If the previous failure is older than this, the counter resets
+            to 1. This is a coarse stand-in for an on-success reset, which we cannot
+            implement from a failure-only action.
+        required: false
+        default: '7'
+    disable_consecutive_failure_tracking:
+        description: |
+            Skip the GitHub Actions cache round-trip used to track consecutive failures.
+            Useful for repos or workflows where cache writes are undesirable, or for
+            debugging. When disabled, `consecutive_failures` is reported as `1`.
+        required: false
+        default: 'false'
+
+outputs:
+    consecutive_failures:
+        description: |
+            Number of consecutive failures observed for this workflow + branch combination
+            within the `stale_failure_days` window (always `1` if tracking is disabled or
+            no prior cache entry exists).
+        value: ${{ steps.failure-counter.outputs.consecutive_failures }}
 
 runs:
     using: composite
@@ -83,14 +113,104 @@ runs:
           env:
               GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
 
+        - name: Compute failure cache key
+          id: cache-key
+          if: ${{ steps.silence-check.outcome != 'success' && inputs.disable_consecutive_failure_tracking != 'true' }}
+          shell: bash
+          env:
+              WORKFLOW: ${{ github.workflow }}
+              REF: ${{ github.base_ref || github.ref_name }}
+          run: |
+              set -euo pipefail
+              # Hash the workflow+branch pair so the cache key is stable across runs
+              # (required for restore-keys prefix matching) but free of characters
+              # that GitHub cache keys reject. 32 hex chars keeps the key compact.
+              BUCKET=$(printf '%s|%s' "$WORKFLOW" "$REF" | shasum -a 256 | cut -d' ' -f1 | cut -c1-32)
+              STATE_PATH="${RUNNER_TEMP}/slack-failure-state.json"
+              {
+                echo "bucket=$BUCKET"
+                echo "primary=slack-failure-count-${BUCKET}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+                echo "prefix=slack-failure-count-${BUCKET}-"
+                echo "state_path=$STATE_PATH"
+              } >> "$GITHUB_OUTPUT"
+
+        - name: Restore previous failure count
+          id: cache-restore
+          if: ${{ steps.silence-check.outcome != 'success' && inputs.disable_consecutive_failure_tracking != 'true' }}
+          uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+          with:
+              path: ${{ steps.cache-key.outputs.state_path }}
+              key: ${{ steps.cache-key.outputs.primary }}
+              restore-keys: |
+                  ${{ steps.cache-key.outputs.prefix }}
+
+        - name: Update failure counter
+          id: failure-counter
+          if: ${{ steps.silence-check.outcome != 'success' }}
+          shell: bash
+          env:
+              STATE_PATH: ${{ steps.cache-key.outputs.state_path }}
+              STALE_DAYS: ${{ inputs.stale_failure_days }}
+              DISABLED: ${{ inputs.disable_consecutive_failure_tracking }}
+          run: |
+              set -euo pipefail
+
+              if [[ "$DISABLED" == "true" ]]; then
+                echo "Consecutive-failure tracking disabled via input."
+                echo "consecutive_failures=1" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+
+              PREVIOUS_COUNT=0
+              PREVIOUS_TS=""
+              if [[ -f "$STATE_PATH" ]]; then
+                PREVIOUS_COUNT=$(jq -r '.count // 0' < "$STATE_PATH")
+                PREVIOUS_TS=$(jq -r '.last_failure_utc // ""' < "$STATE_PATH")
+              fi
+
+              NOW_EPOCH=$(date -u +%s)
+              NOW_ISO=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+              # The action only runs on failure, so we cannot reset the counter on
+              # success. Use a time-based fallback: if the previous failure is older
+              # than STALE_DAYS, treat the streak as broken.
+              if [[ -n "$PREVIOUS_TS" && "$PREVIOUS_COUNT" -gt 0 ]]; then
+                PREV_EPOCH=$(date -u -d "$PREVIOUS_TS" +%s 2>/dev/null \
+                  || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$PREVIOUS_TS" +%s 2>/dev/null \
+                  || echo 0)
+                AGE_DAYS=$(( (NOW_EPOCH - PREV_EPOCH) / 86400 ))
+                if (( AGE_DAYS > STALE_DAYS )); then
+                  echo "Previous failure ($PREVIOUS_TS) is $AGE_DAYS day(s) old (> $STALE_DAYS); resetting streak."
+                  PREVIOUS_COUNT=0
+                fi
+              fi
+
+              NEW_COUNT=$(( PREVIOUS_COUNT + 1 ))
+              echo "Consecutive failures for this workflow+branch: $NEW_COUNT (previous: $PREVIOUS_COUNT)"
+
+              mkdir -p "$(dirname "$STATE_PATH")"
+              jq -n --argjson count "$NEW_COUNT" --arg ts "$NOW_ISO" \
+                '{count: $count, last_failure_utc: $ts}' > "$STATE_PATH"
+
+              echo "consecutive_failures=$NEW_COUNT" >> "$GITHUB_OUTPUT"
+
+        - name: Persist failure count
+          if: ${{ steps.silence-check.outcome != 'success' && inputs.disable_consecutive_failure_tracking != 'true' }}
+          uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+          with:
+              path: ${{ steps.cache-key.outputs.state_path }}
+              key: ${{ steps.cache-key.outputs.primary }}
+
         - name: Prepare notification context
           id: context
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
           shell: bash
           env:
               BRANCH_INPUT: ${{ inputs.branch }}
+              CONSECUTIVE_FAILURES: ${{ steps.failure-counter.outputs.consecutive_failures }}
               DEFAULT_BRANCH: ${{ github.base_ref || github.ref_name }}
               MENTION: ${{ inputs.slack_mention_people }}
+              REPEAT_THRESHOLD: ${{ inputs.repeat_threshold }}
               REPO_NAME: ${{ github.event.repository.name }}
               REPO_URL: ${{ github.server_url }}/${{ github.repository }}
               WORKFLOW_NAME: ${{ github.workflow }}
@@ -104,11 +224,20 @@ runs:
                 BRANCH="$DEFAULT_BRANCH"
               fi
 
-              # Severity prefix for stable/* branches (production-relevant failures)
+              # Collect severity labels (repeated-failure escalation + stable-branch marker)
+              # into a single :rotating_light: frame to avoid emoji spam.
+              PREFIX_LABELS=()
+              if [[ "${REPEAT_THRESHOLD:-0}" -gt 0 && "${CONSECUTIVE_FAILURES:-1}" -ge "${REPEAT_THRESHOLD}" ]]; then
+                PREFIX_LABELS+=("REPEATED FAILURE (${CONSECUTIVE_FAILURES}x)")
+              fi
               if [[ "$BRANCH" == stable/* ]]; then
-                SEVERITY_PREFIX=":rotating_light: *STABLE BRANCH FAILURE* :rotating_light:"
-              else
-                SEVERITY_PREFIX=""
+                PREFIX_LABELS+=("STABLE BRANCH FAILURE")
+              fi
+
+              SEVERITY_PREFIX=""
+              if (( ${#PREFIX_LABELS[@]} > 0 )); then
+                JOINED=$(IFS=" — "; printf '%s' "${PREFIX_LABELS[*]}")
+                SEVERITY_PREFIX=":rotating_light: *${JOINED}* :rotating_light:"
               fi
 
               # Mention suffix — omit entirely if slack_mention_people is empty
