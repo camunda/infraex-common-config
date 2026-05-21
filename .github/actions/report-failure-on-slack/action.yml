@@ -73,7 +73,10 @@ runs:
     steps:
         - name: Generate token for GitHub
           id: generate-github-token
-          if: ${{ inputs.disable_silence_check == 'false' }}
+          # Always generate: the token is consumed by both the silence-check
+          # step and the analyzer trigger step, so gating it on
+          # disable_silence_check leaves the trigger step without a token
+          # when the silence check is disabled.
           uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@732a017b858dbc516d87dbe0780fafb770532ed7 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
@@ -319,5 +322,5 @@ runs:
 
               echo "GHA Failure Log Analyzer triggered successfully"
           env:
-              GITHUB_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+              GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
