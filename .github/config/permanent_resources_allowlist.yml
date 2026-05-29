@@ -25,6 +25,7 @@ aws:
         # IAM roles
         iam_role:
             - AWSServiceRole*
+            - VigieAccessRole
         # VPCs
         vpc:
             - infraex-permanent-vpc
@@ -46,6 +47,7 @@ aws:
         cloudformation-stack:
             - StackSet-expel-*
             - StackSet-Wiz-*
+            - StackSet-VigieAccessRole-*
 
     eu-west-1:
         # GuardDuty
