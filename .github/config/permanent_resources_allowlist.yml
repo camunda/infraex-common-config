@@ -19,6 +19,8 @@ aws:
         # Lambda functions
         lambda:
             - medicAbsenceFormToJsonData
+            # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+            - StackSet-map-autotag-backfill-*
         # CloudWatch Log Groups
         cloudwatch-loggroup:
             - /aws/lambda/medicAbsenceFormToJsonData
@@ -48,6 +50,8 @@ aws:
             - StackSet-expel-*
             - StackSet-Wiz-*
             - StackSet-VigieAccessRole-*
+            # MAP auto-tagging backfill - managed by infra IT sec
+            - StackSet-map-autotag-backfill-*
 
     eu-west-1:
         # GuardDuty
