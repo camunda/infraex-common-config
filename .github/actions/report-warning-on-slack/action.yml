@@ -33,7 +33,10 @@ inputs:
         description: |
             Optional Slack handles or group mentions to cc on the warning
             (for example `@infraex-medic`). Left empty by default because
-            warnings are advisory and should not page people.
+            warnings are advisory and should not page people. Broadcast
+            mentions (`<!here>`, `<!channel>`, `<!everyone>`) are defused so a
+            warning cannot page a whole channel; user and usergroup mentions
+            still work.
         required: false
         default: ''
     disable_silence_check:
@@ -130,6 +133,10 @@ runs:
               # <!here> / <!channel>. Ampersand must be escaped first.
               TITLE="${TITLE//&/&amp;}"; TITLE="${TITLE//</&lt;}"; TITLE="${TITLE//>/&gt;}"
               MESSAGE="${MESSAGE//&/&amp;}"; MESSAGE="${MESSAGE//</&lt;}"; MESSAGE="${MESSAGE//>/&gt;}"
+
+              # Defuse Slack broadcast mentions in the caller-provided cc list while
+              # still allowing user (<@U...>) and usergroup (<!subteam^...>) mentions.
+              MENTION=$(printf '%s' "${MENTION}" | sed -E 's/<!(here|channel|everyone)(\|[^>]*)?>/\1/g')
 
               # Resolve branch: explicit input > PR base ref (target branch) > current ref
               BRANCH="${BRANCH_INPUT}"

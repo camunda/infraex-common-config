@@ -25,7 +25,7 @@ caller has detected findings.
 | `vault_role_id` | <p>The role ID used for authentication with Vault.</p> | `true` | `""` |
 | `vault_secret_id` | <p>The secret ID used for authentication with Vault.</p> | `true` | `""` |
 | `slack_channel_id` | <p>The Slack channel ID where the warning will be sent.</p> | `false` | `C076N4G1162` |
-| `slack_mention_people` | <p>Optional Slack handles or group mentions to cc on the warning (for example <code>@infraex-medic</code>). Left empty by default because warnings are advisory and should not page people.</p> | `false` | `""` |
+| `slack_mention_people` | <p>Optional Slack handles or group mentions to cc on the warning (for example <code>@infraex-medic</code>). Left empty by default because warnings are advisory and should not page people. Broadcast mentions (<code>&lt;!here&gt;</code>, <code>&lt;!channel&gt;</code>, <code>&lt;!everyone&gt;</code>) are defused so a warning cannot page a whole channel; user and usergroup mentions still work.</p> | `false` | `""` |
 | `disable_silence_check` | <p>Disable the silence check. By default the warning can be muted by opening an issue in the repository with the label <code>alert-management</code> and the title <code>silence: &lt;name of your workflow&gt;</code>.</p> | `false` | `false` |
 | `branch` | <p>The branch the workflow is testing, shown for context. Defaults to auto-detection: <code>github.base_ref</code> for pull requests (the target branch), <code>github.ref_name</code> otherwise.</p> | `false` | `""` |
 | `title` | <p>Short headline shown after the WARNING marker.</p> | `false` | `Non-blocking warning` |
@@ -77,7 +77,10 @@ This action is a `composite` action.
     slack_mention_people:
     # Optional Slack handles or group mentions to cc on the warning
     # (for example `@infraex-medic`). Left empty by default because
-    # warnings are advisory and should not page people.
+    # warnings are advisory and should not page people. Broadcast
+    # mentions (`<!here>`, `<!channel>`, `<!everyone>`) are defused so a
+    # warning cannot page a whole channel; user and usergroup mentions
+    # still work.
     #
     # Required: false
     # Default: ""
