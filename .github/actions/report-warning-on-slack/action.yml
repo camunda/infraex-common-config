@@ -1,0 +1,192 @@
+---
+name: Report Warning and Notify Slack
+description: |
+    Companion to report-failure-on-slack for NON-blocking findings.
+
+    Imports the Slack bot token from HashiCorp Vault and posts a clearly
+    warning-styled Slack notification. Unlike report-failure-on-slack, it does
+    not frame the message as a failure: there is no :rotating_light: severity
+    frame, no "failed!" wording, no STABLE BRANCH FAILURE / REPEATED FAILURE
+    escalation, no consecutive-failure tracking, and it does not trigger the
+    GHA Failure Log Analyzer.
+
+    Use it for advisory signals (for example Helm deprecation or unknown-key
+    configuration drift) that must be surfaced but must not look like a red CI
+    failure. Typically called from a step guarded with `if: always()` once the
+    caller has detected findings.
+
+inputs:
+    vault_addr:
+        description: The address of the Vault instance.
+        required: true
+    vault_role_id:
+        description: The role ID used for authentication with Vault.
+        required: true
+    vault_secret_id:
+        description: The secret ID used for authentication with Vault.
+        required: true
+    slack_channel_id:
+        description: The Slack channel ID where the warning will be sent.
+        required: false
+        default: C076N4G1162 # infraex-alerts
+    slack_mention_people:
+        description: |
+            Optional Slack handles or group mentions to cc on the warning
+            (for example `@infraex-medic`). Left empty by default because
+            warnings are advisory and should not page people.
+        required: false
+        default: ''
+    disable_silence_check:
+        description: |
+            Disable the silence check. By default the warning can be muted by
+            opening an issue in the repository with the label `alert-management`
+            and the title `silence: <name of your workflow>`.
+        required: false
+        default: 'false'
+    branch:
+        description: |
+            The branch the workflow is testing, shown for context.
+            Defaults to auto-detection: `github.base_ref` for pull requests
+            (the target branch), `github.ref_name` otherwise.
+        required: false
+        default: ''
+    title:
+        description: Short headline shown after the WARNING marker.
+        required: false
+        default: Non-blocking warning
+    message:
+        description: |
+            Optional extra context line rendered under the header (plain text;
+            no Slack markup is injected by the caller-provided value).
+        required: false
+        default: ''
+    github_token:
+        description: |
+            Token used only for the silence-issue lookup. Needs read access to
+            issues on the current repository. Defaults to the workflow token.
+        required: false
+        default: ${{ github.token }}
+
+outputs:
+    ts:
+        description: |
+            Slack message timestamp (thread id) of the posted warning. Empty
+            when the notification was skipped (silenced).
+        value: ${{ steps.slack-notification.outputs.ts }}
+    silenced:
+        description: '`true` when a matching silence issue suppressed the warning.'
+        value: ${{ steps.silence-check.outputs.silenced }}
+
+runs:
+    using: composite
+    steps:
+        - name: Check for silence issue
+          id: silence-check
+          if: ${{ inputs.disable_silence_check == 'false' }}
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+              WORKFLOW: ${{ github.workflow }}
+              REPO: ${{ github.repository }}
+          run: |
+              set -euo pipefail
+              ISSUE_TITLE="silence: ${WORKFLOW}"
+              MATCHES=$(gh issue list --repo "${REPO}" --state open \
+                --search "${ISSUE_TITLE} in:title" --label alert-management \
+                --json number,title,url)
+              if [[ "$(echo "${MATCHES}" | jq 'length')" -gt 0 ]]; then
+                URL=$(echo "${MATCHES}" | jq -r '.[0].url')
+                echo "Silence issue active (${URL}); skipping Slack warning."
+                echo "silenced=true" >> "${GITHUB_OUTPUT}"
+              else
+                echo "No silence issue found; the warning will be sent."
+                echo "silenced=false" >> "${GITHUB_OUTPUT}"
+              fi
+
+        - name: Prepare notification context
+          id: context
+          if: ${{ steps.silence-check.outputs.silenced != 'true' }}
+          shell: bash
+          env:
+              BRANCH_INPUT: ${{ inputs.branch }}
+              DEFAULT_BRANCH: ${{ github.base_ref || github.ref_name }}
+              MENTION: ${{ inputs.slack_mention_people }}
+              MESSAGE: ${{ inputs.message }}
+              REPO_NAME: ${{ github.event.repository.name }}
+              REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+              TITLE: ${{ inputs.title }}
+              WORKFLOW_NAME: ${{ github.workflow }}
+              WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          run: |
+              set -euo pipefail
+
+              # Resolve branch: explicit input > PR base ref (target branch) > current ref
+              BRANCH="${BRANCH_INPUT}"
+              if [[ -z "${BRANCH}" ]]; then
+                BRANCH="${DEFAULT_BRANCH}"
+              fi
+
+              # Mention suffix — omitted entirely when slack_mention_people is empty
+              if [[ -n "${MENTION}" ]]; then
+                MENTION_SUFFIX=" (cc ${MENTION})"
+              else
+                MENTION_SUFFIX=""
+              fi
+
+              # Optional context line, only rendered when a message was provided
+              if [[ -n "${MESSAGE}" ]]; then
+                MESSAGE_LINE=$'\n'":information_source: ${MESSAGE}"
+              else
+                MESSAGE_LINE=""
+              fi
+
+              # Build the final strings here so the payload step only passes them
+              # through toJSON() — no further interpolation, no injection risk.
+              TEXT_PLAIN=":warning: WARNING — ${TITLE}: ${REPO_NAME} workflow ${WORKFLOW_NAME} on ${BRANCH}. ${MESSAGE} See: ${WORKFLOW_URL}${MENTION_SUFFIX}"
+              TEXT_BLOCK=":warning: *WARNING — ${TITLE}*"$'\n'":mag: <${REPO_URL}|[${REPO_NAME}]> workflow: ${WORKFLOW_NAME}"$'\n'":seedling: Branch: \`${BRANCH}\`"${MESSAGE_LINE}$'\n'":link: ${WORKFLOW_URL}${MENTION_SUFFIX}"
+
+              {
+                echo "text_plain<<EOF_TEXT_PLAIN"
+                printf '%s\n' "${TEXT_PLAIN}"
+                echo "EOF_TEXT_PLAIN"
+                echo "text_block<<EOF_TEXT_BLOCK"
+                printf '%s\n' "${TEXT_BLOCK}"
+                echo "EOF_TEXT_BLOCK"
+              } >> "${GITHUB_OUTPUT}"
+
+        - name: Import Secrets
+          id: secrets
+          if: ${{ steps.silence-check.outputs.silenced != 'true' }}
+          uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+          with:
+              url: ${{ inputs.vault_addr }}
+              method: approle
+              roleId: ${{ inputs.vault_role_id }}
+              secretId: ${{ inputs.vault_secret_id }}
+              exportEnv: false
+              secrets: |
+                  secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+        - name: Notify in Slack
+          id: slack-notification
+          if: ${{ steps.silence-check.outputs.silenced != 'true' }}
+          uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+          with:
+              method: chat.postMessage
+              token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+              payload: |
+                  {
+                    "channel": ${{ toJSON(inputs.slack_channel_id) }},
+                    "unfurl_links": false,
+                    "unfurl_media": false,
+                    "text": ${{ toJSON(steps.context.outputs.text_plain) }},
+                    "blocks": [
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": ${{ toJSON(steps.context.outputs.text_block) }}
+                        }
+                      }
+                    ]
+                  }
