@@ -29,7 +29,7 @@ caller has detected findings.
 | `disable_silence_check` | <p>Disable the silence check. By default the warning can be muted by opening an issue in the repository with the label <code>alert-management</code> and the title <code>silence: &lt;name of your workflow&gt;</code>.</p> | `false` | `false` |
 | `branch` | <p>The branch the workflow is testing, shown for context. Defaults to auto-detection: <code>github.base_ref</code> for pull requests (the target branch), <code>github.ref_name</code> otherwise.</p> | `false` | `""` |
 | `title` | <p>Short headline shown after the WARNING marker.</p> | `false` | `Non-blocking warning` |
-| `message` | <p>Optional extra context line rendered under the header (plain text; no Slack markup is injected by the caller-provided value).</p> | `false` | `""` |
+| `message` | <p>Optional extra context line rendered under the header. Slack metacharacters (<code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>) in the value are escaped, so it cannot inject links or broadcast mentions (for example <code>&lt;!here&gt;</code>).</p> | `false` | `""` |
 | `github_token` | <p>Token used only for the silence-issue lookup. Needs read access to issues on the current repository. Defaults to the workflow token.</p> | `false` | `${{ github.token }}` |
 
 
@@ -105,8 +105,9 @@ This action is a `composite` action.
     # Default: Non-blocking warning
 
     message:
-    # Optional extra context line rendered under the header (plain text;
-    # no Slack markup is injected by the caller-provided value).
+    # Optional extra context line rendered under the header. Slack
+    # metacharacters (`&`, `<`, `>`) in the value are escaped, so it
+    # cannot inject links or broadcast mentions (for example `<!here>`).
     #
     # Required: false
     # Default: ""

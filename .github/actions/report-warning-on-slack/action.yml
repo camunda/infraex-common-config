@@ -56,8 +56,9 @@ inputs:
         default: Non-blocking warning
     message:
         description: |
-            Optional extra context line rendered under the header (plain text;
-            no Slack markup is injected by the caller-provided value).
+            Optional extra context line rendered under the header. Slack
+            metacharacters (`&`, `<`, `>`) in the value are escaped, so it
+            cannot inject links or broadcast mentions (for example `<!here>`).
         required: false
         default: ''
     github_token:
@@ -75,7 +76,7 @@ outputs:
         value: ${{ steps.slack-notification.outputs.ts }}
     silenced:
         description: '`true` when a matching silence issue suppressed the warning.'
-        value: ${{ steps.silence-check.outputs.silenced }}
+        value: ${{ steps.silence-check.outputs.silenced || 'false' }}
 
 runs:
     using: composite
@@ -83,6 +84,10 @@ runs:
         - name: Check for silence issue
           id: silence-check
           if: ${{ inputs.disable_silence_check == 'false' }}
+          # Fail-open: a gh/jq/API hiccup must never turn an otherwise-green
+          # workflow red, since this action only emits advisory warnings. On
+          # error the step is non-fatal and the warning is sent anyway.
+          continue-on-error: true
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
@@ -119,6 +124,12 @@ runs:
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           run: |
               set -euo pipefail
+
+              # Escape Slack mrkdwn metacharacters in caller-provided strings so a
+              # title/message cannot inject links or broadcast mentions such as
+              # <!here> / <!channel>. Ampersand must be escaped first.
+              TITLE="${TITLE//&/&amp;}"; TITLE="${TITLE//</&lt;}"; TITLE="${TITLE//>/&gt;}"
+              MESSAGE="${MESSAGE//&/&amp;}"; MESSAGE="${MESSAGE//</&lt;}"; MESSAGE="${MESSAGE//>/&gt;}"
 
               # Resolve branch: explicit input > PR base ref (target branch) > current ref
               BRANCH="${BRANCH_INPUT}"
