@@ -136,6 +136,8 @@ runs:
               if [[ -z "${BRANCH}" ]]; then
                 BRANCH="${DEFAULT_BRANCH}"
               fi
+              # Escape the resolved branch too: it can be caller-provided via inputs.branch.
+              BRANCH="${BRANCH//&/&amp;}"; BRANCH="${BRANCH//</&lt;}"; BRANCH="${BRANCH//>/&gt;}"
 
               # Mention suffix — omitted entirely when slack_mention_people is empty
               if [[ -n "${MENTION}" ]]; then
@@ -144,16 +146,18 @@ runs:
                 MENTION_SUFFIX=""
               fi
 
-              # Optional context line, only rendered when a message was provided
+              # Optional context fragments, only rendered when a message was provided
               if [[ -n "${MESSAGE}" ]]; then
                 MESSAGE_LINE=$'\n'":information_source: ${MESSAGE}"
+                MESSAGE_PLAIN=" ${MESSAGE}"
               else
                 MESSAGE_LINE=""
+                MESSAGE_PLAIN=""
               fi
 
               # Build the final strings here so the payload step only passes them
               # through toJSON() — no further interpolation, no injection risk.
-              TEXT_PLAIN=":warning: WARNING — ${TITLE}: ${REPO_NAME} workflow ${WORKFLOW_NAME} on ${BRANCH}. ${MESSAGE} See: ${WORKFLOW_URL}${MENTION_SUFFIX}"
+              TEXT_PLAIN=":warning: WARNING — ${TITLE}: ${REPO_NAME} workflow ${WORKFLOW_NAME} on ${BRANCH}.${MESSAGE_PLAIN} See: ${WORKFLOW_URL}${MENTION_SUFFIX}"
               TEXT_BLOCK=":warning: *WARNING — ${TITLE}*"$'\n'":mag: <${REPO_URL}|[${REPO_NAME}]> workflow: ${WORKFLOW_NAME}"$'\n'":seedling: Branch: \`${BRANCH}\`"${MESSAGE_LINE}$'\n'":link: ${WORKFLOW_URL}${MENTION_SUFFIX}"
 
               {
