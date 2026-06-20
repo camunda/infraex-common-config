@@ -23,7 +23,7 @@ on:
 env:
     AWS_PROFILE: infraex
     # renovate: datasource=github-tags depName=gruntwork-io/cloud-nuke
-    CLOUD_NUKE_VERSION: v0.51.0
+    CLOUD_NUKE_VERSION: v0.52.0
     # Slack channel for internal notifications (FYI)
     SLACK_CHANNEL_ID: C076N4G1162
     # Slack channel for PR tests
@@ -91,7 +91,7 @@ jobs:
             - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@ce8f360e366f900378c3d1531d1f278f3789f04b # 1.7.0
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
 
             - name: Import Secrets
               id: secrets
@@ -477,7 +477,7 @@ jobs:
             - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@ce8f360e366f900378c3d1531d1f278f3789f04b # 1.7.0
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
 
             - name: Import Secrets
               id: secrets
