@@ -4,7 +4,10 @@
 # Format: resource_type/resource_identifier or patterns
 
 aws:
-    eu-central-1:
+    # S3 uses a single global namespace, so buckets are audited once for the
+    # whole account by the aws-s3-global-audit job (not per-region). List every
+    # approved bucket here, regardless of the region it physically lives in.
+    global:
         # S3 buckets
         s3:
             - general-purpose-bucket-that-will-not-be-deleted
@@ -16,6 +19,8 @@ aws:
             - tests-ra-aws-rosa-hcp-tf-state-eu-central-1
             - tf-state-multi-reg
             - camunda.ie
+
+    eu-central-1:
         # Lambda functions
         lambda:
             - medicAbsenceFormToJsonData

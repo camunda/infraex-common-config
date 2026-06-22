@@ -180,12 +180,17 @@ jobs:
                       echo ""
                   } > audit_report.txt
 
-                  # Run cloud-nuke in dry-run mode and capture output
+                  # Run cloud-nuke in dry-run mode and capture output.
+                  # S3 is excluded here: it is a single global namespace and is
+                  # audited once by the aws-s3-global-audit job. Auditing it
+                  # per-region would miss buckets whose home region is excluded
+                  # from this matrix (see AWS_EXCLUDED_REGIONS).
                   ./cloud-nuke_linux_amd64 aws --dry-run \
                     --region $REGION \
                     --force \
                     --older-than 0h \
                     --exclude-resource-type ec2-dhcp-option \
+                    --exclude-resource-type s3 \
                     --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
 
                   # Identify default VPC and its associated resources to filter them out
@@ -408,6 +413,223 @@ jobs:
                             "text": {
                               "type": "mrkdwn",
                               "text": "ℹ️ This is a *dry-run* audit of permanent resources. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+    aws-s3-global-audit:
+        runs-on: ubuntu-latest
+        needs: triage
+        if: needs.triage.outputs.run_aws == 'true'
+        steps:
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+            - name: Install asdf tools
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+
+            - name: Import Secrets
+              id: secrets
+              uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: approle
+                  roleId: ${{ secrets.VAULT_ROLE_ID }}
+                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  exportEnv: false
+                  secrets: |
+                      secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+
+            - name: Configure AWS CLI
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@7adbd89431646bba380c77bb009addd9e69d6d74 # main
+              with:
+                  vault-addr: ${{ secrets.VAULT_ADDR }}
+                  vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  aws-profile: ${{ env.AWS_PROFILE }}
+                  aws-region: eu-central-1
+
+            - name: Audit S3 buckets globally
+              id: s3-audit
+              run: |
+                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
+
+                  {
+                      echo "## AWS S3 Global Permanent Resources Audit"
+                      echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+                      echo ""
+                  } > audit_report.txt
+
+                  # S3 is a single global namespace: list every bucket once for the
+                  # whole account, regardless of the region it physically lives in.
+                  # Keep the AWS call on its own line (no '|| true') so a CLI or
+                  # credentials error fails the job instead of being masked into an
+                  # empty list, which would be a silent blind spot.
+                  aws s3api list-buckets --query "Buckets[].Name" --output text > raw_buckets.txt
+                  # An account with zero buckets yields empty output (valid): the
+                  # trailing '|| true' only absorbs grep's exit 1 when there are no
+                  # non-empty lines to keep.
+                  tr '\t' '\n' < raw_buckets.txt | grep -v '^$' | sort -u > all_buckets.txt || true
+                  echo "Found $(wc -l < all_buckets.txt) S3 buckets in the account"
+
+                  # Load global S3 allowlist patterns (supports '*' glob)
+                  yq -r '.aws.global.s3[]?' "$ALLOWLIST_FILE" 2>/dev/null | sort -u > allowlist_patterns.txt || touch allowlist_patterns.txt
+                  echo "Allowlist patterns loaded:"
+                  cat allowlist_patterns.txt
+
+                  true > unallowlisted_buckets.txt
+                  true > allowlisted_buckets.txt
+                  ALLOWLISTED_COUNT=0
+                  UNALLOWLISTED_COUNT=0
+
+                  while IFS= read -r bucket; do
+                      [[ -z "$bucket" ]] && continue
+
+                      is_allowlisted=false
+                      while IFS= read -r pattern; do
+                          [[ -z "$pattern" ]] && continue
+                          # Native shell glob match: '*' is a wildcard while every
+                          # other character (notably '.') is matched literally. This
+                          # avoids regex false positives such as 'camunda.ie' matching
+                          # 'camundaXie'.
+                          # shellcheck disable=SC2053
+                          if [[ "$bucket" == $pattern ]]; then
+                              is_allowlisted=true
+                              break
+                          fi
+                      done < allowlist_patterns.txt
+
+                      if $is_allowlisted; then
+                          echo "$bucket" >> allowlisted_buckets.txt
+                          ((ALLOWLISTED_COUNT++)) || true
+                      else
+                          # Resolve the bucket home region for triage (best-effort).
+                          # us-east-1 buckets report an empty/None LocationConstraint.
+                          region=$(aws s3api get-bucket-location --bucket "$bucket" --query 'LocationConstraint' --output text 2>/dev/null || echo "unknown")
+                          if [[ "$region" == "None" || -z "$region" || "$region" == "null" ]]; then
+                              region="us-east-1"
+                          fi
+                          echo "$bucket ($region)" >> unallowlisted_buckets.txt
+                          ((UNALLOWLISTED_COUNT++)) || true
+                      fi
+                  done < all_buckets.txt
+
+                  {
+                      echo "### Allowlisted buckets (approved):"
+                      head -50 allowlisted_buckets.txt || echo "None"
+                      echo ""
+                      echo "Total allowlisted: $ALLOWLISTED_COUNT"
+                      echo ""
+                      echo "### ⚠️ Non-allowlisted buckets (review required):"
+                      head -100 unallowlisted_buckets.txt || echo "None"
+                      echo ""
+                      echo "Total non-allowlisted: $UNALLOWLISTED_COUNT"
+                  } >> audit_report.txt
+
+                  cat audit_report.txt
+
+                  # Save counts for Slack message
+                  echo "UNALLOWLISTED_COUNT=$UNALLOWLISTED_COUNT" >> "$GITHUB_OUTPUT"
+                  echo "TOTAL_RESOURCES=$((ALLOWLISTED_COUNT + UNALLOWLISTED_COUNT))" >> "$GITHUB_OUTPUT"
+
+            - name: Determine Slack channel
+              id: slack-channel
+              run: |
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    echo "channel=${{ env.SLACK_CHANNEL_ID_PR }}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "channel=${{ env.SLACK_CHANNEL_ID }}" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Prepare Slack message
+              id: slack-message
+              run: |
+                  UNALLOWLISTED="${{ steps.s3-audit.outputs.UNALLOWLISTED_COUNT }}"
+                  TOTAL="${{ steps.s3-audit.outputs.TOTAL_RESOURCES }}"
+                  RUN_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+                  # Slack block text limit is 3000 chars, limit to 20 resources
+                  MAX_DISPLAY=20
+
+                  echo "run_date=$RUN_DATE" >> "$GITHUB_OUTPUT"
+
+                  if [[ "$UNALLOWLISTED" -gt 0 ]]; then
+                    echo "status_emoji=⚠️" >> "$GITHUB_OUTPUT"
+                    # Build resource list as single line with literal \n for Slack mrkdwn
+                    RESOURCE_LIST=$(head -$MAX_DISPLAY unallowlisted_buckets.txt | awk '{if (NR>1) printf "\\n"; printf "[s3] %s", $0}')
+
+                    if [[ "$UNALLOWLISTED" -gt $MAX_DISPLAY ]]; then
+                      RESOURCE_LIST="${RESOURCE_LIST}... and $((UNALLOWLISTED - MAX_DISPLAY)) more (see full report)"
+                    fi
+
+                    # Use printf %s to output literal string without interpreting escapes
+                    printf '%s\n' "status_text=*⚠️ Non-allowlisted buckets ($UNALLOWLISTED):*\n\`\`\`\n${RESOURCE_LIST}\n\`\`\`" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "status_emoji=✅" >> "$GITHUB_OUTPUT"
+                    echo "status_text=*✅ All $TOTAL buckets are allowlisted*" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Post Audit Report to Slack
+              if: steps.s3-audit.outputs.UNALLOWLISTED_COUNT > 0
+              uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "📋 Weekly AWS S3 Global Permanent Resources Audit",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "📋 Weekly AWS S3 Global Permanent Resources Audit",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Scope:*\nGlobal (all regions)"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Use Case:*\nS3 permanent resources audit"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "${{ steps.slack-message.outputs.status_text }}"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is a *dry-run* audit of permanent S3 resources. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
                             }
                           },
                           {
@@ -730,6 +952,7 @@ jobs:
         needs:
             - aws-list-regions
             - aws-permanent-audit
+            - aws-s3-global-audit
             - azure-list-regions
             - azure-permanent-audit
         steps:
