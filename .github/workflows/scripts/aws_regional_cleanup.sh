@@ -76,7 +76,15 @@ echo "Tearing down Aurora Global Databases with a member in $region"
 # matrix in aws_nightly_cleanup.yml.
 CLEANUP_REGIONS="eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2"
 
-global_cluster_ids=$(aws rds describe-global-clusters --region "$region" --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>/dev/null || true)
+# Capture stderr (2>&1) so a real failure — transient AWS error or missing
+# permissions — is surfaced as a warning instead of being silently swallowed and
+# treated as "no global clusters". Skipping teardown silently here would let
+# cloud-nuke fail later with the harder-to-action global-cluster errors.
+if ! global_cluster_ids=$(aws rds describe-global-clusters --region "$region" \
+    --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>&1); then
+    echo "Warning: could not list global clusters in $region; skipping global database teardown: ${global_cluster_ids}"
+    global_cluster_ids=""
+fi
 
 # `--output text` yields the literal "None" (not an empty string) when the query
 # resolves to null, so treat it as "no global clusters" like elsewhere in this script.
