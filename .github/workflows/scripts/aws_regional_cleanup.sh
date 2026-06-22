@@ -58,6 +58,121 @@ paginate() {
     done
 }
 
+echo "Tearing down Aurora Global Databases with a member in $region"
+# Aurora Global Databases link regional DB clusters across AWS Regions. A member
+# cluster can't be deleted while it belongs to a global database, and the
+# primary (writer) member can't be detached until all secondaries are removed.
+# cloud-nuke runs independently per region and can't perform this cross-region
+# teardown, so it fails with InvalidGlobalClusterStateFault / "this cluster is a
+# part of a global cluster". We handle it here: for every global database that
+# has a member in the current region, detach all members (secondaries first,
+# primary last, each in its own region) and delete the now-empty global
+# database. Each regional cluster becomes standalone and is then removed by
+# cloud-nuke in its own region.
+#
+# Safety guard: a global database is only torn down when ALL of its members live
+# in regions fully wiped by this workflow, so we never detach clusters that
+# belong to permanent or reference environments. Keep this list in sync with the
+# matrix in aws_nightly_cleanup.yml.
+CLEANUP_REGIONS="eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2"
+
+global_cluster_ids=$(aws rds describe-global-clusters --region "$region" --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>/dev/null || true)
+
+if [ -n "$global_cluster_ids" ]; then
+    read -r -a global_cluster_ids_array <<< "$global_cluster_ids"
+
+    for global_cluster_id in "${global_cluster_ids_array[@]}"
+    do
+        members=$(aws rds describe-global-clusters --region "$region" \
+            --global-cluster-identifier "$global_cluster_id" \
+            --query 'GlobalClusters[0].GlobalClusterMembers[].[DBClusterArn,IsWriter]' \
+            --output text 2>/dev/null || true)
+
+        if [ -z "$members" ]; then
+            echo "Global database $global_cluster_id has no members, deleting it"
+            execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $global_cluster_id" || true
+            continue
+        fi
+
+        # Sort members into secondaries and primary while enforcing the safety guard.
+        secondary_arns=()
+        primary_arn=""
+        primary_region=""
+        member_in_region=false
+        skip_global_cluster=false
+
+        while IFS=$'\t' read -r member_arn is_writer
+        do
+            [ -z "$member_arn" ] && continue
+            # ARN format: arn:aws:rds:<region>:<account-id>:cluster:<name>
+            member_region=$(echo "$member_arn" | cut -d: -f4)
+
+            if [ "$member_region" = "$region" ]; then
+                member_in_region=true
+            fi
+
+            if ! grep -qwF "$member_region" <<< "$CLEANUP_REGIONS"; then
+                echo "Skipping global database $global_cluster_id (member in protected region: $member_region)"
+                skip_global_cluster=true
+                break
+            fi
+
+            if [ "$is_writer" = "True" ]; then
+                primary_arn="$member_arn"
+                primary_region="$member_region"
+            else
+                secondary_arns+=("$member_arn")
+            fi
+        done <<< "$members"
+
+        if [ "$skip_global_cluster" = true ]; then
+            continue
+        fi
+
+        if [ "$member_in_region" != true ]; then
+            echo "Skipping global database $global_cluster_id (no member in $region)"
+            continue
+        fi
+
+        echo "Tearing down global database: $global_cluster_id"
+
+        # Detach secondaries first; the primary can't be removed while any
+        # secondary member is still attached.
+        for member_arn in "${secondary_arns[@]}"
+        do
+            member_region=$(echo "$member_arn" | cut -d: -f4)
+            echo "Detaching secondary cluster $member_arn (region $member_region)"
+            execute_or_simulate "aws rds remove-from-global-cluster --region $member_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $member_arn" || true
+        done
+
+        if [ -n "$primary_arn" ]; then
+            echo "Detaching primary cluster $primary_arn (region $primary_region)"
+            execute_or_simulate "aws rds remove-from-global-cluster --region $primary_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $primary_arn" || true
+        fi
+
+        # Detaching is asynchronous; wait for the global database to be empty
+        # before deleting it (best-effort, capped at ~5 minutes).
+        delete_region="${primary_region:-$region}"
+        if [ "$DRY_RUN" != true ]; then
+            for _ in $(seq 1 30)
+            do
+                remaining=$(aws rds describe-global-clusters --region "$delete_region" \
+                    --global-cluster-identifier "$global_cluster_id" \
+                    --query 'length(GlobalClusters[0].GlobalClusterMembers)' \
+                    --output text 2>/dev/null || echo "0")
+                if [ "$remaining" = "0" ] || [ "$remaining" = "None" ] || [ -z "$remaining" ]; then
+                    break
+                fi
+                echo "Waiting for $remaining member(s) to detach from $global_cluster_id..."
+                sleep 10
+            done
+        fi
+
+        echo "Deleting global database: $global_cluster_id"
+        execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id" || true
+    done
+fi
+
 echo "Deleting OIDC Providers"
 # Delete OIDC Provider
 oidc_providers=$(paginate "aws iam list-open-id-connect-providers" "OpenIDConnectProviderList[?contains(Arn, '$region')].Arn")

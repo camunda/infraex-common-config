@@ -77,6 +77,50 @@ paginate() {
     done
 }
 
+# Function to empty a bucket, including every object version and delete marker.
+# `aws s3 rm --recursive` only removes the *current* version of each object, so
+# versioned buckets keep their noncurrent versions and delete markers and then
+# fail to delete with "BucketNotEmpty". This purges everything in batches.
+empty_bucket() {
+    local bucket="$1"
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY RUN] Would empty all object versions and delete markers from bucket $bucket"
+        return 0
+    fi
+
+    while : ; do
+        local listing
+        listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null || true)
+        if [ -z "$listing" ]; then
+            break
+        fi
+
+        local payload
+        payload=$(echo "$listing" | jq -c '{Objects: [(.Versions // []) + (.DeleteMarkers // []) | .[] | {Key, VersionId}][0:1000], Quiet: true}')
+
+        local count
+        count=$(echo "$payload" | jq '.Objects | length')
+        if [ "$count" -eq 0 ]; then
+            break
+        fi
+
+        echo "Deleting $count object version(s)/delete marker(s) from bucket $bucket"
+        local result
+        result=$(aws s3api delete-objects --bucket "$bucket" --delete "$payload" --output json 2>/dev/null || true)
+
+        # Stop if the batch failed or some objects could not be deleted (e.g.
+        # object lock / retention); otherwise we would loop forever on the same
+        # items. The subsequent delete-bucket then surfaces the problem.
+        local errors
+        errors=$(echo "$result" | jq '.Errors // [] | length' 2>/dev/null || echo 1)
+        if [ -z "$result" ] || [ "$errors" -gt 0 ]; then
+            echo "Warning: could not fully empty bucket $bucket ($errors object error(s)); leaving it for manual cleanup"
+            break
+        fi
+    done
+}
+
 echo "Deleting additional global resources..."
 
 echo "Deleting IAM Users"
@@ -250,8 +294,8 @@ if [ -n "$bucket_ids" ]; then
         if echo "${keeplist_buckets[@]}" | grep -qw "$bucket"; then
             echo "Bucket $bucket is in the keeplist, skipping deletion."
         else
-            echo "Deleting contents of bucket: $bucket"
-            execute_or_simulate "aws s3 rm s3://$bucket --recursive"
+            echo "Emptying bucket (all object versions and delete markers): $bucket"
+            empty_bucket "$bucket"
 
             echo "Deleting bucket: $bucket"
             execute_or_simulate "aws s3api delete-bucket --bucket $bucket"
