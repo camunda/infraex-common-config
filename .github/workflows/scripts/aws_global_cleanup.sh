@@ -91,7 +91,13 @@ empty_bucket() {
 
     while : ; do
         local listing
-        listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null || true)
+        # Distinguish an AWS API failure (AccessDenied, throttling, transient
+        # error) from a genuinely empty result: on failure, warn and stop rather
+        # than silently treating the bucket as already empty.
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null); then
+            echo "Warning: failed to list object versions for bucket $bucket; leaving it for manual cleanup"
+            break
+        fi
         if [ -z "$listing" ]; then
             break
         fi

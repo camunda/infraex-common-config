@@ -78,7 +78,9 @@ CLEANUP_REGIONS="eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2"
 
 global_cluster_ids=$(aws rds describe-global-clusters --region "$region" --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>/dev/null || true)
 
-if [ -n "$global_cluster_ids" ]; then
+# `--output text` yields the literal "None" (not an empty string) when the query
+# resolves to null, so treat it as "no global clusters" like elsewhere in this script.
+if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
     read -r -a global_cluster_ids_array <<< "$global_cluster_ids"
 
     for global_cluster_id in "${global_cluster_ids_array[@]}"
@@ -88,7 +90,9 @@ if [ -n "$global_cluster_ids" ]; then
             --query 'GlobalClusters[0].GlobalClusterMembers[].[DBClusterArn,IsWriter]' \
             --output text 2>/dev/null || true)
 
-        if [ -z "$members" ]; then
+        # An empty member list (or the literal "None" when GlobalClusters[0] is
+        # null / the describe call failed) means there is nothing to detach.
+        if [ -z "$members" ] || [ "$members" = "None" ]; then
             echo "Global database $global_cluster_id has no members, deleting it"
             execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $global_cluster_id" || true
             continue
@@ -153,7 +157,11 @@ if [ -n "$global_cluster_ids" ]; then
         # Detaching is asynchronous; wait for the global database to be empty
         # before deleting it (best-effort, capped at ~5 minutes).
         delete_region="${primary_region:-$region}"
+        # Default to empty so dry-run (which skips the wait loop) still shows the
+        # intended deletion via execute_or_simulate.
+        remaining=0
         if [ "$DRY_RUN" != true ]; then
+            remaining="unknown"
             for _ in $(seq 1 30)
             do
                 remaining=$(aws rds describe-global-clusters --region "$delete_region" \
@@ -161,6 +169,7 @@ if [ -n "$global_cluster_ids" ]; then
                     --query 'length(GlobalClusters[0].GlobalClusterMembers)' \
                     --output text 2>/dev/null || echo "0")
                 if [ "$remaining" = "0" ] || [ "$remaining" = "None" ] || [ -z "$remaining" ]; then
+                    remaining=0
                     break
                 fi
                 echo "Waiting for $remaining member(s) to detach from $global_cluster_id..."
@@ -168,8 +177,15 @@ if [ -n "$global_cluster_ids" ]; then
             done
         fi
 
-        echo "Deleting global database: $global_cluster_id"
-        execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id" || true
+        # Only delete once the database is confirmed empty. Attempting it with
+        # members still attached fails, and because the error is swallowed the
+        # cluster would silently survive and keep blocking cloud-nuke.
+        if [ "$remaining" = "0" ]; then
+            echo "Deleting global database: $global_cluster_id"
+            execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id" || true
+        else
+            echo "Warning: global database $global_cluster_id still has $remaining member(s) attached after ~5 min; leaving it for the next run"
+        fi
     done
 fi
 
