@@ -93,13 +93,19 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
 
     for global_cluster_id in "${global_cluster_ids_array[@]}"
     do
-        members=$(aws rds describe-global-clusters --region "$region" \
+        # Capture stderr so a describe failure (throttling / AccessDenied) is not
+        # mistaken for "no members" — which would log a misleading message and
+        # attempt a delete that hides the real problem. Skip this cluster on error.
+        if ! members=$(aws rds describe-global-clusters --region "$region" \
             --global-cluster-identifier "$global_cluster_id" \
             --query 'GlobalClusters[0].GlobalClusterMembers[].[DBClusterArn,IsWriter]' \
-            --output text 2>/dev/null || true)
+            --output text 2>&1); then
+            echo "Warning: could not describe global database $global_cluster_id; skipping its teardown this run: ${members}"
+            continue
+        fi
 
         # An empty member list (or the literal "None" when GlobalClusters[0] is
-        # null / the describe call failed) means there is nothing to detach.
+        # null) means there is nothing to detach, so the global database can go.
         if [ -z "$members" ] || [ "$members" = "None" ]; then
             echo "Global database $global_cluster_id has no members, deleting it"
             execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $global_cluster_id" || true
@@ -172,10 +178,16 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
             remaining="unknown"
             for _ in $(seq 1 30)
             do
-                remaining=$(aws rds describe-global-clusters --region "$delete_region" \
+                # A describe failure must stay "unknown" (not be read as 0),
+                # otherwise we could delete while members are still attached.
+                if ! remaining=$(aws rds describe-global-clusters --region "$delete_region" \
                     --global-cluster-identifier "$global_cluster_id" \
                     --query 'length(GlobalClusters[0].GlobalClusterMembers)' \
-                    --output text 2>/dev/null || echo "0")
+                    --output text 2>&1); then
+                    echo "Warning: could not check members of $global_cluster_id: ${remaining}"
+                    remaining="unknown"
+                    break
+                fi
                 if [ "$remaining" = "0" ] || [ "$remaining" = "None" ] || [ -z "$remaining" ]; then
                     remaining=0
                     break
@@ -186,13 +198,14 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
         fi
 
         # Only delete once the database is confirmed empty. Attempting it with
-        # members still attached fails, and because the error is swallowed the
-        # cluster would silently survive and keep blocking cloud-nuke.
+        # members still attached (or after a describe failure left the state
+        # "unknown") fails, and because the error is swallowed the cluster would
+        # silently survive and keep blocking cloud-nuke.
         if [ "$remaining" = "0" ]; then
             echo "Deleting global database: $global_cluster_id"
             execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id" || true
         else
-            echo "Warning: global database $global_cluster_id still has $remaining member(s) attached after ~5 min; leaving it for the next run"
+            echo "Warning: global database $global_cluster_id not confirmed empty (remaining=$remaining); leaving it for the next run"
         fi
     done
 fi
