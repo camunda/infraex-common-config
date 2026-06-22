@@ -89,3 +89,9 @@ A weekly audit runs every **Sunday at 22:00 UTC** to identify all resources in p
 - Helps track resource growth and identify potential orphaned resources
 
 This provides visibility into the permanent infrastructure without affecting any resources.
+
+###### S3 buckets (global audit)
+
+S3 uses a single, account-wide global namespace and every bucket is pinned to one home region. The per-region audit therefore **excludes S3** and a dedicated `aws-s3-global-audit` job lists all buckets once (`aws s3api list-buckets`) and compares them against the allowlist.
+
+This avoids a blind spot: auditing S3 per-region would silently skip any bucket whose home region is excluded from the per-region matrix (e.g. `us-east-1`, see `AWS_EXCLUDED_REGIONS`). Approved buckets are listed under `aws.global.s3` in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml), regardless of region.
