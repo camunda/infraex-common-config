@@ -471,8 +471,14 @@ jobs:
 
                   # S3 is a single global namespace: list every bucket once for the
                   # whole account, regardless of the region it physically lives in.
-                  aws s3api list-buckets --query "Buckets[].Name" --output text \
-                    | tr '\t' '\n' | grep -v '^$' | sort -u > all_buckets.txt || true
+                  # Keep the AWS call on its own line (no '|| true') so a CLI or
+                  # credentials error fails the job instead of being masked into an
+                  # empty list, which would be a silent blind spot.
+                  aws s3api list-buckets --query "Buckets[].Name" --output text > raw_buckets.txt
+                  # An account with zero buckets yields empty output (valid): the
+                  # trailing '|| true' only absorbs grep's exit 1 when there are no
+                  # non-empty lines to keep.
+                  tr '\t' '\n' < raw_buckets.txt | grep -v '^$' | sort -u > all_buckets.txt || true
                   echo "Found $(wc -l < all_buckets.txt) S3 buckets in the account"
 
                   # Load global S3 allowlist patterns (supports '*' glob)
@@ -491,9 +497,12 @@ jobs:
                       is_allowlisted=false
                       while IFS= read -r pattern; do
                           [[ -z "$pattern" ]] && continue
-                          # Convert glob pattern to regex and match against the bucket name
-                          regex_pattern=${pattern//\*/.*}
-                          if echo "$bucket" | grep -qE "^${regex_pattern}$"; then
+                          # Native shell glob match: '*' is a wildcard while every
+                          # other character (notably '.') is matched literally. This
+                          # avoids regex false positives such as 'camunda.ie' matching
+                          # 'camundaXie'.
+                          # shellcheck disable=SC2053
+                          if [[ "$bucket" == $pattern ]]; then
                               is_allowlisted=true
                               break
                           fi
