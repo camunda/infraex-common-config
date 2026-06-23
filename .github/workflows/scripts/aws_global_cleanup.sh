@@ -85,7 +85,21 @@ empty_bucket() {
     local bucket="$1"
 
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY RUN] Would empty all object versions and delete markers from bucket $bucket"
+        # Still exercise the read path (list-object-versions + payload build) so
+        # the logic is validated on PR dry-runs, but never delete: inspect only
+        # the first page and report what would be removed.
+        local listing
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null); then
+            echo "[DRY RUN] Warning: failed to list object versions for bucket $bucket"
+            return 0
+        fi
+        local count=0
+        if [ -n "$listing" ]; then
+            local payload
+            payload=$(echo "$listing" | jq -c '{Objects: [(.Versions // []) + (.DeleteMarkers // []) | .[] | {Key, VersionId}][0:1000], Quiet: true}')
+            count=$(echo "$payload" | jq '.Objects | length')
+        fi
+        echo "[DRY RUN] Would delete $count object version(s)/delete marker(s) from the first page of bucket $bucket (and continue until empty)"
         return 0
     fi
 
