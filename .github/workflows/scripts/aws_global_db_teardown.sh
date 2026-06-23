@@ -66,7 +66,10 @@ for r in $CLEANUP_REGIONS; do
         global_cluster_ids="$global_cluster_ids $ids"
     fi
 done
-global_cluster_ids=$(echo "$global_cluster_ids" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+# Dedupe. Use `awk 'NF'` (not `grep -v '^$'`) to drop blank lines: grep exits 1
+# when nothing matches, which under `set -o pipefail` would abort the script in
+# the normal "no global clusters" case before the empty check below.
+global_cluster_ids=$(echo "$global_cluster_ids" | tr ' ' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
 
 if [ -z "${global_cluster_ids// /}" ]; then
     echo "No Aurora Global Databases found."
