@@ -172,10 +172,16 @@ for global_cluster_id in $global_cluster_ids; do
             # instead of swallowing the error; stop once the primary is gone.
             primary_detached=false
             for _ in $(seq 1 30); do
-                still_member=$(aws rds describe-global-clusters --region "$primary_region" \
+                # Surface a membership-check failure instead of silently treating
+                # it as "still a member"; fall back to "unknown" and still attempt
+                # the detach below.
+                if ! still_member=$(aws rds describe-global-clusters --region "$primary_region" \
                     --global-cluster-identifier "$global_cluster_id" \
                     --query "length(GlobalClusters[0].GlobalClusterMembers[?DBClusterArn=='${primary_arn}'])" \
-                    --output text 2>/dev/null || echo "unknown")
+                    --output text 2>&1); then
+                    echo "Warning: could not check primary membership of $global_cluster_id: ${still_member}"
+                    still_member="unknown"
+                fi
                 if [ "$still_member" = "0" ] || [ "$still_member" = "None" ]; then
                     primary_detached=true
                     break
