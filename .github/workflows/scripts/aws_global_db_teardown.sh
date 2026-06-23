@@ -60,10 +60,16 @@ echo "Discovering Aurora Global Databases (cleanup regions: $CLEANUP_REGIONS; ac
 # robust against regional endpoint differences.
 global_cluster_ids=""
 for r in $CLEANUP_REGIONS; do
-    ids=$(aws rds describe-global-clusters --region "$r" \
-        --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>/dev/null || true)
-    if [ -n "$ids" ] && [ "$ids" != "None" ]; then
-        global_cluster_ids="$global_cluster_ids $ids"
+    # Surface a describe failure (AccessDenied/throttling/region disabled) as a
+    # warning and continue to the other regions, instead of silently treating it
+    # as "no global clusters".
+    if ids=$(aws rds describe-global-clusters --region "$r" \
+        --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>&1); then
+        if [ -n "$ids" ] && [ "$ids" != "None" ]; then
+            global_cluster_ids="$global_cluster_ids $ids"
+        fi
+    else
+        echo "Warning: could not list global clusters in $r (continuing): ${ids}"
     fi
 done
 # Dedupe. Use `awk 'NF'` (not `grep -v '^$'`) to drop blank lines: grep exits 1
@@ -144,7 +150,13 @@ for global_cluster_id in $global_cluster_ids; do
     for member_arn in "${secondary_arns[@]}"; do
         member_region=$(echo "$member_arn" | cut -d: -f4)
         echo "Detaching secondary cluster $member_arn (region $member_region)"
-        execute_or_simulate "aws rds remove-from-global-cluster --region $member_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $member_arn" || true
+        if [ "$DRY_RUN" = true ]; then
+            execute_or_simulate "aws rds remove-from-global-cluster --region $member_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $member_arn"
+        elif ! detach_err=$(aws rds remove-from-global-cluster --region "$member_region" --global-cluster-identifier "$global_cluster_id" --db-cluster-identifier "$member_arn" 2>&1); then
+            # Surface the error (best-effort): the wait loop below still gates the
+            # delete on the global database actually becoming empty.
+            echo "Warning: could not detach secondary $member_arn from $global_cluster_id: ${detach_err}"
+        fi
     done
 
     if [ -n "$primary_arn" ]; then
