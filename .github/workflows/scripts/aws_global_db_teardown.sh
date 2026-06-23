@@ -60,6 +60,7 @@ echo "Discovering Aurora Global Databases (cleanup regions: $CLEANUP_REGIONS; ac
 # Global clusters are account-global; query each cleanup region and dedupe to be
 # robust against regional endpoint differences.
 global_cluster_ids=""
+discovery_failures=0
 for r in $CLEANUP_REGIONS; do
     # Surface a describe failure (AccessDenied/throttling/region disabled) as a
     # warning and continue to the other regions, instead of silently treating it
@@ -71,6 +72,7 @@ for r in $CLEANUP_REGIONS; do
         fi
     else
         echo "Warning: could not list global clusters in $r (continuing): ${ids}"
+        discovery_failures=$((discovery_failures + 1))
     fi
 done
 # Normalise whitespace and dedupe. `aws ... --output text` separates multiple
@@ -81,7 +83,12 @@ done
 global_cluster_ids=$(echo "$global_cluster_ids" | tr ' \t' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
 
 if [ -z "${global_cluster_ids// /}" ]; then
-    echo "No Aurora Global Databases found."
+    if [ "$discovery_failures" -gt 0 ]; then
+        # Don't pretend the account is clean when discovery was actually blocked.
+        echo "No Aurora Global Databases discovered, but $discovery_failures region(s) failed to list (see warnings above) — teardown may be incomplete."
+    else
+        echo "No Aurora Global Databases found."
+    fi
     exit 0
 fi
 
