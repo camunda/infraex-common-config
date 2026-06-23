@@ -72,9 +72,11 @@ echo "Tearing down Aurora Global Databases with a member in $region"
 #
 # Safety guard: a global database is only torn down when ALL of its members live
 # in regions fully wiped by this workflow, so we never detach clusters that
-# belong to permanent or reference environments. Keep this list in sync with the
-# matrix in aws_nightly_cleanup.yml.
-CLEANUP_REGIONS="eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2"
+# belong to permanent or reference environments. Overridable via the
+# CLEANUP_REGIONS env var so the workflow can pass the matrix-derived list and
+# avoid drift; the default below must otherwise stay in sync with the matrix in
+# aws_nightly_cleanup.yml.
+CLEANUP_REGIONS="${CLEANUP_REGIONS:-eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2}"
 
 # Capture stderr (2>&1) so a real failure — transient AWS error or missing
 # permissions — is surfaced as a warning instead of being silently swallowed and
@@ -172,10 +174,20 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
                 # transiently fail with InvalidGlobalClusterStateFault until the
                 # secondaries are gone. Retry (capped ~5 min) instead of swallowing
                 # the error; otherwise the primary stays attached and keeps
-                # blocking cloud-nuke.
+                # blocking cloud-nuke. A sibling per-region job may tear down the
+                # same global cluster in parallel, so first check whether the
+                # primary is still a member and stop once it is gone.
                 primary_detached=false
                 for _ in $(seq 1 30)
                 do
+                    still_member=$(aws rds describe-global-clusters --region "$primary_region" \
+                        --global-cluster-identifier "$global_cluster_id" \
+                        --query "length(GlobalClusters[0].GlobalClusterMembers[?DBClusterArn=='${primary_arn}'])" \
+                        --output text 2>/dev/null || echo "unknown")
+                    if [ "$still_member" = "0" ] || [ "$still_member" = "None" ]; then
+                        primary_detached=true
+                        break
+                    fi
                     if detach_err=$(aws rds remove-from-global-cluster --region "$primary_region" \
                         --global-cluster-identifier "$global_cluster_id" \
                         --db-cluster-identifier "$primary_arn" 2>&1); then
@@ -226,7 +238,13 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
         # silently survive and keep blocking cloud-nuke.
         if [ "$remaining" = "0" ]; then
             echo "Deleting global database: $global_cluster_id"
-            execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id" || true
+            if [ "$DRY_RUN" = true ]; then
+                execute_or_simulate "aws rds delete-global-cluster --region $delete_region --global-cluster-identifier $global_cluster_id"
+            elif ! delete_err=$(aws rds delete-global-cluster --region "$delete_region" --global-cluster-identifier "$global_cluster_id" 2>&1); then
+                # A sibling per-region job may have already deleted it, so only
+                # warn (with the AWS error) rather than failing the whole cleanup.
+                echo "Warning: delete-global-cluster for $global_cluster_id did not succeed: ${delete_err}"
+            fi
         else
             echo "Warning: global database $global_cluster_id not confirmed empty (remaining=$remaining); leaving it for the next run"
         fi
