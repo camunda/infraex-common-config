@@ -77,6 +77,75 @@ paginate() {
     done
 }
 
+# Function to empty a bucket, including every object version and delete marker.
+# `aws s3 rm --recursive` only removes the *current* version of each object, so
+# versioned buckets keep their noncurrent versions and delete markers and then
+# fail to delete with "BucketNotEmpty". This purges everything in batches.
+empty_bucket() {
+    local bucket="$1"
+
+    if [ "$DRY_RUN" = true ]; then
+        # Still exercise the read path (list-object-versions + payload build) so
+        # the logic is validated on PR dry-runs, but never delete: inspect only
+        # the first page and report what would be removed.
+        local listing
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>&1); then
+            echo "[DRY RUN] Warning: failed to list object versions for bucket $bucket: ${listing}"
+            return 0
+        fi
+        local count=0
+        if [ -n "$listing" ]; then
+            local payload
+            payload=$(echo "$listing" | jq -c '{Objects: [(.Versions // []) + (.DeleteMarkers // []) | .[] | {Key, VersionId}][0:1000], Quiet: true}')
+            count=$(echo "$payload" | jq '.Objects | length')
+        fi
+        echo "[DRY RUN] Would delete $count object version(s)/delete marker(s) from the first page of bucket $bucket (and continue until empty)"
+        return 0
+    fi
+
+    while : ; do
+        local listing
+        # Distinguish an AWS API failure (AccessDenied, throttling, transient
+        # error) from a genuinely empty result: on failure, warn (with the AWS
+        # error) and stop rather than silently treating the bucket as empty.
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>&1); then
+            echo "Warning: failed to list object versions for bucket $bucket: ${listing}; leaving it for manual cleanup"
+            break
+        fi
+        if [ -z "$listing" ]; then
+            break
+        fi
+
+        local payload
+        payload=$(echo "$listing" | jq -c '{Objects: [(.Versions // []) + (.DeleteMarkers // []) | .[] | {Key, VersionId}][0:1000], Quiet: true}')
+
+        local count
+        count=$(echo "$payload" | jq '.Objects | length')
+        if [ "$count" -eq 0 ]; then
+            break
+        fi
+
+        echo "Deleting $count object version(s)/delete marker(s) from bucket $bucket"
+        # Branch on the command's exit status so a hard API failure surfaces the
+        # AWS error text instead of an empty result. On failure, bail out (the
+        # subsequent delete-bucket then reports the problem) rather than looping.
+        local result
+        if ! result=$(aws s3api delete-objects --bucket "$bucket" --delete "$payload" --output json 2>&1); then
+            echo "Warning: could not empty bucket $bucket (delete-objects failed): ${result}; leaving it for manual cleanup"
+            break
+        fi
+
+        # Also stop if some objects could not be deleted (e.g. object lock /
+        # retention); otherwise we would loop forever on the same items.
+        local errors
+        errors=$(echo "$result" | jq '.Errors // [] | length' 2>/dev/null || echo 1)
+        if [ "$errors" -gt 0 ]; then
+            echo "Warning: could not fully empty bucket $bucket ($errors object error(s)); leaving it for manual cleanup"
+            break
+        fi
+    done
+}
+
 echo "Deleting additional global resources..."
 
 echo "Deleting IAM Users"
@@ -250,8 +319,8 @@ if [ -n "$bucket_ids" ]; then
         if echo "${keeplist_buckets[@]}" | grep -qw "$bucket"; then
             echo "Bucket $bucket is in the keeplist, skipping deletion."
         else
-            echo "Deleting contents of bucket: $bucket"
-            execute_or_simulate "aws s3 rm s3://$bucket --recursive"
+            echo "Emptying bucket (all object versions and delete markers): $bucket"
+            empty_bucket "$bucket"
 
             echo "Deleting bucket: $bucket"
             execute_or_simulate "aws s3api delete-bucket --bucket $bucket"

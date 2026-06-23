@@ -231,8 +231,10 @@ if [ -n "$eip_allocations" ]; then
 fi
 
 echo "Deleting CloudWatch Log Groups"
-# Delete CloudWatch Log Groups (can accumulate storage costs)
-# Skip log groups that contain 'DO_NOT_DELETE' or are AWS-managed
+# Delete CloudWatch Log Groups (they accumulate storage costs). This runs only in
+# ephemeral test regions, where log groups left behind by deleted resources
+# (EKS control-plane, ECS Container Insights, VPC flow logs, ECS task logs, ...)
+# should be cleaned up too. Only skip those explicitly marked DO_NOT_DELETE.
 log_groups=$(paginate "aws logs describe-log-groups --region $region" "logGroups[].logGroupName")
 
 if [ -n "$log_groups" ]; then
@@ -240,17 +242,14 @@ if [ -n "$log_groups" ]; then
 
     for log_group in "${log_groups_array[@]}"
     do
-        # Skip AWS-managed log groups and those marked as DO_NOT_DELETE
-        if [[ "$log_group" == /aws/* ]] || \
-           [[ "$log_group" == /aws-* ]] || \
-           [[ "$log_group" == /elasticbeanstalk/* ]] || \
-           [[ "$log_group" == /ecs/* ]] || \
-           [[ "$log_group" == *DO_NOT_DELETE* ]]; then
-            echo "Skipping log group: $log_group (AWS-managed or protected)"
+        if [[ "$log_group" == *DO_NOT_DELETE* ]]; then
+            echo "Skipping log group: $log_group (protected)"
             continue
         fi
 
         echo "Deleting CloudWatch Log Group: $log_group"
-        execute_or_simulate "aws logs delete-log-group --region $region --log-group-name \"$log_group\""
+        # Best-effort: a genuinely undeletable / service-managed log group must
+        # not abort the rest of the cleanup (set -e).
+        execute_or_simulate "aws logs delete-log-group --region $region --log-group-name \"$log_group\"" || true
     done
 fi

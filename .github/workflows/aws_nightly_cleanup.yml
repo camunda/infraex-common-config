@@ -17,6 +17,7 @@ on:
         paths:
             - .github/workflows/aws_nightly_cleanup.yml
             - .github/workflows/scripts/aws_global_cleanup.sh
+            - .github/workflows/scripts/aws_global_db_teardown.sh
             - .github/workflows/scripts/aws_regional_cleanup.sh
 
 env:
@@ -30,8 +31,68 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # Single, sequential orchestrator for cross-region Aurora Global Database
+    # teardown. It runs once, before the parallel per-region cleanup matrix, so
+    # there is no race between region jobs and cloud-nuke sees standalone clusters.
+    aws-global-db-teardown:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+            # Guarantees the pinned yq (.tool-versions) used by the region
+            # derivation below, instead of relying on the runner image.
+            - name: Install asdf tools
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+
+            - name: Determine DRY_RUN and matrix-derived regions
+              env:
+                  DISPATCH_REGION: ${{ github.event.inputs.region }}
+              run: |
+                  WF=".github/workflows/aws_nightly_cleanup.yml"
+
+                  # Single source of truth: the regions wiped by this workflow are
+                  # exactly its cleanup matrix, read straight from the YAML so the
+                  # teardown safety guard can never drift from the matrix.
+                  CLEANUP_REGIONS=$(yq '[.jobs.aws-cleanup.strategy.matrix.config[].region] | join(" ")' "$WF")
+                  echo "CLEANUP_REGIONS=$CLEANUP_REGIONS" | tee -a "$GITHUB_ENV"
+
+                  # Mirror the matrix run conditions for "active regions":
+                  # - pull_request: dry-run over all regions (matches the matrix PR override)
+                  # - workflow_dispatch: the single region selected via inputs (so a
+                  #   manual run against e.g. us-east-1 still tears down its global DBs)
+                  # - schedule: regions whose day is "All" or matches the current weekday
+                  # yq joins directly (no `| paste`) so a yq failure can't be masked
+                  # into an empty ACTIVE_REGIONS that would silently skip everything.
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
+                      ACTIVE_REGIONS="$CLEANUP_REGIONS"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      ACTIVE_REGIONS="$DISPATCH_REGION"
+                  else
+                      current_day=$(date +%A)
+                      ACTIVE_REGIONS=$(yq "[.jobs.aws-cleanup.strategy.matrix.config[] | select(.day == \"All\" or .day == \"$current_day\") | .region] | join(\" \")" "$WF")
+                  fi
+                  echo "ACTIVE_REGIONS=$ACTIVE_REGIONS" | tee -a "$GITHUB_ENV"
+
+            - name: Configure AWS CLI
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@7adbd89431646bba380c77bb009addd9e69d6d74 # main
+              with:
+                  vault-addr: ${{ secrets.VAULT_ADDR }}
+                  vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  aws-profile: ${{ env.AWS_PROFILE }}
+                  aws-region: us-east-1
+
+            - name: Tear down Aurora Global Databases
+              timeout-minutes: 30
+              run: .github/workflows/scripts/aws_global_db_teardown.sh
+
     aws-cleanup:
         runs-on: ubuntu-latest
+        # Wait for the global-DB teardown so cloud-nuke sees standalone clusters,
+        # but still run (best-effort) even if that teardown had issues.
+        needs: aws-global-db-teardown
+        if: ${{ !cancelled() }}
         strategy:
             fail-fast: false # don't propagate failing jobs
             matrix:
@@ -213,6 +274,7 @@ jobs:
         runs-on: ubuntu-latest
         if: failure()
         needs:
+            - aws-global-db-teardown
             - aws-cleanup
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
