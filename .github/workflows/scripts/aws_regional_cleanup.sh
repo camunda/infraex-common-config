@@ -110,7 +110,13 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
         # null) means there is nothing to detach, so the global database can go.
         if [ -z "$members" ] || [ "$members" = "None" ]; then
             echo "Global database $global_cluster_id has no members, deleting it"
-            execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $global_cluster_id" || true
+            if [ "$DRY_RUN" = true ]; then
+                execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $global_cluster_id"
+            elif ! delete_err=$(aws rds delete-global-cluster --region "$region" --global-cluster-identifier "$global_cluster_id" 2>&1); then
+                # A sibling per-region job may have already deleted it, so only
+                # warn (with the AWS error) rather than failing the whole cleanup.
+                echo "Warning: delete-global-cluster for $global_cluster_id did not succeed: ${delete_err}"
+            fi
             continue
         fi
 
