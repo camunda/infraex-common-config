@@ -72,10 +72,12 @@ for r in $CLEANUP_REGIONS; do
         echo "Warning: could not list global clusters in $r (continuing): ${ids}"
     fi
 done
-# Dedupe. Use `awk 'NF'` (not `grep -v '^$'`) to drop blank lines: grep exits 1
-# when nothing matches, which under `set -o pipefail` would abort the script in
-# the normal "no global clusters" case before the empty check below.
-global_cluster_ids=$(echo "$global_cluster_ids" | tr ' ' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
+# Normalise whitespace and dedupe. `aws ... --output text` separates multiple
+# identifiers with TABS, so split on spaces AND tabs (`tr ' \t' '\n'`), otherwise
+# tab-grouped IDs bypass `sort -u` and get iterated as one malformed token. Use
+# `awk 'NF'` (not `grep -v '^$'`) to drop blank lines: grep exits 1 on no match,
+# which under `set -o pipefail` would abort in the normal "no clusters" case.
+global_cluster_ids=$(echo "$global_cluster_ids" | tr ' \t' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
 
 if [ -z "${global_cluster_ids// /}" ]; then
     echo "No Aurora Global Databases found."

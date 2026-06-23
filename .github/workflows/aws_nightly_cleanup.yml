@@ -40,6 +40,8 @@ jobs:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
             - name: Determine DRY_RUN and matrix-derived regions
+              env:
+                  DISPATCH_REGION: ${{ github.event.inputs.region }}
               run: |
                   WF=".github/workflows/aws_nightly_cleanup.yml"
 
@@ -49,18 +51,21 @@ jobs:
                   CLEANUP_REGIONS=$(yq '[.jobs.aws-cleanup.strategy.matrix.config[].region] | join(" ")' "$WF")
                   echo "CLEANUP_REGIONS=$CLEANUP_REGIONS" | tee -a "$GITHUB_ENV"
 
-                  # Mirror the matrix run conditions for "active regions" today:
+                  # Mirror the matrix run conditions for "active regions":
                   # - pull_request: dry-run over all regions (matches the matrix PR override)
-                  # - workflow_dispatch: only the first region (eu-west-2)
+                  # - workflow_dispatch: the single region selected via inputs (so a
+                  #   manual run against e.g. us-east-1 still tears down its global DBs)
                   # - schedule: regions whose day is "All" or matches the current weekday
+                  # yq joins directly (no `| paste`) so a yq failure can't be masked
+                  # into an empty ACTIVE_REGIONS that would silently skip everything.
                   if [[ "${{ github.event_name }}" == "pull_request" ]]; then
                       echo "DRY_RUN=true" | tee -a "$GITHUB_ENV"
                       ACTIVE_REGIONS="$CLEANUP_REGIONS"
                   elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      ACTIVE_REGIONS="eu-west-2"
+                      ACTIVE_REGIONS="$DISPATCH_REGION"
                   else
                       current_day=$(date +%A)
-                      ACTIVE_REGIONS=$(yq ".jobs.aws-cleanup.strategy.matrix.config[] | select(.day == \"All\" or .day == \"$current_day\") | .region" "$WF" | paste -sd' ' -)
+                      ACTIVE_REGIONS=$(yq "[.jobs.aws-cleanup.strategy.matrix.config[] | select(.day == \"All\" or .day == \"$current_day\") | .region] | join(\" \")" "$WF")
                   fi
                   echo "ACTIVE_REGIONS=$ACTIVE_REGIONS" | tee -a "$GITHUB_ENV"
 
