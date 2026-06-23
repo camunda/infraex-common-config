@@ -17,11 +17,12 @@ set -euxo pipefail
 
 DRY_RUN=${DRY_RUN:-false}
 
-# Regions fully wiped by this workflow (its whole matrix). A Global Database is
-# only torn down when ALL of its members live in these regions, so we never touch
-# permanent or reference environments. The workflow passes the matrix-derived
-# value; the default is a fallback for local/manual runs.
-CLEANUP_REGIONS="${CLEANUP_REGIONS:-eu-west-2 eu-west-3 eu-north-1 us-east-1 us-east-2}"
+# Regions fully wiped by this workflow. A Global Database is only torn down when
+# ALL of its members live in these regions, so we never touch permanent or
+# reference environments. Required and provided by the workflow, which derives it
+# from its cleanup matrix — there is intentionally no hard-coded default that
+# could drift from the matrix.
+: "${CLEANUP_REGIONS:?must be set (the workflow derives it from the cleanup matrix)}"
 
 # Regions actually being cleaned on this run (matrix day logic). A Global Database
 # is only torn down when at least one member lives in an active region, matching
