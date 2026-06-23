@@ -277,6 +277,33 @@
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_postgres_versions.txt',
       'format': 'plain',
     },
+    // Bitnami Premium (vendor-ee) image tags, listed from the upstream Broadcom
+    // registry and published by camunda-deployment-references. Tags look like
+    // '18.4.0-debian-12-r9', so consumers must annotate 'versioning=docker'.
+    'bitnami-postgresql-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_postgresql_versions.txt',
+      'format': 'plain',
+    },
+    'bitnami-os-shell-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_os-shell_versions.txt',
+      'format': 'plain',
+    },
+    'bitnami-postgres-exporter-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_postgres-exporter_versions.txt',
+      'format': 'plain',
+    },
+    'bitnami-elasticsearch-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_elasticsearch_versions.txt',
+      'format': 'plain',
+    },
+    'bitnami-elasticsearch-exporter-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_elasticsearch-exporter_versions.txt',
+      'format': 'plain',
+    },
+    'bitnami-keycloak-config-cli-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_keycloak-config-cli_versions.txt',
+      'format': 'plain',
+    },
     'helm-camunda': {
       'defaultRegistryUrlTemplate': 'https://raw.githubusercontent.com/camunda/camunda-platform-helm/refs/heads/main/.tool-versions',
       'format': 'plain',
