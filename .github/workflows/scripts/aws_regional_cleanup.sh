@@ -165,7 +165,30 @@ if [ -n "$global_cluster_ids" ] && [ "$global_cluster_ids" != "None" ]; then
 
         if [ -n "$primary_arn" ]; then
             echo "Detaching primary cluster $primary_arn (region $primary_region)"
-            execute_or_simulate "aws rds remove-from-global-cluster --region $primary_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $primary_arn" || true
+            if [ "$DRY_RUN" = true ]; then
+                execute_or_simulate "aws rds remove-from-global-cluster --region $primary_region --global-cluster-identifier $global_cluster_id --db-cluster-identifier $primary_arn"
+            else
+                # Secondary removal is asynchronous, so the primary detach can
+                # transiently fail with InvalidGlobalClusterStateFault until the
+                # secondaries are gone. Retry (capped ~5 min) instead of swallowing
+                # the error; otherwise the primary stays attached and keeps
+                # blocking cloud-nuke.
+                primary_detached=false
+                for _ in $(seq 1 30)
+                do
+                    if detach_err=$(aws rds remove-from-global-cluster --region "$primary_region" \
+                        --global-cluster-identifier "$global_cluster_id" \
+                        --db-cluster-identifier "$primary_arn" 2>&1); then
+                        primary_detached=true
+                        break
+                    fi
+                    echo "Primary detach not ready yet (secondaries still detaching): ${detach_err}"
+                    sleep 10
+                done
+                if [ "$primary_detached" != true ]; then
+                    echo "Warning: could not detach primary $primary_arn from $global_cluster_id after ~5 min; leaving it for the next run"
+                fi
+            fi
         fi
 
         # Detaching is asynchronous; wait for the global database to be empty

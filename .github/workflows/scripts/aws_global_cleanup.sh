@@ -89,8 +89,8 @@ empty_bucket() {
         # the logic is validated on PR dry-runs, but never delete: inspect only
         # the first page and report what would be removed.
         local listing
-        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null); then
-            echo "[DRY RUN] Warning: failed to list object versions for bucket $bucket"
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>&1); then
+            echo "[DRY RUN] Warning: failed to list object versions for bucket $bucket: ${listing}"
             return 0
         fi
         local count=0
@@ -106,10 +106,10 @@ empty_bucket() {
     while : ; do
         local listing
         # Distinguish an AWS API failure (AccessDenied, throttling, transient
-        # error) from a genuinely empty result: on failure, warn and stop rather
-        # than silently treating the bucket as already empty.
-        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>/dev/null); then
-            echo "Warning: failed to list object versions for bucket $bucket; leaving it for manual cleanup"
+        # error) from a genuinely empty result: on failure, warn (with the AWS
+        # error) and stop rather than silently treating the bucket as empty.
+        if ! listing=$(aws s3api list-object-versions --bucket "$bucket" --max-items 1000 --output json 2>&1); then
+            echo "Warning: failed to list object versions for bucket $bucket: ${listing}; leaving it for manual cleanup"
             break
         fi
         if [ -z "$listing" ]; then
@@ -126,15 +126,20 @@ empty_bucket() {
         fi
 
         echo "Deleting $count object version(s)/delete marker(s) from bucket $bucket"
+        # Branch on the command's exit status so a hard API failure surfaces the
+        # AWS error text instead of an empty result. On failure, bail out (the
+        # subsequent delete-bucket then reports the problem) rather than looping.
         local result
-        result=$(aws s3api delete-objects --bucket "$bucket" --delete "$payload" --output json 2>/dev/null || true)
+        if ! result=$(aws s3api delete-objects --bucket "$bucket" --delete "$payload" --output json 2>&1); then
+            echo "Warning: could not empty bucket $bucket (delete-objects failed): ${result}; leaving it for manual cleanup"
+            break
+        fi
 
-        # Stop if the batch failed or some objects could not be deleted (e.g.
-        # object lock / retention); otherwise we would loop forever on the same
-        # items. The subsequent delete-bucket then surfaces the problem.
+        # Also stop if some objects could not be deleted (e.g. object lock /
+        # retention); otherwise we would loop forever on the same items.
         local errors
         errors=$(echo "$result" | jq '.Errors // [] | length' 2>/dev/null || echo 1)
-        if [ -z "$result" ] || [ "$errors" -gt 0 ]; then
+        if [ "$errors" -gt 0 ]; then
             echo "Warning: could not fully empty bucket $bucket ($errors object error(s)); leaving it for manual cleanup"
             break
         fi
