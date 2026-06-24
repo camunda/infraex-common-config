@@ -279,8 +279,10 @@
     },
     // Bitnami Premium image tags published by camunda-deployment-references, one
     // self-contained JSON per image (format: json) whose releases carry {version,
-    // newDigest}. Tags look like '18.4.0-debian-12-r9', so consumers annotate
-    // 'versioning=docker'.
+    // newDigest}. Tags look like '18.4.0-debian-12-r9'; 'docker' versioning will
+    // NOT update across the '-rN' revision, so consumers must annotate the build
+    // with a regex versioning, e.g.:
+    //   versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(-(?<compatibility>debian-\d+)-r(?<build>\d+))?$
     'bitnami-postgresql-camunda': {
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/bitnami_postgresql.json',
       'format': 'json',
