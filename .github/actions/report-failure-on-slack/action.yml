@@ -137,7 +137,7 @@ runs:
         - name: Restore previous failure count
           id: cache-restore
           if: ${{ steps.silence-check.outcome != 'success' && inputs.disable_consecutive_failure_tracking != 'true' }}
-          uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+          uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
           with:
               path: ${{ steps.cache-key.outputs.state_path }}
               key: ${{ steps.cache-key.outputs.primary }}
@@ -196,7 +196,7 @@ runs:
 
         - name: Persist failure count
           if: ${{ steps.silence-check.outcome != 'success' && inputs.disable_consecutive_failure_tracking != 'true' }}
-          uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+          uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
           with:
               path: ${{ steps.cache-key.outputs.state_path }}
               key: ${{ steps.cache-key.outputs.primary }}
