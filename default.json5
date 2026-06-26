@@ -156,8 +156,11 @@
         'amazon-eks',
         'amazon-rds-postgresql',
         'aurora-postgresql',
+        'ghcr.io/cloudnative-pg/postgresql',
         'opensearch',
+        'postgresql',
         'red-hat-openshift',
+        'registry.camunda.cloud/vendor-ee/postgresql',
       ],
       matchUpdateTypes: [
         'major',
@@ -165,7 +168,7 @@
       draftPR: true,
       prBodyNotes: [
         '⚠️ **Breaking Changes Possible** ⚠️',
-        'This update includes a new version of a core infrastructure component (`amazon-eks`, `amazon-rds-postgresql`, `aurora-postgresql`, `opensearch`, or `red-hat-openshift`).',
+        'This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `red-hat-openshift`, or a PostgreSQL engine/image: `amazon-rds-postgresql`, `aurora-postgresql`, `ghcr.io/cloudnative-pg/postgresql`, `registry.camunda.cloud/vendor-ee/postgresql`, `postgresql`).',
         'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
         'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
       ],
