@@ -155,6 +155,7 @@
       matchPackageNames: [
         'amazon-eks',
         'amazon-rds-postgresql',
+        'aurora-postgresql',
         'opensearch',
         'red-hat-openshift',
       ],
