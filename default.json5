@@ -156,8 +156,10 @@
         'amazon-eks',
         'amazon-rds-postgresql',
         'aurora-postgresql',
+        'ghcr.io/cloudnative-pg/postgresql',
         'opensearch',
         'red-hat-openshift',
+        'registry.camunda.cloud/vendor-ee/postgresql',
       ],
       matchUpdateTypes: [
         'major',
@@ -165,9 +167,29 @@
       draftPR: true,
       prBodyNotes: [
         '⚠️ **Breaking Changes Possible** ⚠️',
-        'This update includes a new version of a core infrastructure component (`amazon-eks`, `amazon-rds-postgresql`, `aurora-postgresql`, `opensearch`, or `red-hat-openshift`).',
+        "This update includes a new major version of a core infrastructure component (Amazon EKS, OpenSearch, OpenShift, or a PostgreSQL engine/image). See this rule's `matchPackageNames` for the exact set.",
         'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
         'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
+      ],
+    },
+    {
+      // Azure Database for PostgreSQL Flexible Server pins its major via the
+      // endoflife-date PostgreSQL product (depName `postgresql`). Scope the match
+      // to that datasource so it cannot also match an unrelated package literally
+      // named `postgresql` (e.g. a Bitnami Helm chart) in a consuming repo.
+      matchDatasources: [
+        'endoflife-date',
+      ],
+      matchPackageNames: [
+        'postgresql',
+      ],
+      matchUpdateTypes: [
+        'major',
+      ],
+      draftPR: true,
+      prBodyNotes: [
+        '⚠️ **Breaking Changes Possible** ⚠️',
+        'This is a major PostgreSQL upgrade. PostgreSQL major upgrades are not in-place and must be reviewed; apply only at the beginning of a Camunda 8 release cycle unless explicitly approved.',
       ],
     },
     {
