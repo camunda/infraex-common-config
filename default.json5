@@ -165,7 +165,7 @@
       draftPR: true,
       prBodyNotes: [
         '⚠️ **Breaking Changes Possible** ⚠️',
-        'This update includes a new version of a core infrastructure component (`amazon-eks`, `opensearch`, `postgresql`, or `openshift`).',
+        'This update includes a new version of a core infrastructure component (`amazon-eks`, `amazon-rds-postgresql`, `aurora-postgresql`, `opensearch`, or `red-hat-openshift`).',
         'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
         'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
       ],
