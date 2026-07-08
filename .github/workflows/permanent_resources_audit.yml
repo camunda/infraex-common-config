@@ -38,6 +38,15 @@ env:
     AWS_EXCLUDED_REGIONS: '["eu-west-2", "eu-west-3", "eu-north-1", "us-east-1", "us-east-2"]'
     AZURE_EXCLUDED_REGIONS: '["swedencentral", "spaincentral"]'
 
+    # ELBv2 target group quota headroom audit thresholds. cloud-nuke does not
+    # report target groups, so orphaned ones accumulate silently until they hit
+    # the regional "Target Groups per Region" quota (default 3000) and break new
+    # ingress load balancer creation with TooManyTargetGroups. Alert to Slack when
+    # utilization reaches this percentage of the quota, or when the number of
+    # orphaned (unattached) target groups reaches this count.
+    ELBV2_TG_USAGE_WARN_PERCENT: 80
+    ELBV2_TG_ORPHAN_WARN: 50
+
 # Limit workflow to a single execution per ref
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
@@ -322,6 +331,83 @@ jobs:
                   echo "UNALLOWLISTED_COUNT=$UNALLOWLISTED_COUNT" >> "$GITHUB_OUTPUT"
                   echo "TOTAL_RESOURCES=$((ALLOWLISTED_COUNT + UNALLOWLISTED_COUNT))" >> "$GITHUB_OUTPUT"
 
+            - name: Audit ELBv2 target group quota headroom
+              if: steps.region-check.outputs.region_disabled != 'true'
+              id: tg-audit
+              env:
+                  REGION: ${{ matrix.region }}
+                  USAGE_WARN_PERCENT: ${{ env.ELBV2_TG_USAGE_WARN_PERCENT }}
+                  ORPHAN_WARN: ${{ env.ELBV2_TG_ORPHAN_WARN }}
+              run: |
+                  # cloud-nuke does not list ELBv2 target groups, so orphaned target
+                  # groups (created by Kubernetes Service type=LoadBalancer controllers
+                  # and left behind when their load balancer/cluster is deleted) pile up
+                  # unnoticed until they exhaust the regional "Target Groups per Region"
+                  # quota (default 3000) and break new ingress load balancer creation
+                  # with TooManyTargetGroups. Surface the utilization so it is never a
+                  # surprise in a permanent region.
+
+                  # Count all target groups and the orphaned (unattached) subset.
+                  # NOTE: do not use length() inside --query here. With server-side
+                  # pagination the AWS CLI evaluates the function once per page and
+                  # prints one count per page; project the ARNs (which the CLI
+                  # aggregates across pages) and count them client-side instead.
+                  tg_total=$(aws elbv2 describe-target-groups --region "$REGION" \
+                      --query 'TargetGroups[].TargetGroupArn' --output text 2>/dev/null \
+                      | tr '\t' '\n' | grep -c . || true)
+                  # The `0` backticks below are a JMESPath number literal, not a
+                  # shell command substitution: keep them single-quoted and literal.
+                  # shellcheck disable=SC2016
+                  tg_orphaned=$(aws elbv2 describe-target-groups --region "$REGION" \
+                      --query 'TargetGroups[?length(LoadBalancerArns)==`0`].TargetGroupArn' --output text 2>/dev/null \
+                      | tr '\t' '\n' | grep -c . || true)
+
+                  # Resolve the regional quota: the applied (possibly adjusted) value,
+                  # falling back to the AWS default, then to the documented default.
+                  tg_quota=$(aws service-quotas get-service-quota \
+                      --service-code elasticloadbalancing --quota-code L-B22855CB \
+                      --region "$REGION" --query 'Quota.Value' --output text 2>/dev/null || true)
+                  if [[ -z "$tg_quota" || "$tg_quota" == "None" ]]; then
+                      tg_quota=$(aws service-quotas get-aws-default-service-quota \
+                          --service-code elasticloadbalancing --quota-code L-B22855CB \
+                          --region "$REGION" --query 'Quota.Value' --output text 2>/dev/null || true)
+                  fi
+                  if [[ -z "$tg_quota" || "$tg_quota" == "None" ]]; then
+                      tg_quota=3000
+                  fi
+                  tg_quota=${tg_quota%.*} # the API returns e.g. "3000.0"
+
+                  # Integer utilization percentage, guarding against a zero quota.
+                  if [[ "$tg_quota" -gt 0 ]]; then
+                      tg_usage_percent=$(( tg_total * 100 / tg_quota ))
+                  else
+                      tg_usage_percent=0
+                  fi
+
+                  tg_alert=false
+                  if [[ "$tg_usage_percent" -ge "$USAGE_WARN_PERCENT" || "$tg_orphaned" -ge "$ORPHAN_WARN" ]]; then
+                      tg_alert=true
+                  fi
+
+                  {
+                      echo ""
+                      echo "### ELBv2 target group quota headroom"
+                      echo "Total target groups : $tg_total"
+                      echo "Orphaned (no LB)    : $tg_orphaned"
+                      echo "Regional quota      : $tg_quota"
+                      echo "Utilization         : ${tg_usage_percent}% (alert >= ${USAGE_WARN_PERCENT}%)"
+                      echo "Orphaned threshold  : alert >= ${ORPHAN_WARN} orphaned"
+                      echo "Alert triggered     : $tg_alert"
+                  } | tee -a audit_report.txt
+
+                  {
+                      echo "TG_TOTAL=$tg_total"
+                      echo "TG_ORPHANED=$tg_orphaned"
+                      echo "TG_QUOTA=$tg_quota"
+                      echo "TG_USAGE_PERCENT=$tg_usage_percent"
+                      echo "TG_ALERT=$tg_alert"
+                  } >> "$GITHUB_OUTPUT"
+
             - name: Determine Slack channel
               if: steps.region-check.outputs.region_disabled != 'true'
               id: slack-channel
@@ -413,6 +499,73 @@ jobs:
                             "text": {
                               "type": "mrkdwn",
                               "text": "ℹ️ This is a *dry-run* audit of permanent resources. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
+                            }
+                          },
+                          {
+                            "type": "context",
+                            "elements": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "Run date: ${{ steps.slack-message.outputs.run_date }}"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+
+            - name: Post ELBv2 target group audit to Slack
+              if: steps.region-check.outputs.region_disabled != 'true' && steps.tg-audit.outputs.TG_ALERT == 'true'
+              uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: |
+                      {
+                        "channel": "${{ steps.slack-channel.outputs.channel }}",
+                        "unfurl_links": false,
+                        "unfurl_media": false,
+                        "text": "⚠️ ELBv2 target group quota headroom - ${{ matrix.region }}",
+                        "blocks": [
+                          {
+                            "type": "header",
+                            "text": {
+                              "type": "plain_text",
+                              "text": "⚠️ ELBv2 Target Group Quota Headroom",
+                              "emoji": true
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "fields": [
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Region:*\n${{ matrix.region }}"
+                              },
+                              {
+                                "type": "mrkdwn",
+                                "text": "*Utilization:*\n${{ steps.tg-audit.outputs.TG_USAGE_PERCENT }}% of ${{ steps.tg-audit.outputs.TG_QUOTA }}"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "*Target groups:* ${{ steps.tg-audit.outputs.TG_TOTAL }} total, *${{ steps.tg-audit.outputs.TG_ORPHANED }} orphaned* (not attached to any load balancer)."
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "${{ env.SLACK_MENTION }} investigate: orphaned target groups are usually leftovers from deleted Kubernetes Services of type=LoadBalancer (OpenShift router, ingress-nginx, Contour, Submariner). cloud-nuke does not remove them, so they keep accumulating until they exhaust the regional quota and break new ingress load balancer creation with a TooManyTargetGroups error."
+                            }
+                          },
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "ℹ️ This is a *read-only* audit. No resources were deleted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full audit report>"
                             }
                           },
                           {

@@ -253,3 +253,28 @@ if [ -n "$log_groups" ]; then
         execute_or_simulate "aws logs delete-log-group --region $region --log-group-name \"$log_group\"" || true
     done
 fi
+
+echo "Deleting orphaned ELBv2 Target Groups"
+# ELBv2 target groups are NOT handled by cloud-nuke. Target groups created by
+# in-cluster controllers for Kubernetes Services of type=LoadBalancer (OpenShift
+# router, ingress-nginx, Contour, Submariner, ...) are left behind when their
+# load balancer or the whole cluster is destroyed. They silently pile up and
+# eventually exhaust the regional "Target Groups per Region" quota (default 3000),
+# which breaks new ingress load balancer creation with a TooManyTargetGroups error.
+#
+# Delete every target group that is no longer associated with a load balancer
+# (empty LoadBalancerArns). cloud-nuke removes the load balancers (here or on a
+# previous nightly run), so the set of orphaned target groups converges over the
+# schedule. A target group still referenced by a listener cannot be deleted and
+# is skipped (best-effort, must not abort the rest of the cleanup under set -e).
+target_group_arns=$(paginate "aws elbv2 describe-target-groups --region $region" "TargetGroups[?length(LoadBalancerArns)==\`0\`].TargetGroupArn")
+
+if [ -n "$target_group_arns" ]; then
+    read -r -a target_group_arns_array <<< "$target_group_arns"
+
+    for target_group_arn in "${target_group_arns_array[@]}"
+    do
+        echo "Deleting orphaned Target Group: $target_group_arn"
+        execute_or_simulate "aws elbv2 delete-target-group --region $region --target-group-arn $target_group_arn" || true
+    done
+fi
