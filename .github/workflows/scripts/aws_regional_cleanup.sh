@@ -267,14 +267,29 @@ echo "Deleting orphaned ELBv2 Target Groups"
 # previous nightly run), so the set of orphaned target groups converges over the
 # schedule. A target group still referenced by a listener cannot be deleted and
 # is skipped (best-effort, must not abort the rest of the cleanup under set -e).
-target_group_arns=$(paginate "aws elbv2 describe-target-groups --region $region" "TargetGroups[?length(LoadBalancerArns)==\`0\`].TargetGroupArn")
+#
+# `aws --output text` returns one page (up to 400 items) per line, tab-separated
+# within a line, so normalise the result to one ARN per line. A plain `read -a`
+# stops at the first newline and would only ever process the first page (~400),
+# leaving a large backlog to drain 400 at a time. Deletions run in parallel:
+# a leaked backlog can be thousands of target groups, far more than a sequential
+# loop can delete within this step's time budget.
+target_group_arns=$(paginate "aws elbv2 describe-target-groups --region $region" "TargetGroups[?length(LoadBalancerArns)==\`0\`].TargetGroupArn" | tr '\t' '\n' | grep -v '^$' || true)
 
 if [ -n "$target_group_arns" ]; then
-    read -r -a target_group_arns_array <<< "$target_group_arns"
-
-    for target_group_arn in "${target_group_arns_array[@]}"
-    do
-        echo "Deleting orphaned Target Group: $target_group_arn"
-        execute_or_simulate "aws elbv2 delete-target-group --region $region --target-group-arn $target_group_arn" || true
-    done
+    echo "Found $(echo "$target_group_arns" | grep -c .) orphaned target group(s) to delete"
+    if [ "$DRY_RUN" = true ]; then
+        while IFS= read -r target_group_arn; do
+            echo "[DRY RUN] Would execute: aws elbv2 delete-target-group --region $region --target-group-arn $target_group_arn"
+        done <<< "$target_group_arns"
+    else
+        # -P 10: modest parallelism to drain large backlogs within the time budget.
+        # Each delete is best-effort: a target group still wired to a listener
+        # returns an error which we ignore so a single failure can't abort the sweep.
+        # The ARN is passed as a positional arg ($2), never interpolated into the
+        # inner script, to avoid any shell injection.
+        # shellcheck disable=SC2016
+        echo "$target_group_arns" | xargs -P 10 -I{} sh -c \
+            'echo "Deleting orphaned Target Group: $2"; aws elbv2 delete-target-group --region "$1" --target-group-arn "$2" || true' _ "$region" {}
+    fi
 fi
