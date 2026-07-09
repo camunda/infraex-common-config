@@ -95,3 +95,9 @@ This provides visibility into the permanent infrastructure without affecting any
 S3 uses a single, account-wide global namespace and every bucket is pinned to one home region. The per-region audit therefore **excludes S3** and a dedicated `aws-s3-global-audit` job lists all buckets once (`aws s3api list-buckets`) and compares them against the allowlist.
 
 This avoids a blind spot: auditing S3 per-region would silently skip any bucket whose home region is excluded from the per-region matrix (e.g. `us-east-1`, see `AWS_EXCLUDED_REGIONS`). Approved buckets are listed under `aws.global.s3` in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml), regardless of region.
+
+###### ELBv2 target groups (quota headroom)
+
+cloud-nuke does not report ELBv2 target groups. Target groups created for Kubernetes Services of type `LoadBalancer` (OpenShift router, ingress-nginx, Contour, Submariner, ...) are left behind when their load balancer or cluster is deleted, and they silently accumulate until they reach the regional **Target Groups per Region** quota (default 3000). Hitting the cap breaks new ingress load balancer creation with a `TooManyTargetGroups` error.
+
+The audit therefore counts, per permanent region, the total and orphaned (unattached) target groups and compares them against the regional quota. It posts a Slack warning when utilization reaches `ELBV2_TG_USAGE_WARN_PERCENT` (default 80%) of the quota, or when the number of orphaned target groups reaches `ELBV2_TG_ORPHAN_WARN` (default 50). In the CI regions, these orphaned target groups are deleted automatically by the [nightly cleanup](.github/workflows/aws_nightly_cleanup.yml).
