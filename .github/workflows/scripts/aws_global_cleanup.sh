@@ -6,6 +6,15 @@ set -euxo pipefail
 # Default value for DRY_RUN is false
 DRY_RUN=${DRY_RUN:-false}
 
+# Resources tagged with this key=value are treated as permanent and skipped by
+# every deletion loop below. This lets long-lived demos / reference architectures
+# survive the weekly cleanup without hardcoding their names here: the owning IaC
+# applies the tag (e.g. via the AWS provider default_tags) and any AWS resource
+# carrying it is preserved. See camunda/camunda-deployment-references
+# (aws_openshift_rosa_hcp_dual_region_tests.yml, keep_alive mode).
+PERMANENT_TAG_KEY="${PERMANENT_TAG_KEY:-infraex-permanent}"
+PERMANENT_TAG_VALUE="${PERMANENT_TAG_VALUE:-true}"
+
 SKIP_ROLES=(
   "AWS*"
   "AmazonEKS*"
@@ -44,6 +53,18 @@ execute_or_simulate() {
     else
         eval "$cmd"
     fi
+}
+
+# Reads AWS "Key<TAB>Value" tag lines on stdin (aws ... --query 'Tags[].[Key,Value]'
+# --output text) and returns success when the permanent-protection tag is present.
+#
+# Fail-open by design: callers read tags with `2>/dev/null`, so a resource with no
+# tags — or a transient tag-read error — yields no match and follows the normal
+# deletion path instead of silently disabling the whole cleanup. Permanent
+# resources are additionally protected by living in a non-nuked permanent region.
+has_permanent_tag() {
+    awk -v k="$PERMANENT_TAG_KEY" -v v="$PERMANENT_TAG_VALUE" \
+        'BEGIN { found = 1 } $1 == k && $2 == v { found = 0 } END { exit found }'
 }
 
 # Function to paginate through AWS CLI output
@@ -162,6 +183,12 @@ if [ -n "$usernames" ]; then
             continue
         fi
 
+        if aws iam list-user-tags --user-name "$username" \
+            --query 'Tags[].[Key,Value]' --output text 2>/dev/null | has_permanent_tag; then
+            echo "Skipping user: $username (tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE)"
+            continue
+        fi
+
         echo "Processing user: $username"
         attached_policy_arns=$(paginate "aws iam list-attached-user-policies --user-name $username" "AttachedPolicies[].PolicyArn")
 
@@ -219,6 +246,12 @@ if [ -n "$role_arns" ]; then
         done
 
         if [ "$skip" = true ]; then
+            continue
+        fi
+
+        if aws iam list-role-tags --role-name "$role_arn" \
+            --query 'Tags[].[Key,Value]' --output text 2>/dev/null | has_permanent_tag; then
+            echo "Skipping role: $role_arn (tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE)"
             continue
         fi
 
@@ -287,6 +320,12 @@ if [ -n "$iam_policies" ]; then
             continue
         fi
 
+        if aws iam list-policy-tags --policy-arn "$iam_policy" \
+            --query 'Tags[].[Key,Value]' --output text 2>/dev/null | has_permanent_tag; then
+            echo "Skipping policy: $iam_policy (tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE)"
+            continue
+        fi
+
         echo "Deleting policy: $iam_policy"
 
         # Delete all non-default policy versions first (required before policy deletion)
@@ -318,6 +357,9 @@ if [ -n "$bucket_ids" ]; then
     do
         if echo "${keeplist_buckets[@]}" | grep -qw "$bucket"; then
             echo "Bucket $bucket is in the keeplist, skipping deletion."
+        elif aws s3api get-bucket-tagging --bucket "$bucket" \
+            --query 'TagSet[].[Key,Value]' --output text 2>/dev/null | has_permanent_tag; then
+            echo "Bucket $bucket is tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE, skipping deletion."
         else
             echo "Emptying bucket (all object versions and delete markers): $bucket"
             empty_bucket "$bucket"
@@ -338,6 +380,12 @@ if [ -n "$identity_providers" ]; then
     do
         if [[ "$provider" == *DO_NOT_DELETE* ]]; then
             echo "Skipping provider: $provider (marked as DO_NOT_DELETE)"
+            continue
+        fi
+
+        if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$provider" \
+            --query 'Tags[].[Key,Value]' --output text 2>/dev/null | has_permanent_tag; then
+            echo "Skipping provider: $provider (tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE)"
             continue
         fi
 
@@ -368,6 +416,17 @@ if [ -n "$hosted_zones" ]; then
         # Skip protected zones
         if [[ "$zone_name" == *DO_NOT_DELETE* ]]; then
             echo "Skipping hosted zone: $zone_name (protected)"
+            continue
+        fi
+
+        # Skip zones explicitly tagged permanent. NOTE: for ROSA/HyperShift the
+        # in-account *.hypershift.local / rosa.*.openshiftapps.com zones are created
+        # out-of-band by the service and may not carry this tag (see PR description).
+        zone_tags=$(aws route53 list-tags-for-resource --resource-type hostedzone \
+            --resource-id "$zone_id" --query 'ResourceTagSet.Tags[].[Key,Value]' \
+            --output text 2>/dev/null || true)
+        if printf '%s\n' "$zone_tags" | has_permanent_tag; then
+            echo "Skipping hosted zone: $zone_name ($zone_id) (tagged $PERMANENT_TAG_KEY=$PERMANENT_TAG_VALUE)"
             continue
         fi
 
