@@ -285,7 +285,7 @@ runs:
         - name: Notify in Slack in case of failure
           id: slack-notification
           if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
+          uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
           with:
               method: chat.postMessage
               token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
