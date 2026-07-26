@@ -68,10 +68,10 @@ jobs:
         outputs:
             regions: ${{ steps.get-regions.outputs.regions }}
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@58acfa8b2431d0cb640525e4818b409140c28a31 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@1eb60a9d6aa47f3e4b6f5af806ec111ad2dcad18 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -97,7 +97,7 @@ jobs:
                 region: ${{ fromJson(needs.aws-list-regions.outputs.regions) }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
               uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
@@ -115,7 +115,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@58acfa8b2431d0cb640525e4818b409140c28a31 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@1eb60a9d6aa47f3e4b6f5af806ec111ad2dcad18 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -585,7 +585,7 @@ jobs:
         needs: triage
         if: needs.triage.outputs.run_aws == 'true'
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
               uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
@@ -603,7 +603,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@58acfa8b2431d0cb640525e4818b409140c28a31 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@1eb60a9d6aa47f3e4b6f5af806ec111ad2dcad18 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -806,7 +806,7 @@ jobs:
         outputs:
             regions: ${{ steps.get-regions.outputs.regions }}
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Import Secrets
               id: secrets
@@ -849,7 +849,7 @@ jobs:
                 region: ${{ fromJson(needs.azure-list-regions.outputs.regions) }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
               uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
@@ -1109,7 +1109,7 @@ jobs:
             - azure-list-regions
             - azure-permanent-audit
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Notify in Slack in case of failure
               id: slack-notification
