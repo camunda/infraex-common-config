@@ -29,7 +29,7 @@ jobs:
         if: contains(github.head_ref || github.ref, 'renovate/')
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Check author and type of change
               id: check-major
@@ -68,7 +68,7 @@ jobs:
 
             - name: Generate token for GitHub
               id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@305de9730455a10c1df97262d42ced69855f2b16 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8f6fae58d4594d3a700982c6642d9de28a950fcc # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
