@@ -448,7 +448,7 @@ jobs:
 
             - name: Post Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.cloud-nuke-audit.outputs.UNALLOWLISTED_COUNT > 0
-              uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
+              uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
@@ -515,7 +515,7 @@ jobs:
 
             - name: Post ELBv2 target group audit to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.tg-audit.outputs.TG_ALERT == 'true'
-              uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
+              uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
@@ -732,7 +732,7 @@ jobs:
 
             - name: Post Audit Report to Slack
               if: steps.s3-audit.outputs.UNALLOWLISTED_COUNT > 0
-              uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
+              uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
@@ -1034,7 +1034,7 @@ jobs:
 
             - name: Post Azure Audit Report to Slack
               if: steps.region-check.outputs.region_disabled != 'true' && steps.azure-audit.outputs.UNALLOWLISTED_RG_COUNT > 0
-              uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
+              uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
               with:
                   method: chat.postMessage
                   token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
