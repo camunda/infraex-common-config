@@ -233,30 +233,30 @@ if [ -n "$role_arns" ]; then
                 echo "Removing attached policy: $policy_arn"
                 execute_or_simulate "aws iam detach-role-policy --role-name $role_arn --policy-arn $policy_arn"
             done
+        fi
 
-            policy_arns=$(paginate "aws iam list-role-policies --role-name $role_arn" "PolicyNames")
+        policy_arns=$(paginate "aws iam list-role-policies --role-name $role_arn" "PolicyNames")
 
-            if [ -n "$policy_arns" ]; then
-                policy_arns_array=($(echo "$policy_arns" | tr '\n' ' '))
+        if [ -n "$policy_arns" ]; then
+            policy_arns_array=($(echo "$policy_arns" | tr '\n' ' '))
 
-                for policy_name in "${policy_arns_array[@]}"
-                do
-                    echo "Deleting role policy: $policy_name"
-                    execute_or_simulate "aws iam delete-role-policy --role-name $role_arn --policy-name $policy_name"
-                done
-            fi
+            for policy_name in "${policy_arns_array[@]}"
+            do
+                echo "Deleting role policy: $policy_name"
+                execute_or_simulate "aws iam delete-role-policy --role-name $role_arn --policy-name $policy_name"
+            done
+        fi
 
-            instance_profile_arns=$(paginate "aws iam list-instance-profiles-for-role --role-name $role_arn" "InstanceProfiles[].InstanceProfileName")
+        instance_profile_arns=$(paginate "aws iam list-instance-profiles-for-role --role-name $role_arn" "InstanceProfiles[].InstanceProfileName")
 
-            if [ -n "$instance_profile_arns" ]; then
-                instance_profile_arns_array=($(echo "$instance_profile_arns" | tr '\n' ' '))
+        if [ -n "$instance_profile_arns" ]; then
+            instance_profile_arns_array=($(echo "$instance_profile_arns" | tr '\n' ' '))
 
-                for instance_profile_arn in "${instance_profile_arns_array[@]}"
-                do
-                    echo "Removing instance profile: $instance_profile_arn"
-                    execute_or_simulate "aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile_arn --role-name $role_arn"
-                done
-            fi
+            for instance_profile_arn in "${instance_profile_arns_array[@]}"
+            do
+                echo "Removing instance profile: $instance_profile_arn"
+                execute_or_simulate "aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile_arn --role-name $role_arn"
+            done
         fi
 
         echo "Deleting role: $role_arn"
