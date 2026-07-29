@@ -105,7 +105,18 @@ jobs:
                     - region: eu-west-3
                       day: All
                       cleanup_older_than: 12h
+                    # Third CI region, used by the multi-region reference
+                    # architectures that need more than two regions to keep a
+                    # Raft quorum. Opt-in region: see the accessibility guard below.
+                    - region: eu-central-2
+                      day: All
+                      cleanup_older_than: 12h
                     - region: eu-north-1
+                      day: Saturday
+                      cleanup_older_than: 0h
+                    # Fourth region available to multi-region work, kept weekly so
+                    # a topology can survive a work week. Opt-in region.
+                    - region: eu-south-1
                       day: Saturday
                       cleanup_older_than: 0h
                     - region: us-east-1
@@ -189,6 +200,27 @@ jobs:
                   vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   aws-profile: ${{ env.AWS_PROFILE }}
                   aws-region: ${{ matrix.config.region }}
+
+            # Some of the regions above are AWS opt-in regions: they only answer
+            # once enabled on the account. Skip them instead of failing the whole
+            # nightly run (and paging #infraex on Slack) while enablement is
+            # pending. Mirrors the guard in permanent_resources_audit.yml.
+            - name: Check region accessibility
+              if: ${{ env.should_run == 'true' }}
+              run: |
+                  REGION="${{ env.AWS_REGION }}"
+                  if OUTPUT=$(aws ec2 describe-availability-zones --region "$REGION" 2>&1); then
+                      echo "✅ Region $REGION is accessible"
+                      exit 0
+                  fi
+                  if echo "$OUTPUT" | grep -qiE 'UnauthorizedOperation|AuthFailure|OptInRequired|InvalidClientTokenId|AccessDenied|not enabled|not subscribed'; then
+                      echo "⏭️ Region $REGION is not enabled on this account (opt-in required). Skipping its cleanup."
+                      echo "should_run=false" | tee -a "$GITHUB_ENV"
+                      exit 0
+                  fi
+                  echo "❌ Unexpected error checking region $REGION:"
+                  echo "$OUTPUT"
+                  exit 1
 
             - name: Install Cloud Nuke
               if: ${{ env.should_run == 'true' }}

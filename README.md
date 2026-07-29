@@ -32,6 +32,12 @@ CI Regions are designated specifically for **Continuous Integration (CI) tests**
 |------------|------------|------------------|
 | EU (London)| eu-west-2  | Daily @5AM       |
 | EU (Paris) | eu-west-3  | Daily @5AM       |
+| EU (Zurich)| eu-central-2 | Daily @5AM     |
+
+`eu-central-2` is the third daily region, added for the multi-region reference architectures: three regions is the smallest topology where a Camunda Zeebe cluster keeps its Raft quorum after losing one region.
+
+> [!IMPORTANT]
+> `eu-central-2` is an AWS **opt-in** region and must be enabled on the account before it is usable. Until it is, the nightly cleanup detects that it is not accessible and skips it instead of failing.
 
 ##### Azure Regions
 
@@ -50,8 +56,14 @@ To keep the environment organized, all resources in these regions are automatica
 | Region              | Identifier   | Cleanup Schedule |
 |---------------------|--------------|------------------|
 | EU (Stockholm)      | eu-north-1   | Saturday @5AM    |
+| EU (Milan)          | eu-south-1   | Saturday @5AM    |
 | US East (N. Virginia) | us-east-1 | Saturday @5AM    |
 | US East (Ohio) | us-east-2 | Saturday @5AM    |
+
+`eu-south-1` gives multi-region work a fourth region that survives a work week.
+
+> [!IMPORTANT]
+> `eu-south-1` is an AWS **opt-in** region and must be enabled on the account before it is usable. Until it is, the weekly cleanup detects that it is not accessible and skips it instead of failing.
 
 ##### Azure Regions
 
