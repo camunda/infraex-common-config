@@ -235,27 +235,27 @@ if [ -n "$role_arns" ]; then
             done
         fi
 
-        policy_arns=$(paginate "aws iam list-role-policies --role-name $role_arn" "PolicyNames")
+        inline_policy_names=$(paginate "aws iam list-role-policies --role-name $role_arn" "PolicyNames")
 
-        if [ -n "$policy_arns" ]; then
-            policy_arns_array=($(echo "$policy_arns" | tr '\n' ' '))
+        if [ -n "$inline_policy_names" ]; then
+            inline_policy_names_array=($(echo "$inline_policy_names" | tr '\n' ' '))
 
-            for policy_name in "${policy_arns_array[@]}"
+            for policy_name in "${inline_policy_names_array[@]}"
             do
                 echo "Deleting role policy: $policy_name"
                 execute_or_simulate "aws iam delete-role-policy --role-name $role_arn --policy-name $policy_name"
             done
         fi
 
-        instance_profile_arns=$(paginate "aws iam list-instance-profiles-for-role --role-name $role_arn" "InstanceProfiles[].InstanceProfileName")
+        instance_profile_names=$(paginate "aws iam list-instance-profiles-for-role --role-name $role_arn" "InstanceProfiles[].InstanceProfileName")
 
-        if [ -n "$instance_profile_arns" ]; then
-            instance_profile_arns_array=($(echo "$instance_profile_arns" | tr '\n' ' '))
+        if [ -n "$instance_profile_names" ]; then
+            instance_profile_names_array=($(echo "$instance_profile_names" | tr '\n' ' '))
 
-            for instance_profile_arn in "${instance_profile_arns_array[@]}"
+            for instance_profile_name in "${instance_profile_names_array[@]}"
             do
-                echo "Removing instance profile: $instance_profile_arn"
-                execute_or_simulate "aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile_arn --role-name $role_arn"
+                echo "Removing instance profile: $instance_profile_name"
+                execute_or_simulate "aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile_name --role-name $role_arn"
             done
         fi
 
