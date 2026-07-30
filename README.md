@@ -72,7 +72,7 @@ To keep the environment organized, all resources in these regions are automatica
 
 Both are enabled, declared in [infraex-terraform `aws/regions.tf`](https://github.com/camunda/infraex-terraform/blob/main/aws/regions.tf) rather than clicked in the console, so the nightly drift detection notices if one is turned off again.
 
-Before adding another opt-in region to a cleanup schedule, enable it there first. The cleanup skips a region that is not opted in — with a warning annotation — instead of failing the whole run, so the ordering is forgiving, but a region left disabled is not being swept and its resources keep incurring charges.
+Enable an opt-in region there **before** adding it to a cleanup schedule. The cleanup does not tolerate a region it cannot reach: it fails loudly, which is deliberate. A region that stops being reachable is not being swept, and a disabled region keeps incurring charges for resources that are no longer visible — that must page someone, not degrade quietly.
 
 #### Permanent Regions
 

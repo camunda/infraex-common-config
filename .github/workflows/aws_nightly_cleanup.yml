@@ -107,7 +107,7 @@ jobs:
                       cleanup_older_than: 12h
                     # Third CI region, used by the multi-region reference
                     # architectures that need more than two regions to keep a
-                    # Raft quorum. Opt-in region: see the opt-in status guard below.
+                    # Raft quorum.
                     - region: eu-central-2
                       day: All
                       cleanup_older_than: 12h
@@ -115,8 +115,7 @@ jobs:
                       day: Saturday
                       cleanup_older_than: 0h
                     # Fourth region available to multi-region work, kept weekly so
-                    # a topology can survive a work week. Opt-in region: see the opt-in
-                    # status guard below.
+                    # a topology can survive a work week.
                     - region: eu-south-1
                       day: Saturday
                       cleanup_older_than: 0h
@@ -201,65 +200,6 @@ jobs:
                   vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
                   aws-profile: ${{ env.AWS_PROFILE }}
                   aws-region: ${{ matrix.config.region }}
-
-            # Some of the regions above are AWS opt-in regions: they cannot be
-            # used until the account opts in. Skip those instead of failing the
-            # whole nightly run (and paging #infraex on Slack) while enablement
-            # is pending.
-            #
-            # The opt-in status is read authoritatively from DescribeRegions
-            # rather than inferred from the error text of a call to the region
-            # itself. Matching error strings would also swallow generic
-            # credential and permission failures (AuthFailure, AccessDenied,
-            # InvalidClientTokenId), silently skipping the cleanup and leaking
-            # resources behind a green run.
-            #
-            # The query is issued against a region that is enabled by default,
-            # so a broken credential fails the call — and therefore the step —
-            # instead of being misread as "region disabled".
-            - name: Check region opt-in status
-              if: ${{ env.should_run == 'true' }}
-              env:
-                  # Enabled by default (launched before March 2019), so it always
-                  # answers as long as the credentials are valid.
-                  QUERY_REGION: eu-west-2
-              run: |
-                  REGION="${{ env.AWS_REGION }}"
-
-                  # Fails the step on a credential or permission error, which is
-                  # the behaviour we want: a cleanup that cannot run must be
-                  # loud, not silently skipped.
-                  OPT_STATUS=$(aws ec2 describe-regions \
-                      --region "$QUERY_REGION" \
-                      --all-regions \
-                      --region-names "$REGION" \
-                      --query 'Regions[0].OptInStatus' \
-                      --output text)
-
-                  case "$OPT_STATUS" in
-                      opted-in|opt-in-not-required)
-                          echo "✅ Region $REGION is enabled ($OPT_STATUS)"
-                          ;;
-                      not-opted-in)
-                          # Skipping rather than failing keeps a newly added
-                          # opt-in region from breaking the nightly run before
-                          # it is enabled.
-                          #
-                          # It is still surfaced as a warning, because the other
-                          # way to reach this state is a region that WAS enabled
-                          # being disabled again — and a disabled region keeps
-                          # billing for resources that are now unreachable and
-                          # no longer swept. That must not hide behind a green
-                          # run.
-                          echo "::warning title=Region $REGION not enabled::Skipping cleanup for $REGION ($OPT_STATUS). If this region is expected to be enabled, resources in it are no longer being swept and keep incurring charges."
-                          echo "⏭️ Region $REGION is not enabled on this account ($OPT_STATUS). Skipping its cleanup."
-                          echo "should_run=false" | tee -a "$GITHUB_ENV"
-                          ;;
-                      *)
-                          echo "❌ Unexpected opt-in status for $REGION: '$OPT_STATUS'" >&2
-                          exit 1
-                          ;;
-                  esac
 
             - name: Install Cloud Nuke
               if: ${{ env.should_run == 'true' }}
