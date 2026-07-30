@@ -240,6 +240,17 @@ jobs:
                           echo "✅ Region $REGION is enabled ($OPT_STATUS)"
                           ;;
                       not-opted-in)
+                          # Skipping rather than failing keeps a newly added
+                          # opt-in region from breaking the nightly run before
+                          # it is enabled.
+                          #
+                          # It is still surfaced as a warning, because the other
+                          # way to reach this state is a region that WAS enabled
+                          # being disabled again — and a disabled region keeps
+                          # billing for resources that are now unreachable and
+                          # no longer swept. That must not hide behind a green
+                          # run.
+                          echo "::warning title=Region $REGION not enabled::Skipping cleanup for $REGION ($OPT_STATUS). If this region is expected to be enabled, resources in it are no longer being swept and keep incurring charges."
                           echo "⏭️ Region $REGION is not enabled on this account ($OPT_STATUS). Skipping its cleanup."
                           echo "should_run=false" | tee -a "$GITHUB_ENV"
                           ;;

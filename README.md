@@ -36,9 +36,6 @@ CI Regions are designated specifically for **Continuous Integration (CI) tests**
 
 `eu-central-2` is the third daily region, added for the multi-region reference architectures: three regions is the smallest topology where a Camunda Zeebe cluster keeps its Raft quorum after losing one region.
 
-> [!IMPORTANT]
-> `eu-central-2` is an AWS **opt-in** region and must be enabled on the account before it is usable. Until it is, the nightly cleanup detects that it is not accessible and skips it instead of failing.
-
 ##### Azure Regions
 
 | Region         | Identifier   | Cleanup Schedule       |
@@ -62,15 +59,20 @@ To keep the environment organized, all resources in these regions are automatica
 
 `eu-south-1` gives multi-region work a fourth region that survives a work week.
 
-> [!IMPORTANT]
-> `eu-south-1` is an AWS **opt-in** region and must be enabled on the account before it is usable. Until it is, the weekly cleanup detects that it is not accessible and skips it instead of failing.
-
 ##### Azure Regions
 
 | Region         | Identifier   | Cleanup Schedule          |
 |----------------|--------------|-------------------------|
 | Spain Central  | spaincentral | Saturday @5AM     |
 
+
+#### Opt-in Regions
+
+`eu-central-2` (Zurich) and `eu-south-1` (Milan) are AWS **opt-in** regions: regions launched after 20 March 2019 are disabled by default and must be enabled on the account before anything can be created in them. Every other region above predates that cutoff and is enabled by default, which AWS does not allow to be disabled.
+
+Both are enabled, declared in [infraex-terraform `aws/regions.tf`](https://github.com/camunda/infraex-terraform/blob/main/aws/regions.tf) rather than clicked in the console, so the nightly drift detection notices if one is turned off again.
+
+Before adding another opt-in region to a cleanup schedule, enable it there first. The cleanup skips a region that is not opted in — with a warning annotation — instead of failing the whole run, so the ordering is forgiving, but a region left disabled is not being swept and its resources keep incurring charges.
 
 #### Permanent Regions
 
