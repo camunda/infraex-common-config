@@ -107,7 +107,7 @@ jobs:
                       cleanup_older_than: 12h
                     # Third CI region, used by the multi-region reference
                     # architectures that need more than two regions to keep a
-                    # Raft quorum. Opt-in region: see the accessibility guard below.
+                    # Raft quorum. Opt-in region: see the opt-in status guard below.
                     - region: eu-central-2
                       day: All
                       cleanup_older_than: 12h
@@ -115,7 +115,8 @@ jobs:
                       day: Saturday
                       cleanup_older_than: 0h
                     # Fourth region available to multi-region work, kept weekly so
-                    # a topology can survive a work week. Opt-in region.
+                    # a topology can survive a work week. Opt-in region: see the opt-in
+                    # status guard below.
                     - region: eu-south-1
                       day: Saturday
                       cleanup_older_than: 0h
