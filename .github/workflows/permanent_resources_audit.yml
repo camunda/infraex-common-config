@@ -35,7 +35,7 @@ env:
     SLACK_MENTION: ${{ github.event_name != 'pull_request' && '<!subteam^S06NTRBMWUD> please' || 'Please' }}
 
     # Regions excluded from permanent audit as they are cleaned daily or weekly (see README.md)
-    AWS_EXCLUDED_REGIONS: '["eu-west-2", "eu-west-3", "eu-north-1", "us-east-1", "us-east-2"]'
+    AWS_EXCLUDED_REGIONS: '["eu-west-2", "eu-west-3", "eu-central-2", "eu-north-1", "eu-south-1", "us-east-1", "us-east-2"]'
     AZURE_EXCLUDED_REGIONS: '["swedencentral", "spaincentral"]'
 
     # ELBv2 target group quota headroom audit thresholds. cloud-nuke does not

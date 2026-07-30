@@ -105,7 +105,18 @@ jobs:
                     - region: eu-west-3
                       day: All
                       cleanup_older_than: 12h
+                    # Third CI region, used by the multi-region reference
+                    # architectures that need more than two regions to keep a
+                    # Raft quorum.
+                    - region: eu-central-2
+                      day: All
+                      cleanup_older_than: 12h
                     - region: eu-north-1
+                      day: Saturday
+                      cleanup_older_than: 0h
+                    # Fourth region available to multi-region work, kept weekly so
+                    # a topology can survive a work week.
+                    - region: eu-south-1
                       day: Saturday
                       cleanup_older_than: 0h
                     - region: us-east-1
