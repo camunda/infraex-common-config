@@ -77,7 +77,7 @@ runs:
           # step and the analyzer trigger step, so gating it on
           # disable_silence_check leaves the trigger step without a token
           # when the silence check is disabled.
-          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@8f6fae58d4594d3a700982c6642d9de28a950fcc # main
+          uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
               github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
