@@ -279,7 +279,28 @@ jobs:
                   --exclude-resource-type cloudtrail \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type guard-duty \
-                  --exclude-resource-type s3
+                  --exclude-resource-type s3 \
+                  2>&1 | tee cloud-nuke-strict.log
+
+            # cloud-nuke exits 0 when it cannot even *list* a resource type, so a
+            # region we are no longer allowed to reach reports "Nothing to nuke,
+            # you're all good!" and this job goes green while sweeping nothing.
+            # A revoked IAM permission, an Organizations SCP, expired credentials,
+            # a disabled region or a partial outage all produce that same silent
+            # success, and whatever the sweep failed to delete keeps costing money
+            # with nobody told. The strict run is meant to be the gate, so make it
+            # actually gate.
+            - name: Assert Cloud Nuke could enumerate resources
+              if: ${{ env.should_run == 'true' }}
+              run: |
+                  # Both markers come from cloud-nuke's own per-resource-type report:
+                  #   | vpc | Unable to retrieve vpc | vpc: failed to list resources in eu-central-2
+                  if grep -nE 'failed to list resources|Unable to retrieve' cloud-nuke-strict.log; then
+                      echo "::error title=Cloud Nuke could not enumerate resources in ${{ env.AWS_REGION }}::The sweep exited 0 but could not list the resource types reported above, so this region was not cleaned. Check the credentials, the IAM permissions and any Organizations SCP covering the region."
+                      exit 1
+                  fi
+
+                  echo "cloud-nuke enumerated every resource type in ${{ env.AWS_REGION }}."
 
     notify-on-failure:
         runs-on: ubuntu-latest
