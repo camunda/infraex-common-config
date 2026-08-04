@@ -247,6 +247,11 @@ jobs:
             # killing the step, unlike a shell-level `|| true`).
             # We're ignoring ec2-dhcp-option as they couldn't be deleted
             # cloudtrail is managed by IT and can't be deleted either
+            # macie-member and ses-receipt-filter do not exist in every region
+            # (Macie and SES receipt rules are not offered in eu-central-2, for
+            # one), so cloud-nuke cannot list them there. We never create either,
+            # so excluding them costs no coverage and keeps the enumeration check
+            # below meaningful: it can then treat *any* listing failure as real.
             - name: Run Cloud Nuke (best-effort)
               timeout-minutes: 90
               continue-on-error: true
@@ -261,7 +266,9 @@ jobs:
                   --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type guard-duty \
+                  --exclude-resource-type macie-member \
                   --exclude-resource-type s3 \
+                  --exclude-resource-type ses-receipt-filter \
                   --exclude-resource-type cloudtrail
 
             # The second run should remove the remaining resources (VPCs) and fail if there's anything left
@@ -279,7 +286,9 @@ jobs:
                   --exclude-resource-type cloudtrail \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type guard-duty \
+                  --exclude-resource-type macie-member \
                   --exclude-resource-type s3 \
+                  --exclude-resource-type ses-receipt-filter \
                   2>&1 | tee cloud-nuke-strict.log
 
             # cloud-nuke exits 0 when it cannot even *list* a resource type, so a
