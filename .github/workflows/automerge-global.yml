@@ -65,36 +65,3 @@ jobs:
                   ignore_pattern: renovate-automerge / approve-and-auto-merge # due to a bug, this action does not work well with workflow call, we need to specify the name of the calling workflow
                   delay: 30s # wait 30s before checking
                   timeout: 10800 # 3 hours timeout
-
-            - name: Generate token for GitHub
-              id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
-            - name: Approve Pull Request and auto-merge
-              if: env.skip == 'false'
-              run: |
-                  : # Approve the PR and add a comment with workflow reference
-                  workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-                  : # Check if the PR has already been approved and prevent multiple comments
-                  approved=$(gh pr view ${{ github.event.pull_request.number }} --json reviewDecision --jq '.reviewDecision')
-
-                  if [ "$approved" = "APPROVED" ]; then
-                    echo "This PR has already been approved."
-                  else
-                    gh pr review ${{ github.event.pull_request.number }} --approve
-                    gh pr comment ${{ github.event.pull_request.number }} --body "This PR has been auto-approved as it does not involve major changes. Workflow run: [See details](${workflow_url})"
-                  fi
-
-                  gh pr merge ${{ github.event.pull_request.number }} --squash
-              env:
-                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
