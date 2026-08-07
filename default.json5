@@ -155,6 +155,7 @@
       matchPackageNames: [
         'amazon-eks',
         'amazon-rds-postgresql',
+        'aurora-mysql',
         'aurora-postgresql',
         'ghcr.io/cloudnative-pg/postgresql',
         'opensearch',
@@ -167,7 +168,7 @@
       draftPR: true,
       prBodyNotes: [
         '⚠️ **Breaking Changes Possible** ⚠️',
-        "This update includes a new major version of a core infrastructure component (Amazon EKS, OpenSearch, OpenShift, or a PostgreSQL engine/image). See this rule's `matchPackageNames` for the exact set.",
+        "This update includes a new major version of a core infrastructure component (Amazon EKS, OpenSearch, OpenShift, or a PostgreSQL/MySQL engine/image). See this rule's `matchPackageNames` for the exact set.",
         'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
         'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
       ],
@@ -298,6 +299,10 @@
     },
     'aurora-pg-camunda': {
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_postgres_versions.txt',
+      'format': 'plain',
+    },
+    'aurora-mysql-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_mysql_versions.txt',
       'format': 'plain',
     },
     // Bitnami Premium image tags published by camunda-deployment-references, one
