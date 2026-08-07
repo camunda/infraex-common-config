@@ -9,10 +9,13 @@ aws:
     # approved bucket here, regardless of the region it physically lives in.
     global:
         # S3 buckets
+        #
+        # Keep in sync with the canonical keeplist consumed by aws_global_cleanup.sh:
+        # https://github.com/camunda/infraex-terraform/blob/main/aws/s3-buckets.yml
+        # A bucket listed here but absent from that file is still deleted by the
+        # weekly global cleanup, so the audit would keep reporting it as missing.
         s3:
             - general-purpose-bucket-that-will-not-be-deleted
-            - infraex-terraform-state
-            - infraex-artifacts
             - tests-eks-tf-state-eu-central-1
             - tests-c8-multi-region-es-eu-central-1
             - tests-rosa-tf-state-eu-central-1
