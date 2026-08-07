@@ -484,3 +484,71 @@ if [ -n "$target_group_arns" ]; then
             'echo "Deleting orphaned Target Group: $2"; aws elbv2 delete-target-group --region "$1" --target-group-arn "$2" || true' _ "$region" {}
     fi
 fi
+
+echo "Deleting abandoned ECS clusters"
+# cloud-nuke cannot remove these. An ECS cluster exposes no creation timestamp,
+# and cloud-nuke excludes every resource without one as soon as a time filter is
+# set. Confirmed against v0.52.0, which logs for each cluster:
+#   DEBUG  Resource has no creation time but a time filter is set - excluding for safety
+# The filter is always set, even when --older-than is omitted, so the ecs-cluster
+# resource type is inert for this account and clusters pile up indefinitely.
+#
+# Age is reconstructed from a first-seen tag, the only way to date a resource the
+# API refuses to timestamp. cloud-nuke already writes `cloud-nuke-first-seen` on
+# every cluster it scans, and leaves the value untouched on later runs, so it is
+# reused here: the clock then starts at the first nightly sweep that ever saw the
+# cluster rather than at the first sweep running this code. Our own tag is written
+# only as a fallback, so this keeps working if cloud-nuke ever stops tagging.
+#
+# Two guards keep it safe:
+#   - a cluster is only ever a candidate while completely idle, so one sitting
+#     between two deployments is never at risk;
+#   - it must then stay idle for the whole cleanup window before anything happens.
+ECS_CLOUD_NUKE_TAG="cloud-nuke-first-seen"
+ECS_FALLBACK_TAG="infraex-cleanup-first-seen"
+
+ecs_cluster_arns=$(paginate "aws ecs list-clusters --region $region" "clusterArns[]" | tr '\t' '\n' | sed '/^$/d')
+
+if [ -n "$ecs_cluster_arns" ]; then
+    while IFS= read -r cluster_arn
+    do
+        if [ -z "$cluster_arn" ]; then
+            continue
+        fi
+        cluster_name="${cluster_arn##*/}"
+
+        # A cluster still holding instances, tasks or services is in use, whatever
+        # its age. Counts are read in one call and summed.
+        in_use=$(aws ecs describe-clusters --region "$region" --clusters "$cluster_arn" \
+            --query 'clusters[0].[registeredContainerInstancesCount,runningTasksCount,pendingTasksCount,activeServicesCount]' \
+            --output text 2>/dev/null | tr '\t' '\n' | awk '{ total += $1 } END { print total + 0 }')
+        if [ "${in_use:-1}" -ne 0 ]; then
+            echo "Skipping ECS cluster: $cluster_name (still in use)"
+            continue
+        fi
+
+        cluster_tags=$(aws ecs list-tags-for-resource --region "$region" --resource-arn "$cluster_arn" --output json 2>/dev/null || echo '{}')
+        first_seen=$(echo "$cluster_tags" | jq -r --arg primary "$ECS_CLOUD_NUKE_TAG" --arg fallback "$ECS_FALLBACK_TAG" \
+            '(.tags // []) | (map(select(.key == $primary)) + map(select(.key == $fallback)))[0].value // ""' 2>/dev/null || true)
+
+        if [ -z "$first_seen" ] || [ "$first_seen" = "null" ]; then
+            # First idle sighting and cloud-nuke has not tagged it yet, which is
+            # expected since it runs after this script. Record the date and leave
+            # the cluster alone. Tagging is best-effort: an untaggable cluster is
+            # simply reconsidered next run rather than aborting the sweep.
+            echo "Recording first idle sighting of ECS cluster: $cluster_name"
+            execute_or_simulate "aws ecs tag-resource --region $region --resource-arn $cluster_arn --tags key=$ECS_FALLBACK_TAG,value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+            continue
+        fi
+
+        if ! is_old_enough "$(iso_to_epoch "$first_seen")"; then
+            echo "Skipping ECS cluster: $cluster_name (idle since $first_seen, too recent)"
+            continue
+        fi
+
+        echo "Deleting ECS cluster: $cluster_name (idle since $first_seen)"
+        # Best-effort: a cluster still referenced by a capacity provider or a
+        # draining instance cannot be deleted and must not abort the sweep.
+        execute_or_simulate "aws ecs delete-cluster --region $region --cluster $cluster_arn" || true
+    done <<< "$ecs_cluster_arns"
+fi
