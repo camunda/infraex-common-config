@@ -19,6 +19,7 @@ on:
             - .github/workflows/scripts/aws_global_cleanup.sh
             - .github/workflows/scripts/aws_global_db_teardown.sh
             - .github/workflows/scripts/aws_regional_cleanup.sh
+            - .github/workflows/scripts/aws_route53_cleanup.sh
 
 env:
     AWS_PROFILE: infraex
@@ -215,6 +216,16 @@ jobs:
               timeout-minutes: 15
               if: ${{ env.should_run == 'true' }}
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
+
+            # Runs before cloud-nuke, so the load balancers of the environment being
+            # torn down tonight are still alive and their records are kept. cloud-nuke
+            # removes those load balancers below, and tomorrow's run deletes the
+            # records. Orphans therefore drain with a one-day lag, like the orphaned
+            # target groups handled in aws_regional_cleanup.sh.
+            - name: Delete orphaned Route53 records
+              timeout-minutes: 20
+              if: ${{ env.should_run == 'true' }}
+              run: .github/workflows/scripts/aws_route53_cleanup.sh "${{ env.AWS_REGION }}"
 
             # this token is used to clone the github repository containing the base modules
             - name: Generate token for GitHub
