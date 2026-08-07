@@ -7,6 +7,18 @@ set -euxo pipefail
 # Default value for DRY_RUN is false
 DRY_RUN=${DRY_RUN:-false}
 
+# Resources younger than this window are left alone.
+#
+# cloud-nuke runs *after* this script in the same job with the same window and
+# deliberately spares resources younger than it. This script must honour the same
+# window, otherwise it deletes the dependencies of a cluster cloud-nuke is about
+# to keep: the cluster stays up but silently loses IRSA (every pod using a
+# service-account role stops getting credentials) with no error surfaced anywhere.
+#
+# Same value as the cloud-nuke `--older-than` flag, e.g. "12h". "0h" disables the
+# filter (weekly regions, where everything is expected to go).
+CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-0h}"
+
 # Check if the region argument is provided
 if [ -z "$1" ]; then
     echo "Please provide the AWS region as the first argument."
@@ -14,6 +26,13 @@ if [ -z "$1" ]; then
 fi
 
 region="$1"
+
+cleanup_older_than_hours="${CLEANUP_OLDER_THAN%h}"
+if ! [[ "$cleanup_older_than_hours" =~ ^[0-9]+$ ]]; then
+    echo "CLEANUP_OLDER_THAN must be a number of hours such as '12h' (got '$CLEANUP_OLDER_THAN')."
+    exit 1
+fi
+age_cutoff_epoch=$(( $(date -u +%s) - cleanup_older_than_hours * 3600 ))
 
 echo "Deleting additional resources in the $region region..."
 
@@ -58,6 +77,79 @@ paginate() {
     done
 }
 
+# Converts an ISO-8601 timestamp to epoch seconds, or prints nothing if it cannot
+# be parsed. AWS returns both offset-aware ("...+02:00", "...Z") and naive
+# ("2026-08-06T14:39:35", always UTC) forms depending on the API, so naive values
+# are pinned to UTC rather than to the runner's local timezone.
+# python3 is used instead of `date` because GNU and BSD date disagree on both
+# parsing and epoch formatting, and this script runs on CI and on laptops.
+iso_to_epoch() {
+    python3 -c '
+import sys, datetime
+try:
+    parsed = datetime.datetime.fromisoformat(sys.argv[1].strip().replace("Z", "+00:00"))
+except ValueError:
+    sys.exit(0)
+if parsed.tzinfo is None:
+    parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+print(int(parsed.timestamp()))
+' "$1" 2>/dev/null || true
+}
+
+# Returns 0 when a resource created at $1 (epoch seconds) is old enough to delete.
+# An unknown timestamp fails closed and keeps the resource: a missed deletion is
+# picked up by the next nightly run, a wrong deletion is not recoverable.
+is_old_enough() {
+    local created_epoch="$1"
+
+    # No window configured: age is irrelevant, everything is in scope.
+    if [ "$cleanup_older_than_hours" -eq 0 ]; then
+        return 0
+    fi
+    if [ -z "$created_epoch" ]; then
+        return 1
+    fi
+
+    [ "$created_epoch" -le "$age_cutoff_epoch" ]
+}
+
+# EKS clusters that still exist in this region, and the OIDC issuer id of each.
+# These are the clusters cloud-nuke will keep (too young) or has not reached yet;
+# their OIDC provider and control-plane log group must survive with them.
+live_eks_clusters=$(aws eks list-clusters --region "$region" --query 'clusters[]' --output text 2>/dev/null || true)
+
+live_oidc_ids=""
+for live_cluster in $live_eks_clusters; do
+    cluster_issuer=$(aws eks describe-cluster --region "$region" --name "$live_cluster" \
+        --query 'cluster.identity.oidc.issuer' --output text 2>/dev/null || true)
+    if [ -n "$cluster_issuer" ] && [ "$cluster_issuer" != "None" ]; then
+        # Issuer looks like https://oidc.eks.<region>.amazonaws.com/id/<ID>
+        live_oidc_ids="$live_oidc_ids ${cluster_issuer##*/}"
+    fi
+done
+
+# Returns 0 when $1 mentions the name of an EKS cluster that still exists.
+# Some resources (VPC peering connections) expose no creation timestamp at all in
+# the AWS API, so their Name tag is the only signal available. Best-effort by
+# design: it only ever keeps more resources than the age filter would.
+references_live_cluster() {
+    local haystack="$1"
+    local candidate
+
+    if [ -z "$haystack" ] || [ "$haystack" = "None" ]; then
+        return 1
+    fi
+    for candidate in $live_eks_clusters; do
+        if [[ "$haystack" == *"$candidate"* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+echo "Age filter: keeping resources newer than ${cleanup_older_than_hours}h"
+echo "Live EKS clusters in $region: ${live_eks_clusters:-<none>}"
+
 echo "Deleting OIDC Providers"
 # Delete OIDC Provider
 oidc_providers=$(paginate "aws iam list-open-id-connect-providers" "OpenIDConnectProviderList[?contains(Arn, '$region')].Arn")
@@ -67,6 +159,22 @@ if [ -n "$oidc_providers" ]; then
 
     for oidc_provider in "${oidc_providers_array[@]}"
     do
+        # An OIDC provider whose EKS cluster is still alive is load-bearing:
+        # removing it breaks IRSA instantly for every pod on that cluster.
+        oidc_id="${oidc_provider##*/}"
+        if [[ " $live_oidc_ids " == *" $oidc_id "* ]]; then
+            echo "Skipping OIDC Provider: $oidc_provider (its EKS cluster still exists)"
+            continue
+        fi
+
+        oidc_created=$(aws iam get-open-id-connect-provider \
+            --open-id-connect-provider-arn "$oidc_provider" \
+            --query 'CreateDate' --output text 2>/dev/null || true)
+        if ! is_old_enough "$(iso_to_epoch "$oidc_created")"; then
+            echo "Skipping OIDC Provider: $oidc_provider (created $oidc_created, too recent)"
+            continue
+        fi
+
         echo "Deleting OIDC Provider: $oidc_provider"
         execute_or_simulate "aws iam delete-open-id-connect-provider --open-id-connect-provider-arn $oidc_provider"
     done
@@ -81,6 +189,18 @@ if [ -n "$peering_connection_ids" ]; then
 
     for peering_connection_id in "${peering_connection_ids_array[@]}"
     do
+        # Dual-region tests peer the VPC of two live clusters. The EC2 API exposes
+        # no creation time for a peering connection, so fall back to its Name tag:
+        # tearing this down mid-test breaks cross-region connectivity.
+        peering_name=$(aws ec2 describe-vpc-peering-connections --region "$region" \
+            --vpc-peering-connection-ids "$peering_connection_id" \
+            --query "VpcPeeringConnections[0].Tags[?Key==\`Name\`].Value | [0]" \
+            --output text 2>/dev/null || true)
+        if references_live_cluster "$peering_name"; then
+            echo "Skipping VPC Peering Connection: $peering_connection_id ($peering_name references a live cluster)"
+            continue
+        fi
+
         echo "Deleting VPC Peering Connection: $peering_connection_id"
         execute_or_simulate "aws ec2 delete-vpc-peering-connection --region $region --vpc-peering-connection-id $peering_connection_id"
     done
@@ -96,6 +216,24 @@ if [ -n "$client_vpn_endpoint_ids" ]; then
     for cvpn_id in "${client_vpn_ids_array[@]}"
     do
         echo "Processing Client VPN Endpoint: $cvpn_id"
+
+        cvpn_details=$(aws ec2 describe-client-vpn-endpoints --region "$region" \
+            --client-vpn-endpoint-ids "$cvpn_id" \
+            --query "ClientVpnEndpoints[0].[CreationTime,Tags[?Key==\`Name\`].Value|[0]]" \
+            --output text 2>/dev/null || true)
+        cvpn_created=$(echo "$cvpn_details" | cut -f1)
+        cvpn_name=$(echo "$cvpn_details" | cut -f2)
+
+        # A Client VPN endpoint is how engineers reach a private cluster. Removing
+        # one that belongs to a cluster still running cuts access to a live test.
+        if references_live_cluster "$cvpn_name"; then
+            echo "Skipping Client VPN Endpoint: $cvpn_id ($cvpn_name references a live cluster)"
+            continue
+        fi
+        if ! is_old_enough "$(iso_to_epoch "$cvpn_created")"; then
+            echo "Skipping Client VPN Endpoint: $cvpn_id (created $cvpn_created, too recent)"
+            continue
+        fi
 
         # Disassociate target networks
         associations=$(aws ec2 describe-client-vpn-target-networks \
@@ -146,8 +284,16 @@ if [ -n "$user_pool_ids" ]; then
     do
         echo "Processing Cognito User Pool: $user_pool_id"
 
-        # Get and delete the domain first (required before deleting the User Pool)
-        domain=$(aws cognito-idp describe-user-pool --region "$region" --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text 2>/dev/null || true)
+        # Domain and creation date come from the same call: the domain must be
+        # deleted before the pool, the date decides whether we touch it at all.
+        user_pool_details=$(aws cognito-idp describe-user-pool --region "$region" --user-pool-id "$user_pool_id" --query 'UserPool.[Domain,CreationDate]' --output text 2>/dev/null || true)
+        domain=$(echo "$user_pool_details" | cut -f1)
+        user_pool_created=$(echo "$user_pool_details" | cut -f2)
+
+        if ! is_old_enough "$(iso_to_epoch "$user_pool_created")"; then
+            echo "Skipping Cognito User Pool: $user_pool_id (created $user_pool_created, too recent)"
+            continue
+        fi
 
         if [ -n "$domain" ] && [ "$domain" != "None" ]; then
             echo "Deleting Cognito User Pool Domain: $domain"
@@ -182,6 +328,13 @@ if [ -n "$cert_arns" ]; then
 
     for cert_arn in "${cert_arns_array[@]}"
     do
+        cert_created=$(aws acm describe-certificate --region "$region" --certificate-arn "$cert_arn" \
+            --query 'Certificate.CreatedAt' --output text 2>/dev/null || true)
+        if ! is_old_enough "$(iso_to_epoch "$cert_created")"; then
+            echo "Skipping ACM Certificate: $cert_arn (created $cert_created, too recent)"
+            continue
+        fi
+
         echo "Deleting ACM Certificate: $cert_arn"
         # Note: This will fail if the certificate is in use by another AWS resource
         execute_or_simulate "aws acm delete-certificate --region $region --certificate-arn $cert_arn" || true
@@ -218,16 +371,26 @@ fi
 echo "Deleting unattached Elastic IPs"
 # Delete Elastic IPs that are not associated with any instance or network interface
 # Unattached EIPs cost ~$3.65/month each
-eip_allocations=$(aws ec2 describe-addresses --region "$region" --query 'Addresses[?!AssociationId].AllocationId' --output text || true)
+eip_allocations=$(aws ec2 describe-addresses --region "$region" --query "Addresses[?!AssociationId].[AllocationId,Tags[?Key==\`Name\`].Value|[0]]" --output text || true)
 
 if [ -n "$eip_allocations" ]; then
-    read -r -a eip_allocations_array <<< "$eip_allocations"
-
-    for allocation_id in "${eip_allocations_array[@]}"
+    while IFS=$'\t' read -r allocation_id eip_name
     do
+        if [ -z "$allocation_id" ]; then
+            continue
+        fi
+
+        # An EIP has no creation timestamp in the EC2 API. The Name tag is the
+        # only way to tell an address orphaned by a destroyed cluster from one a
+        # live cluster has allocated but not yet associated.
+        if references_live_cluster "$eip_name"; then
+            echo "Skipping Elastic IP: $allocation_id ($eip_name references a live cluster)"
+            continue
+        fi
+
         echo "Releasing Elastic IP: $allocation_id"
         execute_or_simulate "aws ec2 release-address --region $region --allocation-id $allocation_id"
-    done
+    done <<< "$eip_allocations"
 fi
 
 echo "Deleting CloudWatch Log Groups"
@@ -235,15 +398,35 @@ echo "Deleting CloudWatch Log Groups"
 # ephemeral test regions, where log groups left behind by deleted resources
 # (EKS control-plane, ECS Container Insights, VPC flow logs, ECS task logs, ...)
 # should be cleaned up too. Only skip those explicitly marked DO_NOT_DELETE.
-log_groups=$(paginate "aws logs describe-log-groups --region $region" "logGroups[].logGroupName")
+# Name and creation time are fetched together: a log group is skipped when it
+# belongs to a cluster that is still running (deleting the control-plane log
+# group of a live cluster destroys the only trace of what it is doing) or when
+# it is younger than the cleanup window. `creationTime` is in milliseconds.
+log_groups=$(paginate "aws logs describe-log-groups --region $region" "logGroups[].[logGroupName,creationTime]")
 
 if [ -n "$log_groups" ]; then
-    read -r -a log_groups_array <<< "$log_groups"
-
-    for log_group in "${log_groups_array[@]}"
+    while IFS=$'\t' read -r log_group log_group_created_ms
     do
+        if [ -z "$log_group" ]; then
+            continue
+        fi
+
         if [[ "$log_group" == *DO_NOT_DELETE* ]]; then
             echo "Skipping log group: $log_group (protected)"
+            continue
+        fi
+
+        if references_live_cluster "$log_group"; then
+            echo "Skipping log group: $log_group (references a live cluster)"
+            continue
+        fi
+
+        log_group_created_epoch=""
+        if [[ "$log_group_created_ms" =~ ^[0-9]+$ ]]; then
+            log_group_created_epoch=$(( log_group_created_ms / 1000 ))
+        fi
+        if ! is_old_enough "$log_group_created_epoch"; then
+            echo "Skipping log group: $log_group (too recent)"
             continue
         fi
 
@@ -251,7 +434,7 @@ if [ -n "$log_groups" ]; then
         # Best-effort: a genuinely undeletable / service-managed log group must
         # not abort the rest of the cleanup (set -e).
         execute_or_simulate "aws logs delete-log-group --region $region --log-group-name \"$log_group\"" || true
-    done
+    done <<< "$log_groups"
 fi
 
 echo "Deleting orphaned ELBv2 Target Groups"
@@ -274,6 +457,14 @@ echo "Deleting orphaned ELBv2 Target Groups"
 # leaving a large backlog to drain 400 at a time. Deletions run in parallel:
 # a leaked backlog can be thousands of target groups, far more than a sequential
 # loop can delete within this step's time budget.
+#
+# No age filter here: ELBv2 exposes no creation timestamp for a target group, and
+# resolving each one's owning cluster would cost one describe-tags call per target
+# group, which the backlog size above rules out. `LoadBalancerArns == 0` is the
+# guard instead - such a target group serves no load balancer, so deleting it
+# cannot break live traffic. Residual risk is the few seconds between an
+# in-cluster controller creating a target group and attaching it to its load
+# balancer; the controller recreates it on the next reconcile.
 target_group_arns=$(paginate "aws elbv2 describe-target-groups --region $region" "TargetGroups[?length(LoadBalancerArns)==\`0\`].TargetGroupArn" | tr '\t' '\n' | grep -v '^$' || true)
 
 if [ -n "$target_group_arns" ]; then
