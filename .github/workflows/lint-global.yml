@@ -11,6 +11,12 @@ on:
                 default: renovate[bot]
                 type: string
 
+# The auto-fix commit is pushed with a dedicated, repository-scoped GitHub App token,
+# never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
+# including the pre-commit steps which install and execute third-party hook code.
+permissions:
+    contents: read
+
 jobs:
     lint:
         name: pre-commit
@@ -20,8 +26,17 @@ jobs:
             # This step is required as we want to use the bot for the checkout,
             # this way, the auto-fix step will commit using this user
             - name: Set autofix_pr environment variable
+              env:
+                  ACTOR: ${{ github.actor }}
+                  AUTOFIX_ACTOR: ${{ inputs.autofix-actor }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+                  BASE_REPO: ${{ github.repository }}
               run: |
-                  if [[ "${{ github.actor }}" == "${{ inputs.autofix-actor }}" && "${{ github.event_name }}" == "pull_request" ]]; then
+                  # Auto-fix needs a privileged App token, so it is restricted to the designated
+                  # bot actor AND to same-repository pull requests. A fork head is never checked
+                  # out while that token is available to the job.
+                  if [[ "${ACTOR}" == "${AUTOFIX_ACTOR}" && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
                     echo "autofix_pr=true" | tee -a "$GITHUB_ENV"
                   else
                     echo "autofix_pr=false" | tee -a "$GITHUB_ENV"
@@ -36,6 +51,10 @@ jobs:
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
                   github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
                   github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  # Scope the installation token to the repository under test. Without an explicit
+                  # `repositories`, a token requested for an owner is valid for every repository of
+                  # the installation, with every permission the App holds.
+                  repositories: ${{ github.event.repository.name }}
                   vault-auth-method: approle
                   vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
                   vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
@@ -46,11 +65,19 @@ jobs:
               # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
                   token: ${{ steps.generate-github-token.outputs.token }}
-                  repository: ${{ github.event.pull_request.head.repo.full_name }}
+                  # Same-repository PRs only, enforced by the autofix_pr guard above.
+                  repository: ${{ github.repository }}
                   ref: ${{ github.event.pull_request.head.ref }}
+                  # The auto-fix commit is created through the GitHub API by
+                  # getsentry/action-github-commit, so no git credential is needed after checkout.
+                  # Leaving it persisted would expose the App token on the runner while pre-commit
+                  # executes third-party hook code.
+                  persist-credentials: false
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               if: env.autofix_pr == 'false'
+              with:
+                  persist-credentials: false
 
             # TODO: Renable when switching back to upstream actionlint
             # - name: Centralized Actionlint
@@ -64,7 +91,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
@@ -85,7 +112,7 @@ jobs:
               # We want to apply automatic fixes made by pre-commit.
               if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
-              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # main
+              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
               with:
                   github-token: ${{ steps.generate-github-token.outputs.token }}
                   message: 'chore: update files from pre-commit run'
