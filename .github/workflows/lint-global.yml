@@ -16,45 +16,28 @@ jobs:
         name: pre-commit
         runs-on: ubuntu-latest
         timeout-minutes: 10
+        # Repository-supplied pre-commit hooks execute in this job, so it holds no
+        # credential and references no secret. See INC-7027.
+        permissions:
+            contents: read
+        outputs:
+            has_fixes: ${{ steps.patch.outputs.has_fixes }}
+            autofix_pr: ${{ steps.mode.outputs.autofix_pr }}
         steps:
-            # This step is required as we want to use the bot for the checkout,
-            # this way, the auto-fix step will commit using this user
-            - name: Set autofix_pr environment variable
+            - name: Set autofix_pr output
+              id: mode
               run: |
                   if [[ "${{ github.actor }}" == "${{ inputs.autofix-actor }}" && "${{ github.event_name }}" == "pull_request" ]]; then
-                    echo "autofix_pr=true" | tee -a "$GITHUB_ENV"
+                    echo "autofix_pr=true" | tee -a "$GITHUB_OUTPUT"
                   else
-                    echo "autofix_pr=false" | tee -a "$GITHUB_ENV"
+                    echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
                   fi
 
-            - name: Generate token for GitHub
-              id: generate-github-token
-              if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'true'
-              # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
               with:
-                  token: ${{ steps.generate-github-token.outputs.token }}
-                  repository: ${{ github.event.pull_request.head.repo.full_name }}
-                  ref: ${{ github.event.pull_request.head.ref }}
-
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'false'
-
-            # TODO: Renable when switching back to upstream actionlint
-            # - name: Centralized Actionlint
-            #   uses: camunda/infra-global-github-actions/actionlint@4c0c3611b80ac8e147f7991092a0e282b52c48fa # main
+                  repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+                  ref: ${{ github.event.pull_request.head.ref || github.ref }}
+                  persist-credentials: false
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
@@ -73,19 +56,100 @@ jobs:
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-              if: always() && env.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
+              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
 
-            - name: Commit Changes made by pre-commit fix
-              # This workflow checks the files after the first pre-commit run.
-              # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
-              # If the issue persists, it means pre-commit was unable to resolve it.
-              # We want to apply automatic fixes made by pre-commit.
-              if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-                  == 'success'
-              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # main
+            - name: Produce patch
+              id: patch
+              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
+                  && steps.pre_commit_check_second_run.outcome == 'success'
+              run: |
+                  set -euo pipefail
+                  git diff --binary > autofix.patch
+                  if [ ! -s autofix.patch ]; then
+                    echo "has_fixes=false" | tee -a "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
+                  git diff --stat
+
+            - name: Upload patch
+              if: steps.patch.outputs.has_fixes == 'true'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  github-token: ${{ steps.generate-github-token.outputs.token }}
-                  message: 'chore: update files from pre-commit run'
+                  name: pre-commit-autofix-patch
+                  path: autofix.patch
+                  retention-days: 1
+
+    autofix-apply:
+        name: Commit pre-commit fixes
+        needs: lint
+        if: always() && needs.lint.outputs.autofix_pr == 'true' && needs.lint.outputs.has_fixes == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            # Fresh runner. No pre-commit hook code has executed here, so there is no
+            # planted git hook, PATH shim or BASH_ENV able to intercept the token below.
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ github.event.pull_request.head.repo.full_name }}
+                  ref: ${{ github.event.pull_request.head.ref }}
+                  persist-credentials: false
+
+            - name: Download patch
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: pre-commit-autofix-patch
+
+            - name: Apply patch
+              run: |
+                  set -euo pipefail
+                  # The patch is produced from repository-supplied hook code, so it is untrusted
+                  # input. Applying it is data handling rather than code execution, but a patch that
+                  # rewrote CI would be a way to escalate later, so workflow changes are refused
+                  # here and left for a human to make deliberately.
+                  if git apply --numstat -z autofix.patch \
+                     | tr '\0' '\n' \
+                     | grep -qE '^\.github/'; then
+                    echo "::error::pre-commit wants to change files under .github/; refusing to autofix."
+                    echo "::error::Run pre-commit locally and commit those changes yourself."
+                    git apply --numstat autofix.patch
+                    exit 1
+                  fi
+                  git apply --index autofix.patch
+                  rm -f autofix.patch
+
+            - name: Commit and push
+              env:
+                  GH_APP_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+              run: |
+                  set -euo pipefail
+                  if git diff --cached --quiet; then
+                    echo "No changes to commit."
+                    exit 0
+                  fi
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git commit -m 'chore: update files from pre-commit run'
+                  # Credential supplied per-command; never written to .git/config or argv.
+                  git -c credential.helper= \
+                      -c credential.helper='!f() { echo username=x-access-token; echo "password=${GH_APP_TOKEN}"; }; f' \
+                      push origin "HEAD:${HEAD_REF}"
