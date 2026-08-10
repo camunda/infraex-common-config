@@ -35,8 +35,11 @@ jobs:
         name: pre-commit
         runs-on: ubuntu-latest
         timeout-minutes: 10
-        # Repository-supplied pre-commit hooks execute in this job. It therefore holds no
-        # credential and references no secret: it only produces a patch as an artifact.
+        # Repository-supplied pre-commit hooks execute in this job, so it is handed nothing
+        # worth stealing: no App token, no `secrets.*` reference, and a GITHUB_TOKEN held to
+        # `contents: read` by the workflow-level permissions and never written to disk, since
+        # both checkouts set `persist-credentials: false`. Its only output is a patch, passed
+        # to autofix-apply as an artifact.
         outputs:
             autofix_pr: ${{ steps.mode.outputs.autofix_pr }}
             has_fixes: ${{ steps.patch.outputs.has_fixes }}
