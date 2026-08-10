@@ -83,9 +83,9 @@ runs:
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
           env:
-              # detect-arch echoes `inputs.arch` back out verbatim when it is not "auto", so this
-              # output is as caller-controlled as the input is. Expanding it into the script
-              # would undo the point of routing `inputs.arch` through env in the first place.
+              # This output carries `inputs.arch` whenever the caller supplied one. detect-arch
+              # constrains it to [A-Za-z0-9_-]+, and passing it through env keeps it out of the
+              # script text regardless — the two together, not either alone.
               DETECTED_ARCH: ${{ steps.detect-arch.outputs.arch }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
               INPUTS_VERSION: ${{ inputs.version }}
