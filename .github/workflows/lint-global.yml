@@ -11,46 +11,54 @@ on:
                 default: renovate[bot]
                 type: string
 
+# The auto-fix commit is created with a dedicated GitHub App token in a separate job,
+# never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
+# including the pre-commit steps which install and execute third-party hook code.
+permissions:
+    contents: read
+
 jobs:
     lint:
         name: pre-commit
         runs-on: ubuntu-latest
         timeout-minutes: 10
+        # Repository-supplied pre-commit hooks execute in this job. It therefore holds no
+        # credential and references no secret: it only produces a patch as an artifact.
+        outputs:
+            autofix_pr: ${{ steps.mode.outputs.autofix_pr }}
+            has_fixes: ${{ steps.patch.outputs.has_fixes }}
         steps:
-            # This step is required as we want to use the bot for the checkout,
-            # this way, the auto-fix step will commit using this user
-            - name: Set autofix_pr environment variable
+            - name: Determine whether this run may auto-fix
+              id: mode
+              env:
+                  ACTOR: ${{ github.actor }}
+                  AUTOFIX_ACTOR: ${{ inputs.autofix-actor }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+                  BASE_REPO: ${{ github.repository }}
               run: |
-                  if [[ "${{ github.actor }}" == "${{ inputs.autofix-actor }}" && "${{ github.event_name }}" == "pull_request" ]]; then
-                    echo "autofix_pr=true" | tee -a "$GITHUB_ENV"
+                  # Auto-fix needs a privileged App token, so it is restricted to the designated
+                  # bot actor AND to same-repository pull requests. A fork head is never checked
+                  # out in the job that holds that token.
+                  if [[ "${ACTOR}" == "${AUTOFIX_ACTOR}" && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
+                    echo "autofix_pr=true" | tee -a "$GITHUB_OUTPUT"
                   else
-                    echo "autofix_pr=false" | tee -a "$GITHUB_ENV"
+                    echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
                   fi
 
-            - name: Generate token for GitHub
-              id: generate-github-token
-              if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
+            # On the auto-fix path we lint the PR head itself, because the resulting patch is
+            # committed back onto that branch. Elsewhere the default checkout (merge result on
+            # pull_request) is kept.
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'true'
-              # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
+              if: steps.mode.outputs.autofix_pr == 'true'
               with:
-                  token: ${{ steps.generate-github-token.outputs.token }}
-                  repository: ${{ github.event.pull_request.head.repo.full_name }}
                   ref: ${{ github.event.pull_request.head.ref }}
+                  persist-credentials: false
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'false'
+              if: steps.mode.outputs.autofix_pr == 'false'
+              with:
+                  persist-credentials: false
 
             # TODO: Renable when switching back to upstream actionlint
             # - name: Centralized Actionlint
@@ -64,7 +72,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
@@ -73,19 +81,92 @@ jobs:
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-              if: always() && env.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
+              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
 
-            - name: Commit Changes made by pre-commit fix
-              # This workflow checks the files after the first pre-commit run.
-              # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
-              # If the issue persists, it means pre-commit was unable to resolve it.
-              # We want to apply automatic fixes made by pre-commit.
-              if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+            # The first pre-commit run checks the files. If the second run passes, pre-commit
+            # applied automatic fixes; if it still fails, pre-commit could not resolve the issue
+            # and there is nothing to commit.
+            - name: Produce auto-fix patch
+              id: patch
+              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
-              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # main
+              run: |
+                  set -euo pipefail
+                  git add --all
+                  git diff --cached --binary > autofix.patch
+                  if [ ! -s autofix.patch ]; then
+                    echo "has_fixes=false" | tee -a "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
+                  git diff --cached --stat
+
+            - name: Upload auto-fix patch
+              if: steps.patch.outputs.has_fixes == 'true'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: pre-commit-autofix-patch
+                  path: autofix.patch
+                  retention-days: 1
+
+    autofix-apply:
+        name: Commit pre-commit fixes
+        needs: lint
+        # `lint` reports failure whenever pre-commit had something to fix, so this job must not
+        # depend on its conclusion — only on the outputs it published.
+        if: ${{ !cancelled() && needs.lint.outputs.autofix_pr == 'true' && needs.lint.outputs.has_fixes == 'true' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            # Fresh runner: no pre-commit hook code has executed here, so there is no planted git
+            # hook, PATH shim or BASH_ENV able to intercept the token minted below.
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  # Pin the installation token to the repository under test rather than relying on
+                  # the composite action's default.
+                  repositories: ${{ github.event.repository.name }}
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+
+            # Same-repository PRs only, enforced by the autofix_pr guard in the lint job, so the
+            # default `repository` is the PR head repository.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.ref }}
+                  # The commit is created through the GitHub API by getsentry/action-github-commit,
+                  # so no git credential is needed after checkout.
+                  persist-credentials: false
+
+            - name: Download auto-fix patch
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: pre-commit-autofix-patch
+
+            - name: Apply auto-fix patch
+              run: |
+                  set -euo pipefail
+                  git apply --stat autofix.patch
+                  # Leave the changes unstaged: action-github-commit collects them with
+                  # `git ls-files -om`, which compares the working tree against the index.
+                  if ! git apply autofix.patch; then
+                    echo "::error::Could not apply the pre-commit patch, most likely because the branch moved between jobs. Re-run the workflow."
+                    exit 1
+                  fi
+                  rm -f autofix.patch
+
+            - name: Commit Changes made by pre-commit fix
+              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
               with:
                   github-token: ${{ steps.generate-github-token.outputs.token }}
                   message: 'chore: update files from pre-commit run'
