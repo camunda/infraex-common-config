@@ -10,47 +10,80 @@ on:
                 description: Name of the actor that will trigger auto-fix
                 default: renovate[bot]
                 type: string
+            autofix-max-changed-lines:
+                description: |
+                    Refuse to auto-commit a pre-commit patch that adds or removes more than this
+                    many lines. Bounds a runaway or broken hook; a human still has to look at
+                    anything bigger.
+                default: 200
+                type: number
+            autofix-max-patch-bytes:
+                description: |
+                    Refuse to auto-commit a pre-commit patch larger than this, in bytes. Catches
+                    bulk content (binaries, generated blobs) that a line count does not.
+                default: 65536
+                type: number
+
+# The auto-fix commit is created with a dedicated GitHub App token in a separate job,
+# never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
+# including the pre-commit steps which install and execute third-party hook code.
+permissions:
+    contents: read
 
 jobs:
     lint:
         name: pre-commit
         runs-on: ubuntu-latest
         timeout-minutes: 10
+        # Repository-supplied pre-commit hooks execute in this job, so it is handed nothing
+        # worth stealing: no App token, no `secrets.*` reference, and a GITHUB_TOKEN held to
+        # `contents: read` by the workflow-level permissions and never written to disk, since
+        # both checkouts set `persist-credentials: false`. Its only output is a patch, passed
+        # to autofix-apply as an artifact.
+        outputs:
+            autofix_pr: ${{ steps.mode.outputs.autofix_pr }}
+            has_fixes: ${{ steps.patch.outputs.has_fixes }}
+            artifact_name: ${{ steps.mode.outputs.artifact_name }}
         steps:
-            # This step is required as we want to use the bot for the checkout,
-            # this way, the auto-fix step will commit using this user
-            - name: Set autofix_pr environment variable
+            - name: Determine whether this run may auto-fix
+              id: mode
+              env:
+                  ACTOR: ${{ github.actor }}
+                  AUTOFIX_ACTOR: ${{ inputs.autofix-actor }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+                  BASE_REPO: ${{ github.repository }}
               run: |
-                  if [[ "${{ github.actor }}" == "${{ inputs.autofix-actor }}" && "${{ github.event_name }}" == "pull_request" ]]; then
-                    echo "autofix_pr=true" | tee -a "$GITHUB_ENV"
+                  set -euo pipefail
+                  # Auto-fix needs a privileged App token, so it is restricted to the designated
+                  # bot actor AND to same-repository pull requests. A fork head is never checked
+                  # out in the job that holds that token.
+                  if [[ "${ACTOR}" == "${AUTOFIX_ACTOR}" && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
+                    echo "autofix_pr=true" | tee -a "$GITHUB_OUTPUT"
                   else
-                    echo "autofix_pr=false" | tee -a "$GITHUB_ENV"
+                    echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
                   fi
 
-            - name: Generate token for GitHub
-              id: generate-github-token
-              if: env.autofix_pr == 'true'
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
+                  # Artifact names are unique per workflow *run*, not per job, and this workflow
+                  # is reusable: a caller can invoke it twice in one run, or through a matrix.
+                  # A fixed name would make the second upload fail and let each instance download
+                  # the other's patch. Generated here rather than exposed as an input, because an
+                  # input only protects callers who already know about this.
+                  echo "artifact_name=pre-commit-autofix-patch-$(openssl rand -hex 8)" | tee -a "$GITHUB_OUTPUT"
 
+            # On the auto-fix path we lint the PR head itself, because the resulting patch is
+            # committed back onto that branch. Elsewhere the default checkout (merge result on
+            # pull_request) is kept.
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'true'
-              # see http>s://github.com/EndBug/add-and-commit?tab=readme-ov-file#working-with-prs
+              if: steps.mode.outputs.autofix_pr == 'true'
               with:
-                  token: ${{ steps.generate-github-token.outputs.token }}
-                  repository: ${{ github.event.pull_request.head.repo.full_name }}
                   ref: ${{ github.event.pull_request.head.ref }}
+                  persist-credentials: false
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              if: env.autofix_pr == 'false'
+              if: steps.mode.outputs.autofix_pr == 'false'
+              with:
+                  persist-credentials: false
 
             # TODO: Renable when switching back to upstream actionlint
             # - name: Centralized Actionlint
@@ -64,7 +97,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
               id: pre_commit_check_first_run
@@ -73,19 +106,166 @@ jobs:
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-              if: always() && env.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
+              if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' }}
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
 
+            # The first pre-commit run checks the files. If the second run passes, pre-commit
+            # applied automatic fixes; if it still fails, pre-commit could not resolve the issue
+            # and there is nothing to commit.
+            - name: Produce auto-fix patch
+              id: patch
+              if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+                  == 'success' }}
+              env:
+                  MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
+              run: |
+                  set -euo pipefail
+                  git add --all
+                  git diff --cached --binary > autofix.patch
+                  if [ ! -s autofix.patch ]; then
+                    echo "has_fixes=false" | tee -a "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  git diff --cached --stat
+                  # Resource guard only, NOT a security control: hook code has already run in
+                  # this job, so anything here can be lied to. It exists to avoid uploading a
+                  # multi-gigabyte artifact and minting a token for a patch that autofix-apply
+                  # is going to refuse anyway. The authoritative check runs there.
+                  bytes=$(wc -c < autofix.patch | tr -d ' ')
+                  if [ "$bytes" -gt "$MAX_BYTES" ]; then
+                    echo "::error::pre-commit produced a ${bytes}-byte patch, over the ${MAX_BYTES}-byte limit; not auto-committing it."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-patch-bytes."
+                    exit 1
+                  fi
+                  echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
+
+            - name: Upload auto-fix patch
+              # `!cancelled()` is required, not cosmetic: the first pre-commit run has failed
+              # by definition on every path that reaches here, so the implicit `success()` would
+              # skip this step and leave autofix-apply with no artifact to download.
+              if: ${{ !cancelled() && steps.patch.outputs.has_fixes == 'true' }}
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: ${{ steps.mode.outputs.artifact_name }}
+                  path: autofix.patch
+                  # The patch is derived from pull request content, so it is no more sensitive
+                  # than the PR itself. Kept briefly so a human can download exactly what the
+                  # bot committed.
+                  retention-days: 1
+
+    autofix-apply:
+        name: Commit pre-commit fixes
+        needs: lint
+        # `lint` reports failure whenever pre-commit had something to fix, so this job must not
+        # depend on its conclusion — only on the outputs it published.
+        if: ${{ !cancelled() && needs.lint.outputs.autofix_pr == 'true' && needs.lint.outputs.has_fixes == 'true' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            # Same-repository PRs only, enforced by the autofix_pr guard in the lint job, so the
+            # default `repository` is the PR head repository.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.ref }}
+                  # The commit is created through the GitHub API by getsentry/action-github-commit,
+                  # so no git credential is needed after checkout.
+                  persist-credentials: false
+
+            - name: Download auto-fix patch
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  # Non-empty whenever this job runs: has_fixes can only be 'true' if the mode
+                  # step, which sets this, already ran. An empty name would download every
+                  # artifact of the run into per-name subdirectories.
+                  name: ${{ needs.lint.outputs.artifact_name }}
+
+            - name: Check the patch is safe to auto-commit
+              # The patch content is untrusted: it was produced by repository-supplied hook code
+              # in the `lint` job. What is trustworthy here is the toolchain measuring it —
+              # no hook code has run on this runner, so `git`, `wc` and `awk` cannot have been
+              # shimmed to under-report.
+              #
+              # This bounds blast radius, it is not an injection defence: a hostile hook would
+              # plant a handful of lines, well under any usable threshold. What it does catch
+              # is a broken or runaway hook rewriting the tree, and bulk content smuggled in
+              # behind a plausible-looking commit message.
+              #
+              # What it is really for is keeping the auto-fix commit small enough that a human
+              # reviewing the pull request can actually read it. Note that review is a weaker
+              # backstop than it sounds: unless the branch requires `require_last_push_approval`
+              # or dismisses stale reviews, an approval given before this commit still stands.
+              env:
+                  MAX_LINES: ${{ inputs.autofix-max-changed-lines }}
+                  MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
+              run: |
+                  set -euo pipefail
+                  numstat=$(git apply --numstat autofix.patch)
+                  bytes=$(wc -c < autofix.patch | tr -d ' ')
+                  files=$(printf '%s\n' "$numstat" | grep -c . || true)
+                  # Binary hunks report "-" instead of a line count; they are covered by MAX_BYTES.
+                  lines=$(printf '%s\n' "$numstat" \
+                          | awk '{ if ($1 != "-") a += $1; if ($2 != "-") d += $2 } END { print a + d + 0 }')
+                  echo "Patch: ${files} file(s), ${lines} changed line(s), ${bytes} byte(s)."
+                  printf '%s\n' "$numstat"
+                  if [ "$lines" -gt "$MAX_LINES" ] || [ "$bytes" -gt "$MAX_BYTES" ]; then
+                    echo "::error::pre-commit patch is too large to auto-commit (${lines} lines / ${bytes} bytes, limits ${MAX_LINES} / ${MAX_BYTES})."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-changed-lines / autofix-max-patch-bytes on the caller."
+                    exit 1
+                  fi
+
+                  # getsentry/action-github-commit sends every file to the API as
+                  # Buffer.from(content).toString(), i.e. decoded as UTF-8, and hardcodes mode
+                  # 100644. Binary content comes out mangled and permissions are lost. The patch
+                  # itself carries both faithfully, so nothing upstream of here notices; refuse
+                  # instead of producing a commit that is quietly wrong.
+                  if printf '%s\n' "$numstat" | awk '$1 == "-" && $2 == "-" { found = 1 } END { exit !found }'; then
+                    echo "::error::The patch changes binary files, which the commit step would corrupt."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
+                    exit 1
+                  fi
+                  if grep -qE '^(old|new) mode ' autofix.patch \
+                     || grep -E '^new file mode ' autofix.patch | grep -qv ' 100644$'; then
+                    echo "::error::The patch changes file modes, which the commit step would flatten to 100644."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
+                    exit 1
+                  fi
+
+            - name: Apply auto-fix patch
+              run: |
+                  set -euo pipefail
+                  git apply --stat autofix.patch
+                  # Leave the changes unstaged: action-github-commit collects them with
+                  # `git ls-files -om`, which compares the working tree against the index.
+                  if ! git apply autofix.patch; then
+                    echo "::error::Could not apply the pre-commit patch, most likely because the branch moved between jobs. Re-run the workflow."
+                    exit 1
+                  fi
+                  rm -f autofix.patch
+
+            # Minted last, deliberately: the token only needs to exist for the commit call, so
+            # it is not alive while the untrusted patch is measured and applied. No pre-commit
+            # hook code has executed on this runner either, so there is no planted git hook,
+            # PATH shim or BASH_ENV able to intercept it.
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  # Pin the installation token to the repository under test rather than relying on
+                  # the composite action's default.
+                  repositories: ${{ github.event.repository.name }}
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+
             - name: Commit Changes made by pre-commit fix
-              # This workflow checks the files after the first pre-commit run.
-              # If the second run fixes the files, it indicates that pre-commit applied automatic fixes.
-              # If the issue persists, it means pre-commit was unable to resolve it.
-              # We want to apply automatic fixes made by pre-commit.
-              if: always() && env.autofix_pr == 'true'  && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-                  == 'success'
-              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # main
+              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
               with:
                   github-token: ${{ steps.generate-github-token.outputs.token }}
                   message: 'chore: update files from pre-commit run'
