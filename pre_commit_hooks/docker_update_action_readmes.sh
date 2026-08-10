@@ -24,10 +24,14 @@ TOP_ACTION_DIR=".github/actions"
 #   whatever npm served at run time;
 # - --ignore-scripts, so a compromised release cannot execute install hooks.
 #
-# renovate: datasource=docker depName=node versioning=docker
+# In `node:TAG@DIGEST` the digest is what is actually resolved; the tag is decorative.
+# So the two are one unit and are updated together, by hand, deliberately: a Renovate
+# annotation on the tag alone would let it advance while the digest — and therefore the
+# image that really runs — stayed put, leaving the file describing something untrue.
+#
+# To move to a newer node, refresh both:
+#   docker buildx imagetools inspect node:<tag> --format '{{.Manifest.Digest}}'
 NODE_IMAGE="node:22"
-# The custom managers in default.json5 track the tag, not the digest, so refresh this by
-# hand whenever the tag above moves: docker manifest inspect "$NODE_IMAGE"
 NODE_IMAGE_DIGEST="sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a"
 # renovate: datasource=npm depName=action-docs
 ACTION_DOCS_VERSION="2.5.1"
