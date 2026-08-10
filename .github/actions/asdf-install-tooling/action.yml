@@ -32,10 +32,22 @@ inputs:
 runs:
     using: composite
     steps:
-        - name: Detect architecture if auto
+        - name: Validate inputs and detect architecture
           id: detect-arch
           shell: bash
           run: |
+              # Every input below ends up either in $GITHUB_OUTPUT, which is line-oriented, or
+              # in a download URL. Checking them here, once, is what keeps each consumer safe;
+              # sanitising per use means remembering to do it again next time one is added.
+              if [[ ! "${INPUTS_VERSION}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                echo "Invalid 'version' input: expected [A-Za-z0-9._-]+, got: ${INPUTS_VERSION}" >&2
+                exit 1
+              fi
+              if [[ ! "${INPUTS_OS}" =~ ^(linux|darwin)$ ]]; then
+                echo "Invalid 'os' input: expected linux or darwin, got: ${INPUTS_OS}" >&2
+                exit 1
+              fi
+
               if [[ "${INPUTS_ARCH}" == "auto" ]]; then
                 ARCH=$(uname -m)
                 case "$ARCH" in
@@ -58,6 +70,8 @@ runs:
               echo "arch=$ARCH" | tee -a "$GITHUB_OUTPUT"
           env:
               INPUTS_ARCH: ${{ inputs.arch }}
+              INPUTS_OS: ${{ inputs.os }}
+              INPUTS_VERSION: ${{ inputs.version }}
 
         - name: Compute cache key
           id: cache-key
