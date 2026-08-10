@@ -47,10 +47,11 @@ runs:
               # Expected format: https://github.com/owner/repo/actions/runs/run_id
               url="${INPUTS_RUN_URL}"
 
-              # owner and repo are constrained to GitHub's own naming rules rather than "[^/]+".
-              # They are written to $GITHUB_OUTPUT and later used as command arguments, so a
-              # newline would define extra step outputs and a metacharacter would travel with
-              # them. Validating the capture is simpler than sanitising every consumer.
+              # The capture groups are a conservative charset, not GitHub's exact naming rules:
+              # they still admit shapes GitHub would reject, such as a leading hyphen. What they
+              # do guarantee is the part that matters here — no newline, no whitespace, no shell
+              # metacharacter — because these values are written to $GITHUB_OUTPUT, which is
+              # line-oriented, and later passed as command arguments.
               if [[ ! "$url" =~ ^https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/actions/runs/([0-9]+) ]]; then
                 echo "Error: Invalid GitHub Actions URL format"
                 echo "Expected format: https://github.com/owner/repo/actions/runs/run_id"
@@ -106,7 +107,9 @@ runs:
               echo "Listing logs directory contents:"
               ls -lh logs
 
-              LOG_CONTENT="$(cat logs/trimmed_50kb.log | tr -d '\n')"
+              # Both CR and LF: the value is written to the line-oriented $GITHUB_OUTPUT, and
+              # this is log text from an arbitrary workflow run, so it is not trusted input.
+              LOG_CONTENT="$(tr -d '\r\n' < logs/trimmed_50kb.log)"
               echo "Downsized log file size: $(echo "$LOG_CONTENT" | wc -l) lines"
               echo "log-file=$LOG_CONTENT" >> "$GITHUB_OUTPUT"
           env:
