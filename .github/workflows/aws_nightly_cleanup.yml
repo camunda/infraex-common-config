@@ -134,8 +134,8 @@ jobs:
               id: determine-values
               run: |
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      AWS_REGION="${{ github.event.inputs.region }}"
-                      CLEANUP_OLDER_THAN="${{ github.event.inputs.cleanup_older_than }}"
+                      AWS_REGION="${GITHUB_EVENT_INPUTS_REGION}"
+                      CLEANUP_OLDER_THAN="${GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN}"
                   else
                       AWS_REGION="${{ matrix.config.region }}"
                       CLEANUP_OLDER_THAN="${{ matrix.config.cleanup_older_than }}"
@@ -143,6 +143,9 @@ jobs:
 
                   echo "AWS_REGION=$AWS_REGION" | tee -a "$GITHUB_ENV"
                   echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
+              env:
+                  GITHUB_EVENT_INPUTS_REGION: ${{ github.event.inputs.region }}
+                  GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN: ${{ github.event.inputs.cleanup_older_than }}
 
             - name: Check if job should run based on the day
               id: day-check
