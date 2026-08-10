@@ -183,8 +183,12 @@ jobs:
               # This bounds blast radius, it is not an injection defence: a hostile hook would
               # plant a handful of lines, well under any usable threshold. What it does catch
               # is a broken or runaway hook rewriting the tree, and bulk content smuggled in
-              # behind a plausible-looking commit message. The real control remains that the
-              # patch lands on a PR branch that still needs review and approval.
+              # behind a plausible-looking commit message.
+              #
+              # What it is really for is keeping the auto-fix commit small enough that a human
+              # reviewing the pull request can actually read it. Note that review is a weaker
+              # backstop than it sounds: unless the branch requires `require_last_push_approval`
+              # or dismisses stale reviews, an approval given before this commit still stands.
               env:
                   MAX_LINES: ${{ inputs.autofix-max-changed-lines }}
                   MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
