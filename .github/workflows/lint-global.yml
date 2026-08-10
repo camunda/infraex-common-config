@@ -10,6 +10,19 @@ on:
                 description: Name of the actor that will trigger auto-fix
                 default: renovate[bot]
                 type: string
+            autofix-max-changed-lines:
+                description: |
+                    Refuse to auto-commit a pre-commit patch that adds or removes more than this
+                    many lines. Bounds a runaway or broken hook; a human still has to look at
+                    anything bigger.
+                default: 200
+                type: number
+            autofix-max-patch-bytes:
+                description: |
+                    Refuse to auto-commit a pre-commit patch larger than this, in bytes. Catches
+                    bulk content (binaries, generated blobs) that a line count does not.
+                default: 65536
+                type: number
 
 # The auto-fix commit is created with a dedicated GitHub App token in a separate job,
 # never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
@@ -93,6 +106,8 @@ jobs:
               id: patch
               if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
                   == 'success'
+              env:
+                  MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
               run: |
                   set -euo pipefail
                   git add --all
@@ -101,8 +116,18 @@ jobs:
                     echo "has_fixes=false" | tee -a "$GITHUB_OUTPUT"
                     exit 0
                   fi
-                  echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
                   git diff --cached --stat
+                  # Resource guard only, NOT a security control: hook code has already run in
+                  # this job, so anything here can be lied to. It exists to avoid uploading a
+                  # multi-gigabyte artifact and minting a token for a patch that autofix-apply
+                  # is going to refuse anyway. The authoritative check runs there.
+                  bytes=$(wc -c < autofix.patch | tr -d ' ')
+                  if [ "$bytes" -gt "$MAX_BYTES" ]; then
+                    echo "::error::pre-commit produced a ${bytes}-byte patch, over the ${MAX_BYTES}-byte limit; not auto-committing it."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-patch-bytes."
+                    exit 1
+                  fi
+                  echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
 
             - name: Upload auto-fix patch
               if: steps.patch.outputs.has_fixes == 'true'
@@ -152,6 +177,34 @@ jobs:
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
                   name: pre-commit-autofix-patch
+
+            - name: Check patch size
+              # Authoritative: no pre-commit hook code has run in this job, so `git` and the
+              # patch file are both trustworthy here.
+              #
+              # This bounds blast radius, it is not an injection defence: a hostile hook would
+              # plant a handful of lines, well under any usable threshold. What it does catch
+              # is a broken or runaway hook rewriting the tree, and bulk content smuggled in
+              # behind a plausible-looking commit message. The real control remains that the
+              # patch lands on a PR branch that still needs review and approval.
+              env:
+                  MAX_LINES: ${{ inputs.autofix-max-changed-lines }}
+                  MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
+              run: |
+                  set -euo pipefail
+                  numstat=$(git apply --numstat autofix.patch)
+                  bytes=$(wc -c < autofix.patch | tr -d ' ')
+                  files=$(printf '%s\n' "$numstat" | grep -c . || true)
+                  # Binary hunks report "-" instead of a line count; they are covered by MAX_BYTES.
+                  lines=$(printf '%s\n' "$numstat" \
+                          | awk '{ if ($1 != "-") a += $1; if ($2 != "-") d += $2 } END { print a + d + 0 }')
+                  echo "Patch: ${files} file(s), ${lines} changed line(s), ${bytes} byte(s)."
+                  printf '%s\n' "$numstat"
+                  if [ "$lines" -gt "$MAX_LINES" ] || [ "$bytes" -gt "$MAX_BYTES" ]; then
+                    echo "::error::pre-commit patch is too large to auto-commit (${lines} lines / ${bytes} bytes, limits ${MAX_LINES} / ${MAX_BYTES})."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-changed-lines / autofix-max-patch-bytes on the caller."
+                    exit 1
+                  fi
 
             - name: Apply auto-fix patch
               run: |
