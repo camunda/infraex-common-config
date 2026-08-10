@@ -178,7 +178,7 @@ jobs:
                   # artifact of the run into per-name subdirectories.
                   name: ${{ needs.lint.outputs.artifact_name }}
 
-            - name: Check patch size
+            - name: Check the patch is safe to auto-commit
               # The patch content is untrusted: it was produced by repository-supplied hook code
               # in the `lint` job. What is trustworthy here is the toolchain measuring it —
               # no hook code has run on this runner, so `git`, `wc` and `awk` cannot have been
@@ -209,6 +209,23 @@ jobs:
                   if [ "$lines" -gt "$MAX_LINES" ] || [ "$bytes" -gt "$MAX_BYTES" ]; then
                     echo "::error::pre-commit patch is too large to auto-commit (${lines} lines / ${bytes} bytes, limits ${MAX_LINES} / ${MAX_BYTES})."
                     echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-changed-lines / autofix-max-patch-bytes on the caller."
+                    exit 1
+                  fi
+
+                  # getsentry/action-github-commit sends every file to the API as
+                  # Buffer.from(content).toString(), i.e. decoded as UTF-8, and hardcodes mode
+                  # 100644. Binary content comes out mangled and permissions are lost. The patch
+                  # itself carries both faithfully, so nothing upstream of here notices; refuse
+                  # instead of producing a commit that is quietly wrong.
+                  if printf '%s\n' "$numstat" | awk '$1 == "-" && $2 == "-" { found = 1 } END { exit !found }'; then
+                    echo "::error::The patch changes binary files, which the commit step would corrupt."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
+                    exit 1
+                  fi
+                  if grep -qE '^(old|new) mode ' autofix.patch \
+                     || grep -E '^new file mode ' autofix.patch | grep -qv ' 100644$'; then
+                    echo "::error::The patch changes file modes, which the commit step would flatten to 100644."
+                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
                     exit 1
                   fi
 
