@@ -46,6 +46,14 @@ runs:
                 echo "Detected architecture: $ARCH"
               else
                 ARCH="${INPUTS_ARCH}"
+                # Validated here rather than at each use: this value is written to
+                # $GITHUB_OUTPUT and read back by two later steps, so a newline in it would
+                # define extra step outputs, and a shell metacharacter would travel with it.
+                # Constraining it once at the source makes every consumer safe.
+                if [[ ! "$ARCH" =~ ^[A-Za-z0-9_-]+$ ]]; then
+                  echo "Invalid 'arch' input: expected [A-Za-z0-9_-]+, got: ${ARCH}" >&2
+                  exit 1
+                fi
               fi
               echo "arch=$ARCH" | tee -a "$GITHUB_OUTPUT"
           env:

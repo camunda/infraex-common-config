@@ -47,7 +47,11 @@ runs:
               # Expected format: https://github.com/owner/repo/actions/runs/run_id
               url="${INPUTS_RUN_URL}"
 
-              if [[ ! "$url" =~ ^https://github\.com/([^/]+)/([^/]+)/actions/runs/([0-9]+) ]]; then
+              # owner and repo are constrained to GitHub's own naming rules rather than "[^/]+".
+              # They are written to $GITHUB_OUTPUT and later used as command arguments, so a
+              # newline would define extra step outputs and a metacharacter would travel with
+              # them. Validating the capture is simpler than sanitising every consumer.
+              if [[ ! "$url" =~ ^https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/actions/runs/([0-9]+) ]]; then
                 echo "Error: Invalid GitHub Actions URL format"
                 echo "Expected format: https://github.com/owner/repo/actions/runs/run_id"
                 exit 1
