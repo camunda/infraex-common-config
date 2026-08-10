@@ -32,3 +32,15 @@ repos:
       rev: 0.2.3
       hooks:
           - id: yamlfmt
+
+    - repo: https://github.com/zizmorcore/zizmor-pre-commit
+      rev: v1.29.0
+      hooks:
+          # Static analysis of GitHub Actions workflows and actions.
+          # Threshold is `high` because the repository still carries ~30 medium and ~55
+          # low/informational findings; see the burn-down issue before lowering it.
+          # Without GH_TOKEN zizmor runs offline, which skips known-vulnerable-actions,
+          # impostor-commit, ref-confusion, ref-version-mismatch and stale-action-refs.
+          # None of those currently report anything at `high`.
+          - id: zizmor
+            args: [--no-progress, --min-severity=high]
