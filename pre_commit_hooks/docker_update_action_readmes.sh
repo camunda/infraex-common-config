@@ -16,6 +16,26 @@ DOC_ACTION_VERSION=${DOC_ACTION_VERSION:-main}
 # directory where your actions are located, use "." if it's top directory
 TOP_ACTION_DIR=".github/actions"
 
+# This hook writes into the working tree, and on the auto-fix path its output is committed
+# back to the pull request by CI. Everything it executes is therefore pinned:
+#
+# - the image by digest, so the tag cannot be repointed under us;
+# - action-docs to an exact version, because `npm install -g action-docs` resolved
+#   whatever npm served at run time;
+# - --ignore-scripts, so a compromised release cannot execute install hooks.
+#
+# In `node:TAG@DIGEST` the digest is what is actually resolved; the tag is decorative.
+# So the two are one unit and are updated together, by hand, deliberately: a Renovate
+# annotation on the tag alone would let it advance while the digest — and therefore the
+# image that really runs — stayed put, leaving the file describing something untrue.
+#
+# To move to a newer node, refresh both:
+#   docker buildx imagetools inspect node:<tag> --format '{{.Manifest.Digest}}'
+NODE_IMAGE="node:22"
+NODE_IMAGE_DIGEST="sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a"
+# renovate: datasource=npm depName=action-docs
+ACTION_DOCS_VERSION="2.5.1"
+
 # Run a single Docker container to handle the README.md updates
 docker run --rm \
     -e USER_ID="$USER_ID" \
@@ -23,12 +43,13 @@ docker run --rm \
     -e DOC_ACTION_VERSION="$DOC_ACTION_VERSION" \
     -e OWNER_PROJECT="$OWNER_PROJECT" \
     -e TOP_ACTION_DIR="$TOP_ACTION_DIR" \
+    -e ACTION_DOCS_VERSION="$ACTION_DOCS_VERSION" \
     -v "$PWD":/workspace \
     -w /workspace \
-    node:22 \
+    "${NODE_IMAGE}@${NODE_IMAGE_DIGEST}" \
     bash -c '
         set -euxo pipefail
-        npm install -g action-docs
+        npm install -g --ignore-scripts "action-docs@${ACTION_DOCS_VERSION}"
         find "$TOP_ACTION_DIR" -name "*.yml" -o -name "*.yaml" | while read -r action_file; do
             action_dir=$(dirname "$action_file")
             action_dir_top=$(basename "$action_dir")
