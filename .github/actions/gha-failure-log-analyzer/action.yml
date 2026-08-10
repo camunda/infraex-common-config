@@ -62,9 +62,9 @@ runs:
               repo="${BASH_REMATCH[2]}"
               run_id="${BASH_REMATCH[3]}"
 
-              echo "owner=$owner" >> $GITHUB_OUTPUT
-              echo "repo=$repo" >> $GITHUB_OUTPUT
-              echo "run_id=$run_id" >> $GITHUB_OUTPUT
+              echo "owner=$owner" >> "$GITHUB_OUTPUT"
+              echo "repo=$repo" >> "$GITHUB_OUTPUT"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
               echo "Parsed URL:"
               echo "  Owner: $owner"
@@ -110,12 +110,13 @@ runs:
               # Both CR and LF: the value is written to the line-oriented $GITHUB_OUTPUT, and
               # this is log text from an arbitrary workflow run, so it is not trusted input.
               LOG_CONTENT="$(tr -d '\r\n' < logs/trimmed_50kb.log)"
-              echo "Downsized log file size: $(echo "$LOG_CONTENT" | wc -l) lines"
+              echo "Downsized log content: ${#LOG_CONTENT} characters"
               echo "log-file=$LOG_CONTENT" >> "$GITHUB_OUTPUT"
           env:
-              # These derive from the caller-supplied URL. The parse step constrains them to
-              # GitHub's naming rules, and passing them through env keeps them out of the
-              # script text regardless — the two together, not either alone.
+              # These derive from the caller-supplied URL. The parse step constrains them to a
+              # charset with no newline, whitespace or shell metacharacter, and passing them
+              # through env keeps them out of the script text regardless — the two together,
+              # not either alone.
               GH_REPO: ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}
               GH_TOKEN: ${{ inputs.gh_token }}
               RUN_ID: ${{ steps.parse-url.outputs.run_id }}
