@@ -23,6 +23,15 @@ on:
                     bulk content (binaries, generated blobs) that a line count does not.
                 default: 65536
                 type: number
+            autofix-artifact-name:
+                description: |
+                    Name of the artifact carrying the patch between the two jobs. Artifact names
+                    are unique per workflow *run*, not per job, so override this if a caller
+                    invokes this workflow more than once in the same run — through a matrix, or
+                    two separate calls. Leaving both instances on the same name makes the second
+                    upload fail and lets each one download the other's patch.
+                default: pre-commit-autofix-patch
+                type: string
 
 # The auto-fix commit is created with a dedicated GitHub App token in a separate job,
 # never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
@@ -133,8 +142,11 @@ jobs:
               if: steps.patch.outputs.has_fixes == 'true'
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: pre-commit-autofix-patch
+                  name: ${{ inputs.autofix-artifact-name }}
                   path: autofix.patch
+                  # The patch is derived from pull request content, so it is no more sensitive
+                  # than the PR itself. Kept briefly so a human can download exactly what the
+                  # bot committed.
                   retention-days: 1
 
     autofix-apply:
@@ -158,7 +170,7 @@ jobs:
             - name: Download auto-fix patch
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
-                  name: pre-commit-autofix-patch
+                  name: ${{ inputs.autofix-artifact-name }}
 
             - name: Check patch size
               # The patch content is untrusted: it was produced by repository-supplied hook code
