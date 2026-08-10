@@ -83,13 +83,13 @@ runs:
           id: fetch-logs
           run: |
               # Download logs using GitHub CLI
-              echo "Fetching logs for run ${{ steps.parse-url.outputs.run_id }} from ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}"
+              echo "Fetching logs for run ${RUN_ID} from ${GH_REPO}"
 
               # Create logs directory
               mkdir -p logs
 
-              gh run view ${{ steps.parse-url.outputs.run_id }} \
-                --repo ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }} \
+              gh run view "${RUN_ID}" \
+                --repo "${GH_REPO}" \
                 --log-failed > logs/failed.log
 
               echo "removing timestamps and downsizing logs"
@@ -106,7 +106,11 @@ runs:
               echo "Downsized log file size: $(echo "$LOG_CONTENT" | wc -l) lines"
               echo "log-file=$LOG_CONTENT" >> "$GITHUB_OUTPUT"
           env:
+              # owner and repo are captured from the URL with `[^/]+`, so they can carry shell
+              # metacharacters. The step above already routes them through env; this one did not.
+              GH_REPO: ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}
               GH_TOKEN: ${{ inputs.gh_token }}
+              RUN_ID: ${{ steps.parse-url.outputs.run_id }}
 
         - name: Analyze Logs with AI
           id: analyze

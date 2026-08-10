@@ -71,10 +71,14 @@ runs:
               # Now generate a final hash of the combined hashes (this is the "hash of hashes")
               FINAL_HASH=$(echo -n "$COMBINED_HASHES" | sha256sum | awk '{print $1}')
 
-              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key=${RUNNER_OS}-${DETECTED_ARCH}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
           env:
+              # detect-arch echoes `inputs.arch` back out verbatim when it is not "auto", so this
+              # output is as caller-controlled as the input is. Expanding it into the script
+              # would undo the point of routing `inputs.arch` through env in the first place.
+              DETECTED_ARCH: ${{ steps.detect-arch.outputs.arch }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
               INPUTS_VERSION: ${{ inputs.version }}
 
@@ -110,7 +114,7 @@ runs:
               set -euxo pipefail
 
               # Variables
-              FILE_NAME="asdf-${INPUTS_VERSION}-${INPUTS_OS}-${{ steps.detect-arch.outputs.arch }}.tar.gz"
+              FILE_NAME="asdf-${INPUTS_VERSION}-${INPUTS_OS}-${DETECTED_ARCH}.tar.gz"
               DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${INPUTS_VERSION}/${FILE_NAME}"
               MD5_URL="${DOWNLOAD_URL}.md5"
 
@@ -131,6 +135,7 @@ runs:
               tar -xzf /tmp/asdf.tar.gz -C "$HOME/.local/bin"
               chmod +x "$HOME/.local/bin/asdf"
           env:
+              DETECTED_ARCH: ${{ steps.detect-arch.outputs.arch }}
               INPUTS_VERSION: ${{ inputs.version }}
               INPUTS_OS: ${{ inputs.os }}
 
