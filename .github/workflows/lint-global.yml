@@ -146,24 +146,6 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
-            # Fresh runner: no pre-commit hook code has executed here, so there is no planted git
-            # hook, PATH shim or BASH_ENV able to intercept the token minted below.
-            - name: Generate token for GitHub
-              id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  # Pin the installation token to the repository under test rather than relying on
-                  # the composite action's default.
-                  repositories: ${{ github.event.repository.name }}
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
             # Same-repository PRs only, enforced by the autofix_pr guard in the lint job, so the
             # default `repository` is the PR head repository.
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -179,8 +161,10 @@ jobs:
                   name: pre-commit-autofix-patch
 
             - name: Check patch size
-              # Authoritative: no pre-commit hook code has run in this job, so `git` and the
-              # patch file are both trustworthy here.
+              # The patch content is untrusted: it was produced by repository-supplied hook code
+              # in the `lint` job. What is trustworthy here is the toolchain measuring it —
+              # no hook code has run on this runner, so `git`, `wc` and `awk` cannot have been
+              # shimmed to under-report.
               #
               # This bounds blast radius, it is not an injection defence: a hostile hook would
               # plant a handful of lines, well under any usable threshold. What it does catch
@@ -217,6 +201,26 @@ jobs:
                     exit 1
                   fi
                   rm -f autofix.patch
+
+            # Minted last, deliberately: the token only needs to exist for the commit call, so
+            # it is not alive while the untrusted patch is measured and applied. No pre-commit
+            # hook code has executed on this runner either, so there is no planted git hook,
+            # PATH shim or BASH_ENV able to intercept it.
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  # Pin the installation token to the repository under test rather than relying on
+                  # the composite action's default.
+                  repositories: ${{ github.event.repository.name }}
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
 
             - name: Commit Changes made by pre-commit fix
               uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
