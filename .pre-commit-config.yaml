@@ -14,8 +14,8 @@ repos:
           - id: end-of-file-fixer
           - id: check-added-large-files
 
-    - repo: https://github.com/mattleibow/actionlint
-      rev: 7b6f502befda0d99dcb5a1cf8cf72d792bfa7c8a
+    - repo: https://github.com/rhysd/actionlint
+      rev: v1.7.12
       hooks:
           - id: actionlint
             args: [-ignore=SC2155]
@@ -32,3 +32,15 @@ repos:
       rev: 0.2.3
       hooks:
           - id: yamlfmt
+
+    - repo: https://github.com/zizmorcore/zizmor-pre-commit
+      rev: v1.29.0
+      hooks:
+          # Static analysis of GitHub Actions workflows and actions.
+          # Threshold is `high` because the repository still carries ~30 medium and ~55
+          # low/informational findings; see the burn-down issue before lowering it.
+          # Without GH_TOKEN zizmor runs offline, which skips known-vulnerable-actions,
+          # impostor-commit, ref-confusion, ref-version-mismatch and stale-action-refs.
+          # None of those currently report anything at `high`.
+          - id: zizmor
+            args: [--no-progress, --min-severity=high]

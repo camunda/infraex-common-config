@@ -97,7 +97,7 @@ runs:
           shell: bash
           continue-on-error: true
           run: |
-              ISSUE_TITLE="silence: ${{ github.workflow }}"
+              ISSUE_TITLE="silence: ${GITHUB_WORKFLOW}"
               ISSUE_SEARCH=$(gh issue list --repo ${{ github.repository }} --state open --search "$ISSUE_TITLE in:title" --label "alert-management" --json number,title,url)
               ISSUE_COUNT=$(echo "$ISSUE_SEARCH" | jq '. | length')
 
@@ -317,10 +317,11 @@ runs:
               gh workflow run "GHA Failure Log Analyzer" \
                 --repo camunda/infraex-common-config \
                 --field run_url="${{ env.WORKFLOW_URL }}" \
-                --field slack_channel_id="${{ inputs.slack_channel_id }}" \
+                --field slack_channel_id="${INPUTS_SLACK_CHANNEL_ID}" \
                 --field slack_thread_ts="${{ steps.slack-notification.outputs.ts }}"
 
               echo "GHA Failure Log Analyzer triggered successfully"
           env:
               GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              INPUTS_SLACK_CHANNEL_ID: ${{ inputs.slack_channel_id }}

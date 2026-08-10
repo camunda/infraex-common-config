@@ -36,7 +36,7 @@ runs:
           id: detect-arch
           shell: bash
           run: |
-              if [[ "${{ inputs.arch }}" == "auto" ]]; then
+              if [[ "${INPUTS_ARCH}" == "auto" ]]; then
                 ARCH=$(uname -m)
                 case "$ARCH" in
                   x86_64) ARCH="amd64" ;;
@@ -45,9 +45,11 @@ runs:
                 esac
                 echo "Detected architecture: $ARCH"
               else
-                ARCH="${{ inputs.arch }}"
+                ARCH="${INPUTS_ARCH}"
               fi
               echo "arch=$ARCH" | tee -a "$GITHUB_OUTPUT"
+          env:
+              INPUTS_ARCH: ${{ inputs.arch }}
 
         - name: Compute cache key
           id: cache-key
@@ -58,7 +60,7 @@ runs:
               COMBINED_HASHES=""
 
               # Loop over each .tool-versions file, generate a hash for each one, and combine them
-              IFS=',' read -r -a tool_versions_files <<< "${{ inputs.tool_versions_files }}"
+              IFS=',' read -r -a tool_versions_files <<< "${INPUTS_TOOL_VERSIONS_FILES}"
               for tool_file in "${tool_versions_files[@]}"; do
                 if [ -f "$tool_file" ]; then
                   FILE_HASH=$(sha256sum "$tool_file" | awk '{print $1}')
@@ -69,9 +71,12 @@ runs:
               # Now generate a final hash of the combined hashes (this is the "hash of hashes")
               FINAL_HASH=$(echo -n "$COMBINED_HASHES" | sha256sum | awk '{print $1}')
 
-              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${{ inputs.version }}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
+          env:
+              INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+              INPUTS_VERSION: ${{ inputs.version }}
 
         - name: Check if asdf cache exists
           id: cache-asdf-check
@@ -105,11 +110,11 @@ runs:
               set -euxo pipefail
 
               # Variables
-              FILE_NAME="asdf-${{ inputs.version }}-${{ inputs.os }}-${{ steps.detect-arch.outputs.arch }}.tar.gz"
-              DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${{ inputs.version }}/${FILE_NAME}"
+              FILE_NAME="asdf-${INPUTS_VERSION}-${INPUTS_OS}-${{ steps.detect-arch.outputs.arch }}.tar.gz"
+              DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${INPUTS_VERSION}/${FILE_NAME}"
               MD5_URL="${DOWNLOAD_URL}.md5"
 
-              echo "Installing asdf ${{ inputs.version }} ($DOWNLOAD_URL)"
+              echo "Installing asdf ${INPUTS_VERSION} ($DOWNLOAD_URL)"
 
               # Update destination
               mkdir -p "$HOME/.local/bin"
@@ -125,10 +130,16 @@ runs:
               # Extract and install
               tar -xzf /tmp/asdf.tar.gz -C "$HOME/.local/bin"
               chmod +x "$HOME/.local/bin/asdf"
+          env:
+              INPUTS_VERSION: ${{ inputs.version }}
+              INPUTS_OS: ${{ inputs.os }}
 
         - name: Add asdf path to the action path
           shell: bash
-          run: |
+          # Putting asdf on PATH is the whole point of this action. Both values are fixed
+          # paths derived from $HOME, not from action inputs or event data, so there is no
+          # attacker-controlled component to smuggle in here.
+          run: | # zizmor: ignore[github-env]
               echo "$HOME/.local/bin" | tee -a "$GITHUB_PATH"
               echo "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" | tee -a "$GITHUB_PATH"
 
@@ -141,7 +152,7 @@ runs:
 
               asdf current
 
-              IFS=',' read -r -a tool_versions_files <<< "${{ inputs.tool_versions_files }}"
+              IFS=',' read -r -a tool_versions_files <<< "${INPUTS_TOOL_VERSIONS_FILES}"
               for tool_file in "${tool_versions_files[@]}"; do
                 if [ -f "$tool_file" ]; then
                   tool_file_dir=$(dirname "$tool_file")
@@ -177,6 +188,7 @@ runs:
               done
           env:
               ASDF_PYTHON_EXTRA_CONFIGURE_OPTIONS: --with-lzma
+              INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
 
         - name: Cache installed tools
           id: cache-tools

@@ -37,10 +37,10 @@ jobs:
                   : # we don't rely on github.actor as it's the latest person to schedule/trigger the workflow.
                   pr_author="$(gh pr view ${{ github.event.pull_request.number }} --json author --jq '.author.login')"
 
-                  if [ "$pr_author" = "${{ inputs.author-name }}" ]; then
+                  if [ "$pr_author" = "${INPUTS_AUTHOR_NAME}" ]; then
                     echo "skip=false" | tee -a "$GITHUB_ENV"
                   else
-                    echo "This PR was not created by ${{ inputs.author-name }}, skipping auto approval."
+                    echo "This PR was not created by ${INPUTS_AUTHOR_NAME}, skipping auto approval."
                     echo "skip=true" | tee -a "$GITHUB_ENV"
                     exit 0
                   fi
@@ -56,6 +56,7 @@ jobs:
                   fi
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  INPUTS_AUTHOR_NAME: ${{ inputs.author-name }}
 
             - name: Wait for other checks to succeed
               uses: poseidon/wait-for-status-checks@e7e24423722c5b8e97a6dd5848827d2a412f812d # v0.7.0
