@@ -23,15 +23,6 @@ on:
                     bulk content (binaries, generated blobs) that a line count does not.
                 default: 65536
                 type: number
-            autofix-artifact-name:
-                description: |
-                    Name of the artifact carrying the patch between the two jobs. Artifact names
-                    are unique per workflow *run*, not per job, so override this if a caller
-                    invokes this workflow more than once in the same run — through a matrix, or
-                    two separate calls. Leaving both instances on the same name makes the second
-                    upload fail and lets each one download the other's patch.
-                default: pre-commit-autofix-patch
-                type: string
 
 # The auto-fix commit is created with a dedicated GitHub App token in a separate job,
 # never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
@@ -49,6 +40,7 @@ jobs:
         outputs:
             autofix_pr: ${{ steps.mode.outputs.autofix_pr }}
             has_fixes: ${{ steps.patch.outputs.has_fixes }}
+            artifact_name: ${{ steps.mode.outputs.artifact_name }}
         steps:
             - name: Determine whether this run may auto-fix
               id: mode
@@ -67,6 +59,13 @@ jobs:
                   else
                     echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
                   fi
+
+                  # Artifact names are unique per workflow *run*, not per job, and this workflow
+                  # is reusable: a caller can invoke it twice in one run, or through a matrix.
+                  # A fixed name would make the second upload fail and let each instance download
+                  # the other's patch. Generated here rather than exposed as an input, because an
+                  # input only protects callers who already know about this.
+                  echo "artifact_name=pre-commit-autofix-patch-$(openssl rand -hex 8)" | tee -a "$GITHUB_OUTPUT"
 
             # On the auto-fix path we lint the PR head itself, because the resulting patch is
             # committed back onto that branch. Elsewhere the default checkout (merge result on
@@ -142,7 +141,7 @@ jobs:
               if: steps.patch.outputs.has_fixes == 'true'
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: ${{ inputs.autofix-artifact-name }}
+                  name: ${{ steps.mode.outputs.artifact_name }}
                   path: autofix.patch
                   # The patch is derived from pull request content, so it is no more sensitive
                   # than the PR itself. Kept briefly so a human can download exactly what the
@@ -170,7 +169,10 @@ jobs:
             - name: Download auto-fix patch
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
-                  name: ${{ inputs.autofix-artifact-name }}
+                  # Non-empty whenever this job runs: has_fixes can only be 'true' if the mode
+                  # step, which sets this, already ran. An empty name would download every
+                  # artifact of the run into per-name subdirectories.
+                  name: ${{ needs.lint.outputs.artifact_name }}
 
             - name: Check patch size
               # The patch content is untrusted: it was produced by repository-supplied hook code
