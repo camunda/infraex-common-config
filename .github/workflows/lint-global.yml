@@ -85,15 +85,6 @@ jobs:
               with:
                   persist-credentials: false
 
-            - name: Centralized Actionlint
-              uses: camunda/infra-global-github-actions/actionlint@70856595c361916264dc0ca86084200a68da48f5 # actionlint-1.0.3
-              with:
-                  # Kept in step with the actionlint pinned in .pre-commit-config.yaml. Letting
-                  # the action's own default apply would run a different version here than
-                  # locally, so a workflow could pass on one side and fail on the other.
-                  # renovate: datasource=github-releases depName=rhysd/actionlint extractVersion=^v(?<version>.*)$
-                  version: 1.7.12
-
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
               run: |
