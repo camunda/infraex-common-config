@@ -51,6 +51,7 @@ jobs:
                   HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
                   BASE_REPO: ${{ github.repository }}
               run: |
+                  set -euo pipefail
                   # Auto-fix needs a privileged App token, so it is restricted to the designated
                   # bot actor AND to same-repository pull requests. A fork head is never checked
                   # out in the job that holds that token.
@@ -102,7 +103,7 @@ jobs:
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
               uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
-              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success'
+              if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' }}
               id: pre_commit_check_second_run
               with:
                   extra_args: --all-files --verbose
@@ -112,8 +113,8 @@ jobs:
             # and there is nothing to commit.
             - name: Produce auto-fix patch
               id: patch
-              if: always() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
-                  == 'success'
+              if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' && steps.pre_commit_check_second_run.outcome
+                  == 'success' }}
               env:
                   MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
               run: |
@@ -138,7 +139,10 @@ jobs:
                   echo "has_fixes=true" | tee -a "$GITHUB_OUTPUT"
 
             - name: Upload auto-fix patch
-              if: steps.patch.outputs.has_fixes == 'true'
+              # `!cancelled()` is required, not cosmetic: the first pre-commit run has failed
+              # by definition on every path that reaches here, so the implicit `success()` would
+              # skip this step and leave autofix-apply with no artifact to download.
+              if: ${{ !cancelled() && steps.patch.outputs.has_fixes == 'true' }}
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: ${{ steps.mode.outputs.artifact_name }}
