@@ -123,6 +123,34 @@
       enabled: true,
     },
     {
+      // `separateMinorPatch` defaults to false, so Renovate only builds a `major`
+      // and a `non-major` bucket. The `non-major` bucket always aims at the highest
+      // non-major release, so once upstream ships a minor the whole bucket is typed
+      // `minor` and the "Only patch updates" rule above kills it. The patch releases
+      // in between then become unreachable and the dependency freezes on the branch
+      // for good. Splitting the bucket keeps the patch lane open.
+      description: 'Keep patch updates reachable on maintenance branches once a newer minor exists.',
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      separateMinorPatch: true,
+    },
+    {
+      // These two repositories only provide the CI toolchain (reusable workflows,
+      // composite actions, pre-commit hooks). They ship nothing to the reference
+      // architecture a maintenance branch documents, so freezing them buys no
+      // stability and only leaves the branches running stale automation.
+      description: 'Track our own CI tooling on all update types on maintenance branches.',
+      matchPackageNames: [
+        'camunda/infraex-common-config',
+        'camunda/infra-global-github-actions',
+      ],
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      enabled: true,
+    },
+    {
       groupName: 'minor-grouped',
       matchUpdateTypes: [
         'minor',
