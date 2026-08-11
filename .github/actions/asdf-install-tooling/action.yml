@@ -32,10 +32,22 @@ inputs:
 runs:
     using: composite
     steps:
-        - name: Detect architecture if auto
+        - name: Validate inputs and detect architecture
           id: detect-arch
           shell: bash
           run: |
+              # Every input below ends up either in $GITHUB_OUTPUT, which is line-oriented, or
+              # in a download URL. Checking them here, once, is what keeps each consumer safe;
+              # sanitising per use means remembering to do it again next time one is added.
+              if [[ ! "${INPUTS_VERSION}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                echo "Invalid 'version' input: expected [A-Za-z0-9._-]+, got: ${INPUTS_VERSION}" >&2
+                exit 1
+              fi
+              if [[ ! "${INPUTS_OS}" =~ ^(linux|darwin)$ ]]; then
+                echo "Invalid 'os' input: expected linux or darwin, got: ${INPUTS_OS}" >&2
+                exit 1
+              fi
+
               if [[ "${INPUTS_ARCH}" == "auto" ]]; then
                 ARCH=$(uname -m)
                 case "$ARCH" in
@@ -46,10 +58,20 @@ runs:
                 echo "Detected architecture: $ARCH"
               else
                 ARCH="${INPUTS_ARCH}"
+                # Validated here rather than at each use: this value is written to
+                # $GITHUB_OUTPUT and read back by two later steps, so a newline in it would
+                # define extra step outputs, and a shell metacharacter would travel with it.
+                # Constraining it once at the source makes every consumer safe.
+                if [[ ! "$ARCH" =~ ^[A-Za-z0-9_-]+$ ]]; then
+                  echo "Invalid 'arch' input: expected [A-Za-z0-9_-]+, got: ${ARCH}" >&2
+                  exit 1
+                fi
               fi
               echo "arch=$ARCH" | tee -a "$GITHUB_OUTPUT"
           env:
               INPUTS_ARCH: ${{ inputs.arch }}
+              INPUTS_OS: ${{ inputs.os }}
+              INPUTS_VERSION: ${{ inputs.version }}
 
         - name: Compute cache key
           id: cache-key
@@ -71,10 +93,14 @@ runs:
               # Now generate a final hash of the combined hashes (this is the "hash of hashes")
               FINAL_HASH=$(echo -n "$COMBINED_HASHES" | sha256sum | awk '{print $1}')
 
-              echo "cache_key=${{ runner.os }}-${{ steps.detect-arch.outputs.arch }}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key=${RUNNER_OS}-${DETECTED_ARCH}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
           env:
+              # This output carries `inputs.arch` whenever the caller supplied one. detect-arch
+              # constrains it to [A-Za-z0-9_-]+, and passing it through env keeps it out of the
+              # script text regardless — the two together, not either alone.
+              DETECTED_ARCH: ${{ steps.detect-arch.outputs.arch }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
               INPUTS_VERSION: ${{ inputs.version }}
 
@@ -110,7 +136,7 @@ runs:
               set -euxo pipefail
 
               # Variables
-              FILE_NAME="asdf-${INPUTS_VERSION}-${INPUTS_OS}-${{ steps.detect-arch.outputs.arch }}.tar.gz"
+              FILE_NAME="asdf-${INPUTS_VERSION}-${INPUTS_OS}-${DETECTED_ARCH}.tar.gz"
               DOWNLOAD_URL="https://github.com/asdf-vm/asdf/releases/download/${INPUTS_VERSION}/${FILE_NAME}"
               MD5_URL="${DOWNLOAD_URL}.md5"
 
@@ -131,6 +157,7 @@ runs:
               tar -xzf /tmp/asdf.tar.gz -C "$HOME/.local/bin"
               chmod +x "$HOME/.local/bin/asdf"
           env:
+              DETECTED_ARCH: ${{ steps.detect-arch.outputs.arch }}
               INPUTS_VERSION: ${{ inputs.version }}
               INPUTS_OS: ${{ inputs.os }}
 

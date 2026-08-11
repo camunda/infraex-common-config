@@ -47,7 +47,12 @@ runs:
               # Expected format: https://github.com/owner/repo/actions/runs/run_id
               url="${INPUTS_RUN_URL}"
 
-              if [[ ! "$url" =~ ^https://github\.com/([^/]+)/([^/]+)/actions/runs/([0-9]+) ]]; then
+              # The capture groups are a conservative charset, not GitHub's exact naming rules:
+              # they still admit shapes GitHub would reject, such as a leading hyphen. What they
+              # do guarantee is the part that matters here — no newline, no whitespace, no shell
+              # metacharacter — because these values are written to $GITHUB_OUTPUT, which is
+              # line-oriented, and later passed as command arguments.
+              if [[ ! "$url" =~ ^https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/actions/runs/([0-9]+) ]]; then
                 echo "Error: Invalid GitHub Actions URL format"
                 echo "Expected format: https://github.com/owner/repo/actions/runs/run_id"
                 exit 1
@@ -57,9 +62,9 @@ runs:
               repo="${BASH_REMATCH[2]}"
               run_id="${BASH_REMATCH[3]}"
 
-              echo "owner=$owner" >> $GITHUB_OUTPUT
-              echo "repo=$repo" >> $GITHUB_OUTPUT
-              echo "run_id=$run_id" >> $GITHUB_OUTPUT
+              echo "owner=$owner" >> "$GITHUB_OUTPUT"
+              echo "repo=$repo" >> "$GITHUB_OUTPUT"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
               echo "Parsed URL:"
               echo "  Owner: $owner"
@@ -83,13 +88,13 @@ runs:
           id: fetch-logs
           run: |
               # Download logs using GitHub CLI
-              echo "Fetching logs for run ${{ steps.parse-url.outputs.run_id }} from ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}"
+              echo "Fetching logs for run ${RUN_ID} from ${GH_REPO}"
 
               # Create logs directory
               mkdir -p logs
 
-              gh run view ${{ steps.parse-url.outputs.run_id }} \
-                --repo ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }} \
+              gh run view "${RUN_ID}" \
+                --repo "${GH_REPO}" \
                 --log-failed > logs/failed.log
 
               echo "removing timestamps and downsizing logs"
@@ -102,11 +107,19 @@ runs:
               echo "Listing logs directory contents:"
               ls -lh logs
 
-              LOG_CONTENT="$(cat logs/trimmed_50kb.log | tr -d '\n')"
-              echo "Downsized log file size: $(echo "$LOG_CONTENT" | wc -l) lines"
+              # Both CR and LF: the value is written to the line-oriented $GITHUB_OUTPUT, and
+              # this is log text from an arbitrary workflow run, so it is not trusted input.
+              LOG_CONTENT="$(tr -d '\r\n' < logs/trimmed_50kb.log)"
+              echo "Downsized log content: ${#LOG_CONTENT} characters"
               echo "log-file=$LOG_CONTENT" >> "$GITHUB_OUTPUT"
           env:
+              # These derive from the caller-supplied URL. The parse step constrains them to a
+              # charset with no newline, whitespace or shell metacharacter, and passing them
+              # through env keeps them out of the script text regardless — the two together,
+              # not either alone.
+              GH_REPO: ${{ steps.parse-url.outputs.owner }}/${{ steps.parse-url.outputs.repo }}
               GH_TOKEN: ${{ inputs.gh_token }}
+              RUN_ID: ${{ steps.parse-url.outputs.run_id }}
 
         - name: Analyze Logs with AI
           id: analyze
