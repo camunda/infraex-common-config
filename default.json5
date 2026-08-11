@@ -10,8 +10,12 @@
     'helpers:pinGitHubActionDigests',
     ':pinDevDependencies',
   ],
+  // Declared only because Renovate refuses `matchBaseBranches` in a config that
+  // configures no base branch. `$default` resolves to whatever the consuming
+  // repository uses as its default branch; hardcoding 'main' here silently broke
+  // any repository not named that way, and every consumer had to override it.
   baseBranchPatterns: [
-    'main',
+    '$default',
   ],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
