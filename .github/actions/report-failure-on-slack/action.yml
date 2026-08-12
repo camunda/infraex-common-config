@@ -73,10 +73,7 @@ runs:
     steps:
         - name: Generate token for GitHub
           id: generate-github-token
-          # Always generate: the token is consumed by both the silence-check
-          # step and the analyzer trigger step, so gating it on
-          # disable_silence_check leaves the trigger step without a token
-          # when the silence check is disabled.
+          # Always generate: the token is consumed by the silence-check step.
           uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@66bf6e260f2beb42a83284fef490bb96672e8f36 # main
           with:
               github-app-id-vault-key: GITHUB_APP_ID
@@ -87,9 +84,14 @@ runs:
               vault-auth-role-id: ${{ inputs.vault_role_id }}
               vault-auth-secret-id: ${{ inputs.vault_secret_id }}
               vault-url: ${{ inputs.vault_addr }}
-              # we generate a token with access to all assigned repos for the analyzer trigger
-              owner: camunda
-              repositories: '!all'
+              # `owner` and `repositories` are deliberately unset. The upstream action
+              # then derives the repository from `github.repository`, so the token is
+              # scoped to the calling repository alone. They previously read
+              # `owner: camunda` / `repositories: '!all'`, which grants access to every
+              # repository in the organisation -- a scope only the GHA Failure Log
+              # Analyzer needed, because it dispatched a workflow in another repository.
+              # That trigger is gone, and the sole remaining consumer of this token is
+              # the silence check below, which only lists issues on `github.repository`.
 
         - name: Check for Silence Issue
           id: silence-check
@@ -307,21 +309,3 @@ runs:
                   }
           env:
               WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-        - name: Trigger GHA Failure Log Analyzer
-          id: trigger-analyzer
-          if: ${{ steps.silence-check.outcome != 'success' }} # in case of success it means that a silence issue exists
-          shell: bash
-          run: |
-              echo "Triggering GHA Failure Log Analyzer workflow..."
-              gh workflow run "GHA Failure Log Analyzer" \
-                --repo camunda/infraex-common-config \
-                --field run_url="${{ env.WORKFLOW_URL }}" \
-                --field slack_channel_id="${INPUTS_SLACK_CHANNEL_ID}" \
-                --field slack_thread_ts="${{ steps.slack-notification.outputs.ts }}"
-
-              echo "GHA Failure Log Analyzer triggered successfully"
-          env:
-              GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
-              WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-              INPUTS_SLACK_CHANNEL_ID: ${{ inputs.slack_channel_id }}

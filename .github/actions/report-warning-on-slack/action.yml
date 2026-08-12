@@ -7,8 +7,7 @@ description: |
     warning-styled Slack notification. Unlike report-failure-on-slack, it does
     not frame the message as a failure: there is no :rotating_light: severity
     frame, no "failed!" wording, no STABLE BRANCH FAILURE / REPEATED FAILURE
-    escalation, no consecutive-failure tracking, and it does not trigger the
-    GHA Failure Log Analyzer.
+    escalation and no consecutive-failure tracking.
 
     Use it for advisory signals (for example Helm deprecation or unknown-key
     configuration drift) that must be surfaced but must not look like a red CI
