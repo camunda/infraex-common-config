@@ -104,20 +104,45 @@ jobs:
             # Inlining the action also drops the `pip install pre-commit` it performs, which
             # silently installed the latest release over the version the repository pins in
             # .tool-versions.
-            - name: Check pre-commit is available
+            - name: Check pre-commit matches the caller's .tool-versions
+              id: toolchain
               run: |
                   set -euo pipefail
-                  if ! command -v pre-commit >/dev/null 2>&1; then
-                    echo "::error::pre-commit is not installed. Add it to the repository's .tool-versions, the asdf step above installs it from there."
+
+                  expected="$(awk '$1 == "pre-commit" { print $2; exit }' .tool-versions 2>/dev/null || true)"
+                  if [ -z "$expected" ]; then
+                    echo "::error::.tool-versions does not pin pre-commit. Add a 'pre-commit <version>' line to this repository's .tool-versions; the asdf step above installs it from there."
                     exit 1
                   fi
-                  pre-commit --version
+
+                  if ! command -v pre-commit >/dev/null 2>&1; then
+                    echo "::error::pre-commit is not installed. The asdf step above should have provided ${expected} from this repository's .tool-versions."
+                    exit 1
+                  fi
+
+                  # Not just a PATH check: a pre-commit shipped with the runner image would
+                  # satisfy `command -v` while silently running a different version from the
+                  # one the caller pins, which is the drift inlining exists to remove.
+                  actual="$(pre-commit --version | awk '{ print $2 }')"
+                  if [ "$actual" != "$expected" ]; then
+                    echo "::error::pre-commit ${actual} is on PATH but .tool-versions pins ${expected}. The asdf install did not take effect."
+                    exit 1
+                  fi
+                  echo "pre-commit ${actual} matches .tool-versions"
+
+                  # The interpreter identity has to be part of the cache key. Callers are not
+                  # required to pin python in .tool-versions -- when they do not, python comes
+                  # from the runner image and can move while .pre-commit-config.yaml and
+                  # .tool-versions both stay identical. The stale hook environments would then
+                  # be restored on an exact key hit, rebuilt against the new interpreter, and
+                  # never saved, reinstalling on every run.
+                  echo "python=$(python3 --version 2>&1 | tr ' ' '-')" | tee -a "$GITHUB_OUTPUT"
 
             - name: Cache pre-commit hook environments
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/pre-commit
-                  key: pre-commit-1|${{ runner.os }}|${{ hashFiles('.pre-commit-config.yaml', '.tool-versions') }}
+                  key: pre-commit-2|${{ runner.os }}|${{ steps.toolchain.outputs.python }}|${{ hashFiles('.pre-commit-config.yaml', '.tool-versions') }}
 
             - name: Run pre-commit
               id: pre_commit_check_first_run
