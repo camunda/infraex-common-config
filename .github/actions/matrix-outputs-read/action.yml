@@ -1,0 +1,70 @@
+---
+name: Matrix outputs - read
+description: |
+    Collect the per-job outputs written by a matrix step and merge them into a single
+    JSON object, keyed by output name then by matrix key.
+
+    Drop-in replacement for `cloudposse/github-action-matrix-outputs-read`, kept because
+    that action's own `action.yml` references `dcarbone/install-jq-action@v2.1.0` and
+    `actions/download-artifact@v4` without pinning them. GitHub evaluates the
+    `Require actions to be pinned to a full-length commit SHA` setting over the entire
+    dependency tree at `Set up job`, so a caller with that setting on has its job refused
+    before any step runs, and cannot work around it by choosing a different revision.
+    Upstream last released in 2024-02 and its main branch is still unpinned, so there is
+    no revision to move to.
+
+    Pair it with `cloudposse/github-action-matrix-outputs-write`, which is unaffected: at
+    its current release it contains no `uses:` at all.
+
+    The job calling this action does not need `actions/checkout`. It must not have one
+    either if it can be avoided: the download below places every artifact in the working
+    directory, which is then walked with `find . -maxdepth 2`, and a checkout would put
+    repository files inside that search path.
+
+inputs:
+    matrix-step-name:
+        description: |
+            Name passed as `matrix-step-name` to the matching write step. It is also the
+            artifact file name this action looks for.
+        required: true
+
+outputs:
+    result:
+        description: |
+            Merged JSON object. For a matrix writing `{"kube": "..."}` under keys `c1` and
+            `c2`, the result is `{"kube": {"c1": "...", "c2": "..."}}`.
+        value: ${{ steps.context.outputs.result }}
+
+runs:
+    using: composite
+    steps:
+        - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+
+        # The upstream action force-installs jq 1.6 through a third-party action. That step
+        # is deliberately not reproduced: the GitHub runner images already ship jq, and the
+        # two versions were run against the same fixture and produce byte-identical output
+        # for this program. The install bought nothing and pulled in the unpinned reference
+        # this action exists to avoid.
+        - id: context
+          shell: bash
+          run: |
+              set -euo pipefail
+
+              if ! command -v jq >/dev/null 2>&1; then
+                echo "::error::jq is not available on this runner. It ships with the GitHub-hosted images; on a self-hosted runner, install it before calling this action."
+                exit 1
+              fi
+
+              # jq program kept verbatim from the upstream action, only split over several
+              # lines for readability. Single quotes are required: $matrix_key and $item are
+              # jq variables and must not be expanded by the shell, which is what SC2016
+              # warns about and why it is disabled rather than "fixed".
+              # shellcheck disable=SC2016
+              jq_filter='map(to_entries | map(.key as $matrix_key | .value | map_values({($matrix_key): .})))
+                | flatten
+                | reduce .[] as $item ({}; . * $item)'
+
+              result="$(find . -name "$MATRIX_STEP_NAME" -maxdepth 2 -exec cat {} \; | jq -c --slurp "$jq_filter")"
+              echo "result=${result}" | tee -a "$GITHUB_OUTPUT"
+          env:
+              MATRIX_STEP_NAME: ${{ inputs.matrix-step-name }}
