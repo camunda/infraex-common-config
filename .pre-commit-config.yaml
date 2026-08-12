@@ -49,5 +49,10 @@ repos:
           # Without GH_TOKEN zizmor runs offline, which skips known-vulnerable-actions,
           # impostor-commit, ref-confusion, ref-version-mismatch and stale-action-refs.
           # None of those currently report anything at `high`.
+          #
+          # --config makes the pinning policy explicit in .github/zizmor.yml rather than
+          # leaving it to zizmor's defaults. The repository is already fully SHA-pinned,
+          # so this changes no finding today; it stops a future default change from
+          # silently dropping `unpinned-uses` below the `high` threshold above.
           - id: zizmor
-            args: [--no-progress, --min-severity=high]
+            args: [--no-progress, --min-severity=high, --config=.github/zizmor.yml]
