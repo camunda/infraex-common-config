@@ -7,14 +7,16 @@ description: |
     Pair it with `camunda/infra-global-github-actions/start-build-monitor`, which must be the
     **first** step of the job: it starts the resource sampler and drops the `/tmp/_monitor-start.pid`
     timestamp file this action reads to compute the duration. Call this action as the **last**
-    step, with `if: always()` so failed and cancelled jobs are reported too, and
-    `continue-on-error: true` so analytics can never fail a build.
+    step, with `if: always()` so failed and cancelled jobs are reported too.
+
+    Every step here is best-effort: the action reports what it can and never fails the job it is
+    measuring, so callers do not have to remember `continue-on-error: true`.
 
     The CI Analytics service-account key is read from Vault at
     `secret/data/products/infrastructure-experience/ci/ci-analytics`, which is a constant for the
     whole InfraEx fleet — callers only supply credentials, never the path. Authenticate with
-    either JWT/OIDC (preferred: no long-lived credential) or AppRole. When neither set of inputs
-    is provided the action is a silent no-op, so forks and local runs are unaffected.
+    either JWT/OIDC (preferred: no long-lived credential) or AppRole. Leave `vault_addr` empty to
+    disable reporting entirely, so forks and local runs are unaffected.
 
 inputs:
     build_status:
@@ -45,7 +47,8 @@ inputs:
         required: false
     vault_jwt_role:
         description: |
-            Vault JWT auth role. Selects JWT authentication. The calling job needs
+            Vault JWT auth role. Setting it selects JWT authentication, and together with
+            `vault_addr` it is the complete JWT credential set. The calling job needs
             `permissions: id-token: write` for GitHub to mint the OIDC token.
         required: false
     vault_jwt_audience:
@@ -53,8 +56,9 @@ inputs:
         required: false
     vault_role_id:
         description: |
-            Vault AppRole role ID. Only used when `vault_jwt_role` is empty; prefer JWT, which needs
-            no long-lived credential stored as a repository secret.
+            Vault AppRole role ID. Only used when `vault_jwt_role` is empty, and only together with
+            `vault_secret_id` — both are required for the AppRole set to count as complete. Prefer
+            JWT, which needs no long-lived credential stored as a repository secret.
         required: false
     vault_secret_id:
         description: Vault AppRole secret ID. See `vault_role_id`.
@@ -85,10 +89,11 @@ runs:
 
         # AppRole is the migration path for repositories that have not moved to OIDC yet. It is
         # skipped as soon as a JWT role is configured, so a repository can carry both sets of
-        # inputs while it migrates.
+        # inputs while it migrates. Both AppRole inputs are required: attempting auth with a
+        # half-configured set only produces a failure and a misleading "Vault read failed" warning.
         - name: Import CI Analytics secret (AppRole)
           id: secrets-approle
-          if: ${{ inputs.vault_addr != '' && inputs.vault_jwt_role == '' && inputs.vault_role_id != '' }}
+          if: ${{ inputs.vault_addr != '' && inputs.vault_jwt_role == '' && inputs.vault_role_id != '' && inputs.vault_secret_id != '' }}
           continue-on-error: true
           uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
           with:
@@ -100,14 +105,26 @@ runs:
               secrets: |
                   secret/data/products/infrastructure-experience/ci/ci-analytics gcloud_sa_key;
 
-        # Warn only when reporting was actually requested. A caller that configured no Vault
-        # credentials at all wants a no-op, and does not need an annotation on every job.
+        # `vault_addr` is the opt-in switch, so setting it without a complete credential set is a
+        # configuration mistake rather than an opt-out. Say so explicitly: silently doing nothing
+        # here would leave a repository believing it is reporting metrics when it is not.
+        - name: Check Vault configuration
+          if: >-
+              ${{ inputs.vault_addr != ''
+              && inputs.vault_jwt_role == ''
+              && !(inputs.vault_role_id != '' && inputs.vault_secret_id != '') }}
+          shell: bash
+          run: |
+              echo "::warning::Not sending CI health metrics: vault_addr is set but no complete credential set was supplied. Provide vault_jwt_role (JWT, preferred), or both vault_role_id and vault_secret_id (AppRole). Leave vault_addr empty to disable reporting on purpose."
+
+        # Only reachable when credentials were actually supplied, so this always means a real
+        # failure — a Vault outage, or a role without a policy on the CI Analytics path.
         - name: Check CI Analytics secret availability
           if: >-
-              inputs.vault_addr != ''
-              && (inputs.vault_jwt_role != '' || inputs.vault_role_id != '')
+              ${{ inputs.vault_addr != ''
+              && (inputs.vault_jwt_role != '' || (inputs.vault_role_id != '' && inputs.vault_secret_id != ''))
               && steps.secrets-jwt.outputs.gcloud_sa_key == ''
-              && steps.secrets-approle.outputs.gcloud_sa_key == ''
+              && steps.secrets-approle.outputs.gcloud_sa_key == '' }}
           shell: bash
           run: |
               echo "::warning::Not sending CI health metrics: could not read the CI Analytics secret from Vault. Check that the Vault role has a policy on secret/data/products/infrastructure-experience/ci/ci-analytics."
@@ -115,6 +132,7 @@ runs:
         - name: Get build duration in milliseconds
           id: duration
           if: ${{ steps.secrets-jwt.outputs.gcloud_sa_key != '' || steps.secrets-approle.outputs.gcloud_sa_key != '' }}
+          continue-on-error: true # a duration we cannot compute must not fail the job being measured
           shell: bash
           run: |
               set -euo pipefail
@@ -143,6 +161,7 @@ runs:
 
         - name: Submit build status
           if: ${{ always() && (steps.secrets-jwt.outputs.gcloud_sa_key != '' || steps.secrets-approle.outputs.gcloud_sa_key != '') }}
+          continue-on-error: true # BigQuery or network trouble must not fail the job being measured
           uses: camunda/infra-global-github-actions/submit-build-status@66bf6e260f2beb42a83284fef490bb96672e8f36 # main
           with:
               job_name_override: ${{ inputs.job_name }}
