@@ -108,7 +108,9 @@ runs:
                 exit 1
               fi
           env:
-              GITHUB_TOKEN: ${{ github.token }}
+              # GH_TOKEN rather than GITHUB_TOKEN: it is the variable the gh CLI documents,
+              # and what report-warning-on-slack and todo-checker-global already use.
+              GH_TOKEN: ${{ github.token }}
 
         - name: Compute failure cache key
           id: cache-key
