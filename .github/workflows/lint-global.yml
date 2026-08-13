@@ -23,6 +23,24 @@ on:
                     bulk content (binaries, generated blobs) that a line count does not.
                 default: 65536
                 type: number
+        # Declared so callers can pass these three explicitly instead of `secrets: inherit`,
+        # which hands the called workflow every secret the calling repository holds -- Docker
+        # Hub, registry and cloud credentials included -- when all it needs is the AppRole that
+        # mints the auto-fix App token.
+        #
+        # All three are optional: a repository that never auto-fixes (no `autofix-actor` run)
+        # never reaches the job that reads them. Existing callers using `secrets: inherit` keep
+        # working unchanged, since inherit satisfies declared secrets too.
+        secrets:
+            VAULT_ADDR:
+                description: Vault server URL, used only by the auto-fix job.
+                required: false
+            VAULT_ROLE_ID:
+                description: Vault AppRole role ID, used only by the auto-fix job.
+                required: false
+            VAULT_SECRET_ID:
+                description: Vault AppRole secret ID, used only by the auto-fix job.
+                required: false
 
 # The auto-fix commit is created with a dedicated GitHub App token in a separate job,
 # never with GITHUB_TOKEN. GITHUB_TOKEN therefore stays read-only for the whole run,
