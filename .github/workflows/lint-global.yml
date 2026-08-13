@@ -90,12 +90,14 @@ jobs:
                   echo "artifact_name=pre-commit-autofix-patch-$(openssl rand -hex 8)" | tee -a "$GITHUB_OUTPUT"
 
             # On the auto-fix path we lint the PR head itself, because the resulting patch is
-            # committed back onto that branch. Elsewhere the default checkout (merge result on
-            # pull_request) is kept.
+            # committed back onto that branch. By SHA rather than by branch name: autofix-apply
+            # replays the patch onto that exact commit and refuses to commit if the branch has
+            # moved since, so both jobs have to name the same thing. Elsewhere the default
+            # checkout (merge result on pull_request) is kept.
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               if: steps.mode.outputs.autofix_pr == 'true'
               with:
-                  ref: ${{ github.event.pull_request.head.ref }}
+                  ref: ${{ github.event.pull_request.head.sha }}
                   persist-credentials: false
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -221,111 +223,27 @@ jobs:
         # `lint` reports failure whenever pre-commit had something to fix, so this job must not
         # depend on its conclusion — only on the outputs it published.
         if: ${{ !cancelled() && needs.lint.outputs.autofix_pr == 'true' && needs.lint.outputs.has_fixes == 'true' }}
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-            # Same-repository PRs only, enforced by the autofix_pr guard in the lint job, so the
-            # default `repository` is the PR head repository.
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  ref: ${{ github.event.pull_request.head.ref }}
-                  # The commit is created through the GitHub API by getsentry/action-github-commit,
-                  # so no git credential is needed after checkout.
-                  persist-credentials: false
-
-            - name: Download auto-fix patch
-              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-              with:
-                  # Non-empty whenever this job runs: has_fixes can only be 'true' if the mode
-                  # step, which sets this, already ran. An empty name would download every
-                  # artifact of the run into per-name subdirectories.
-                  name: ${{ needs.lint.outputs.artifact_name }}
-
-            - name: Check the patch is safe to auto-commit
-              # The patch content is untrusted: it was produced by repository-supplied hook code
-              # in the `lint` job. What is trustworthy here is the toolchain measuring it —
-              # no hook code has run on this runner, so `git`, `wc` and `awk` cannot have been
-              # shimmed to under-report.
-              #
-              # This bounds blast radius, it is not an injection defence: a hostile hook would
-              # plant a handful of lines, well under any usable threshold. What it does catch
-              # is a broken or runaway hook rewriting the tree, and bulk content smuggled in
-              # behind a plausible-looking commit message.
-              #
-              # What it is really for is keeping the auto-fix commit small enough that a human
-              # reviewing the pull request can actually read it. Note that review is a weaker
-              # backstop than it sounds: unless the branch requires `require_last_push_approval`
-              # or dismisses stale reviews, an approval given before this commit still stands.
-              env:
-                  MAX_LINES: ${{ inputs.autofix-max-changed-lines }}
-                  MAX_BYTES: ${{ inputs.autofix-max-patch-bytes }}
-              run: |
-                  set -euo pipefail
-                  numstat=$(git apply --numstat autofix.patch)
-                  bytes=$(wc -c < autofix.patch | tr -d ' ')
-                  files=$(printf '%s\n' "$numstat" | grep -c . || true)
-                  # Binary hunks report "-" instead of a line count; they are covered by MAX_BYTES.
-                  lines=$(printf '%s\n' "$numstat" \
-                          | awk '{ if ($1 != "-") a += $1; if ($2 != "-") d += $2 } END { print a + d + 0 }')
-                  echo "Patch: ${files} file(s), ${lines} changed line(s), ${bytes} byte(s)."
-                  printf '%s\n' "$numstat"
-                  if [ "$lines" -gt "$MAX_LINES" ] || [ "$bytes" -gt "$MAX_BYTES" ]; then
-                    echo "::error::pre-commit patch is too large to auto-commit (${lines} lines / ${bytes} bytes, limits ${MAX_LINES} / ${MAX_BYTES})."
-                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself, or raise autofix-max-changed-lines / autofix-max-patch-bytes on the caller."
-                    exit 1
-                  fi
-
-                  # getsentry/action-github-commit sends every file to the API as
-                  # Buffer.from(content).toString(), i.e. decoded as UTF-8, and hardcodes mode
-                  # 100644. Binary content comes out mangled and permissions are lost. The patch
-                  # itself carries both faithfully, so nothing upstream of here notices; refuse
-                  # instead of producing a commit that is quietly wrong.
-                  if printf '%s\n' "$numstat" | awk '$1 == "-" && $2 == "-" { found = 1 } END { exit !found }'; then
-                    echo "::error::The patch changes binary files, which the commit step would corrupt."
-                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
-                    exit 1
-                  fi
-                  if grep -qE '^(old|new) mode ' autofix.patch \
-                     || grep -E '^new file mode ' autofix.patch | grep -qv ' 100644$'; then
-                    echo "::error::The patch changes file modes, which the commit step would flatten to 100644."
-                    echo "::error::Run 'pre-commit run --all-files' locally and commit the result yourself."
-                    exit 1
-                  fi
-
-            - name: Apply auto-fix patch
-              run: |
-                  set -euo pipefail
-                  git apply --stat autofix.patch
-                  # Leave the changes unstaged: action-github-commit collects them with
-                  # `git ls-files -om`, which compares the working tree against the index.
-                  if ! git apply autofix.patch; then
-                    echo "::error::Could not apply the pre-commit patch, most likely because the branch moved between jobs. Re-run the workflow."
-                    exit 1
-                  fi
-                  rm -f autofix.patch
-
-            # Minted last, deliberately: the token only needs to exist for the commit call, so
-            # it is not alive while the untrusted patch is measured and applied. No pre-commit
-            # hook code has executed on this runner either, so there is no planted git hook,
-            # PATH shim or BASH_ENV able to intercept it.
-            - name: Generate token for GitHub
-              id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@66bf6e260f2beb42a83284fef490bb96672e8f36 # main
-              with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  # Pin the installation token to the repository under test rather than relying on
-                  # the composite action's default.
-                  repositories: ${{ github.event.repository.name }}
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
-                  vault-url: ${{ secrets.VAULT_ADDR }}
-
-            - name: Commit Changes made by pre-commit fix
-              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
-              with:
-                  github-token: ${{ steps.generate-github-token.outputs.token }}
-                  message: 'chore: update files from pre-commit run'
+        # The privileged half of the split, shared with the other workflows that commit a patch
+        # built by an untrusted job. It downloads the artifact, refuses what it should not commit,
+        # applies it, mints a repository-scoped App token last and commits through the API. It runs
+        # no repository code, which is the whole point: the hooks that produced this patch executed
+        # in `lint`, with no credential.
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@4f41fc83a003370fdba17e7cc5a34840640e1248 # 2.3.2
+        with:
+            artifact-name: ${{ needs.lint.outputs.artifact_name }}
+            patch-file-name: autofix.patch
+            # Same-repository pull requests only, enforced by the autofix_pr guard in `lint`.
+            head-sha: ${{ github.event.pull_request.head.sha }}
+            head-ref: ${{ github.event.pull_request.head.ref }}
+            commit-message: 'chore: update files from pre-commit run'
+            max-patch-bytes: ${{ inputs.autofix-max-patch-bytes }}
+            max-changed-lines: ${{ inputs.autofix-max-changed-lines }}
+            # No refuse-paths-regex on purpose: reformatting `.github/workflows` is exactly what a
+            # pre-commit hook legitimately does here, so the CI-definition guard other callers set
+            # would reject the normal case.
+        secrets:
+            # `secrets: inherit` would not work: the callee names its secrets vault-addr and so on,
+            # while the caller supplies VAULT_ADDR. They have to be mapped.
+            vault-addr: ${{ secrets.VAULT_ADDR }}
+            vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+            vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
