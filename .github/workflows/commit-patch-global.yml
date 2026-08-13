@@ -144,20 +144,24 @@ jobs:
                       exit 1
                   fi
 
-                  numstat=$(git apply --numstat --binary "$patch_path")
+                  # Size first, before anything parses the patch. The job that produced it is
+                  # untrusted, so its own size check cannot be relied on -- it could upload
+                  # gigabytes. Running `git apply --numstat` on that would burn the runner
+                  # before the limit meant to catch it had been consulted.
                   bytes=$(wc -c < "$patch_path" | tr -d ' ')
+                  if [ "$bytes" -gt "$MAX_BYTES" ]; then
+                      echo "::error::The patch is ${bytes} bytes, over the ${MAX_BYTES}-byte limit; not committing it."
+                      echo "::error::Reproduce the job locally and commit the result yourself, or raise max-patch-bytes."
+                      exit 1
+                  fi
+
+                  numstat=$(git apply --numstat --binary "$patch_path")
                   files=$(printf '%s\n' "$numstat" | grep -c . || true)
                   # Binary hunks report "-" for both counts; they are covered by the byte limit.
                   lines=$(printf '%s\n' "$numstat" \
                           | awk '{ if ($1 != "-") a += $1; if ($2 != "-") d += $2 } END { print a + d + 0 }')
                   echo "Patch: ${files} file(s), ${lines} changed line(s), ${bytes} byte(s)."
                   printf '%s\n' "$numstat"
-
-                  if [ "$bytes" -gt "$MAX_BYTES" ]; then
-                      echo "::error::The patch is ${bytes} bytes, over the ${MAX_BYTES}-byte limit; not committing it."
-                      echo "::error::Reproduce the job locally and commit the result yourself, or raise max-patch-bytes."
-                      exit 1
-                  fi
 
                   if [ "$MAX_LINES" -gt 0 ] && [ "$lines" -gt "$MAX_LINES" ]; then
                       echo "::error::The patch changes ${lines} lines, over the ${MAX_LINES}-line limit; not committing it."
