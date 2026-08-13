@@ -91,7 +91,14 @@ jobs:
                   set -e
 
                   echo "📥 Getting existing PR comments"
-                  gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" > comments.json
+                  # --paginate is required: the endpoint returns 30 comments per page and page 1
+                  # holds the OLDEST, so on any pull request past 30 review comments this workflow
+                  # stopped seeing its own comments -- posting a duplicate on every run and never
+                  # honouring the 👎 acknowledgement, leaving the check permanently red.
+                  # --slurp would yield an array of pages, which breaks the `.[]` lookup below, so
+                  # the pages are flattened into one array instead.
+                  gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
+                    --paginate --jq '.[]' | jq -s '.' > comments.json
 
                   echo "🔁 Processing TODOs with git blame verification"
                   echo "0" > todo_count.txt
