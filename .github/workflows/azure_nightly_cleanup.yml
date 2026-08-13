@@ -135,9 +135,11 @@ jobs:
 
     notify-on-failure:
         runs-on: ubuntu-latest
-        # The Slack action talks to GitHub with a Vault-issued App token, not GITHUB_TOKEN.
         permissions:
             contents: read
+            # The Slack action checks for an open "silence: <workflow>" issue in this
+            # repository before alerting, and reads it with this token.
+            issues: read
         if: failure()
         needs:
             - azure-cleanup
