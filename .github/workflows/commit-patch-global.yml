@@ -1,0 +1,263 @@
+---
+name: commit-patch-global
+
+# Commits a patch produced by an untrusted job, from a job that holds the credential.
+#
+# This is the privileged half of a two-job split. The pattern it exists to support:
+#
+#   job 1   runs repository-supplied code -- build tooling, dependency updates, linters,
+#           pre-commit hooks. It holds no GitHub write credential, sets
+#           `persist-credentials: false`, and emits its result as a patch artifact.
+#
+#   job 2   is this workflow. It runs no repository code: pinned third-party actions,
+#           `git apply`, and a commit through the GitHub API. Applying a patch does not
+#           execute it, and `git apply` refuses paths outside the work tree.
+#
+# The point is that a dependency update, or a third-party lint hook, cannot execute next
+# to a token that can write to the repository. See the "CI trust boundary" section of the
+# README for when to reach for this and why.
+#
+# The patch is untrusted input. What is trustworthy here is the toolchain measuring it:
+# no repository code has run on this runner, so `git`, `wc` and `grep` cannot have been
+# shimmed to under-report. The guards below bound blast radius and refuse patches the
+# commit step would silently corrupt; they are not an injection defence, since a hostile
+# patch needs three lines, not a large one.
+#
+# Requires a `pull_request` context: the commit lands on `head-ref` via the GitHub API.
+
+on:
+    workflow_call:
+        inputs:
+            artifact-name:
+                description: Name of the artifact holding the patch, as uploaded by the unprivileged job.
+                required: true
+                type: string
+            patch-file-name:
+                description: Name of the patch file inside that artifact.
+                default: changes.patch
+                type: string
+            head-sha:
+                description: |
+                    The commit the patch was built from. Checked out here, and asserted to still be
+                    what the branch points at before committing. Pass the same value the unprivileged
+                    job checked out, normally `github.event.pull_request.head.sha`.
+                required: true
+                type: string
+            head-ref:
+                description: Branch the commit is pushed to, normally `github.event.pull_request.head.ref`.
+                required: true
+                type: string
+            commit-message:
+                description: Commit message.
+                required: true
+                type: string
+            max-patch-bytes:
+                description: |
+                    Refuse a patch larger than this. Set it above the largest legitimate output of the
+                    producing job -- a generator rewriting a large fixture corpus needs megabytes,
+                    whereas a formatter needs kilobytes -- because its purpose is catching a runaway,
+                    such as a .gitignore miss dumping build caches into the patch.
+                default: 65536
+                type: number
+            max-changed-lines:
+                description: |
+                    Refuse a patch touching more than this many lines. 0 disables it, which is the
+                    right setting whenever the producing job legitimately rewrites generated files:
+                    a line count says nothing useful about machine-written JSON. Where the commit is
+                    meant to stay human-readable, set it.
+                default: 0
+                type: number
+            refuse-paths-regex:
+                description: |
+                    Extended regular expression matched against every path in the patch. A match is
+                    refused. Empty disables it.
+
+                    Use it for paths the producing job has no business writing. CI definitions are
+                    the usual case -- `\.github/(workflows|actions)/|(^|/)\.gitmodules$` -- but only
+                    where they are genuinely out of scope: a formatter that reformats workflow YAML
+                    writes them legitimately, and would be refused.
+                default: ''
+                type: string
+            token-repositories:
+                description: |
+                    Repositories the installation token may act on. Empty means the calling repository,
+                    which is also what the token action defaults to; naming it stops the scope drifting
+                    if that default changes.
+                default: ''
+                type: string
+            vault-secret-path:
+                description: Vault path holding the GitHub App id and private key.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+        secrets:
+            vault-addr:
+                required: true
+            vault-role-id:
+                required: true
+            vault-secret-id:
+                required: true
+
+# The write is carried by the App token, never by GITHUB_TOKEN, which only reads the
+# branch and the ref.
+permissions:
+    contents: read
+
+jobs:
+    commit:
+        name: Commit the patch
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            # No step in this job may run code from the branch: that is the whole point.
+            # Keep it to SHA-pinned third-party actions and git.
+            - name: Checkout the head commit
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  # By SHA, not by branch name: the patch has to be replayed onto exactly the
+                  # tree it was built from. A branch name would let a push in between move the
+                  # ground under this job.
+                  ref: ${{ inputs.head-sha }}
+                  # The commit is created through the GitHub API by the last step, which
+                  # receives the App token explicitly, so no write credential is needed here --
+                  # and the App token does not have to exist yet.
+                  persist-credentials: false
+
+            - name: Download the patch
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: ${{ inputs.artifact-name }}
+                  path: ${{ runner.temp }}
+
+            - name: Check the patch is safe to commit
+              env:
+                  ARTIFACT_NAME: ${{ inputs.artifact-name }}
+                  PATCH_FILE_NAME: ${{ inputs.patch-file-name }}
+                  MAX_BYTES: ${{ inputs.max-patch-bytes }}
+                  MAX_LINES: ${{ inputs.max-changed-lines }}
+                  REFUSE_PATHS: ${{ inputs.refuse-paths-regex }}
+              run: |
+                  set -euo pipefail
+
+                  patch_path="${RUNNER_TEMP}/${PATCH_FILE_NAME}"
+                  if [ ! -s "$patch_path" ]; then
+                      echo "::error::${PATCH_FILE_NAME} is missing or empty in artifact '${ARTIFACT_NAME}'."
+                      exit 1
+                  fi
+
+                  # Size first, before anything parses the patch. The job that produced it is
+                  # untrusted, so its own size check cannot be relied on -- it could upload
+                  # gigabytes. Running `git apply --numstat` on that would burn the runner
+                  # before the limit meant to catch it had been consulted.
+                  bytes=$(wc -c < "$patch_path" | tr -d ' ')
+                  if [ "$bytes" -gt "$MAX_BYTES" ]; then
+                      echo "::error::The patch is ${bytes} bytes, over the ${MAX_BYTES}-byte limit; not committing it."
+                      echo "::error::Reproduce the job locally and commit the result yourself, or raise max-patch-bytes."
+                      exit 1
+                  fi
+
+                  numstat=$(git apply --numstat --binary "$patch_path")
+                  files=$(printf '%s\n' "$numstat" | grep -c . || true)
+                  # Binary hunks report "-" for both counts; they are covered by the byte limit.
+                  lines=$(printf '%s\n' "$numstat" \
+                          | awk '{ if ($1 != "-") a += $1; if ($2 != "-") d += $2 } END { print a + d + 0 }')
+                  echo "Patch: ${files} file(s), ${lines} changed line(s), ${bytes} byte(s)."
+                  printf '%s\n' "$numstat"
+
+                  if [ "$MAX_LINES" -gt 0 ] && [ "$lines" -gt "$MAX_LINES" ]; then
+                      echo "::error::The patch changes ${lines} lines, over the ${MAX_LINES}-line limit; not committing it."
+                      echo "::error::Reproduce the job locally and commit the result yourself, or raise max-changed-lines."
+                      exit 1
+                  fi
+
+                  # getsentry/action-github-commit sends every file to the API as
+                  # Buffer.from(content).toString(), i.e. decoded as UTF-8, and hardcodes mode
+                  # 100644. Binary content comes out mangled and permissions are lost. The patch
+                  # carries both faithfully -- it is measured and applied with --binary -- so
+                  # nothing upstream notices; refuse rather than commit something quietly wrong.
+                  # Deletions are fine: the action handles them with `sha: null`.
+                  if printf '%s\n' "$numstat" | awk '$1 == "-" && $2 == "-" { found = 1 } END { exit !found }'; then
+                      echo "::error::The patch changes binary files, which the commit step would corrupt."
+                      exit 1
+                  fi
+
+                  if grep -qE '^(old|new) mode ' "$patch_path" \
+                     || grep -E '^new file mode ' "$patch_path" | grep -qv ' 100644$'; then
+                      echo "::error::The patch changes file modes, which the commit step would flatten to 100644."
+                      exit 1
+                  fi
+
+                  # `cut -f3-` keeps the whole path field, so a rename with either side matching
+                  # is caught too.
+                  if [ -n "$REFUSE_PATHS" ] \
+                     && printf '%s\n' "$numstat" | cut -f3- | grep -qE "$REFUSE_PATHS"; then
+                      echo "::error::The patch touches paths this job is not allowed to write (${REFUSE_PATHS})."
+                      echo "::error::Inspect the pull request: this is a broken job, or branch code writing where it should not."
+                      exit 1
+                  fi
+
+            - name: Apply the patch
+              env:
+                  PATCH_FILE_NAME: ${{ inputs.patch-file-name }}
+              run: |
+                  set -euo pipefail
+
+                  patch_path="${RUNNER_TEMP}/${PATCH_FILE_NAME}"
+
+                  # `git apply` refuses paths outside the working tree, so the patch cannot reach
+                  # the runner's filesystem. It is applied, never executed.
+                  #
+                  # The changes are left unstaged on purpose: action-github-commit collects them
+                  # with `git ls-files -om`, which compares the working tree against the index.
+                  git apply --stat --binary "$patch_path"
+                  git apply --check --binary "$patch_path"
+                  if ! git apply --binary "$patch_path"; then
+                      echo "::error::Could not apply the patch. Re-run the workflow."
+                      exit 1
+                  fi
+
+            - name: Check the branch has not moved
+              # `git apply` matches context, not position, so a patch built from an older tree
+              # can still apply cleanly to a newer one. And the commit step takes its parent from
+              # the remote branch as it stands at that moment while sending the working tree's
+              # file contents: if the branch was pushed to while the producing job was working,
+              # that would quietly overwrite the newer version of every file in the patch.
+              #
+              # This narrows the window rather than closing it -- the commit call re-reads the
+              # ref seconds later and there is no compare-and-swap to hand -- but it turns the
+              # likely case into a loud failure, and the push that moved the branch has started
+              # its own run, which redoes the work.
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  HEAD_SHA: ${{ inputs.head-sha }}
+                  HEAD_REF: ${{ inputs.head-ref }}
+              run: |
+                  set -euo pipefail
+
+                  current=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq '.object.sha')
+                  if [ "$current" != "$HEAD_SHA" ]; then
+                      echo "::error::${HEAD_REF} moved from ${HEAD_SHA} to ${current} while the job was running; not committing a patch built from the old tree."
+                      exit 1
+                  fi
+                  echo "${HEAD_REF} is still at ${HEAD_SHA}."
+
+            # Minted last, deliberately: the token only needs to exist for the commit call, so
+            # it is not alive while the untrusted patch is downloaded, measured and applied.
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@32a6e03de12f6c9c08a2e0590bb5aef2d69e9d6c # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: ${{ inputs.vault-secret-path }}
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: ${{ inputs.vault-secret-path }}
+                  repositories: ${{ inputs.token-repositories || github.event.repository.name }}
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.vault-role-id }}
+                  vault-auth-secret-id: ${{ secrets.vault-secret-id }}
+                  vault-url: ${{ secrets.vault-addr }}
+
+            - name: Commit the changes
+              uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
+              with:
+                  github-token: ${{ steps.generate-github-token.outputs.token }}
+                  message: ${{ inputs.commit-message }}
