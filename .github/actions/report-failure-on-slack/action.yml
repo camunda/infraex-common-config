@@ -80,14 +80,15 @@ runs:
               set -euo pipefail
               ISSUE_TITLE="silence: ${GITHUB_WORKFLOW}"
 
-              # Read with the caller's own GITHUB_TOKEN. The silence issues live in the
-              # calling repository, which is precisely what that token covers, so there is
-              # nothing here an App token was needed for once the cross-repository dispatch
-              # went away.
+              # Read with the caller's own `github.token`, passed below as GH_TOKEN. The
+              # silence issues live in the calling repository, which is precisely what that
+              # token covers, so there is nothing here an App token was needed for once the
+              # cross-repository dispatch went away.
               #
               # stderr is kept out of the capture: merged in, a warning from gh would be
               # parsed as JSON and break silencing for a reason nobody would guess.
               err="$(mktemp)"
+              trap 'rm -f "${err}"' EXIT
               if ! ISSUE_SEARCH=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
                     --search "${ISSUE_TITLE} in:title" --label "alert-management" \
                     --json number,title,url 2>"${err}"); then
