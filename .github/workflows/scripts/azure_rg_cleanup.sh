@@ -126,7 +126,7 @@ done
 # leaves the group running and billing with nothing to signal it. Wait for the
 # groups to actually disappear and fail the job if they do not, so a wedged
 # group is visible the same morning instead of being rediscovered by hand.
-if [[ ${#INITIATED[@]-0} -gt 0 ]]; then
+if [[ ${#INITIATED[@]} -gt 0 ]]; then
   echo "Waiting up to ${DELETION_TIMEOUT}s for ${#INITIATED[@]} resource group(s) to disappear..."
   DEADLINE=$(( $(date +%s) + DELETION_TIMEOUT ))
 
