@@ -61,21 +61,34 @@ check() { # check <scenario> <what was expected> <result>
   fi
 }
 
+# Every helper captures the test result into `rc` before building the message.
+# Arguments are expanded before the command runs, so a command substitution in
+# the message would overwrite $? with its own status and the assertion would
+# pass unconditionally.
 expect_rc() {
+  local rc
   [[ "$RC" == "$2" ]]
-  check "$1" "rc=$2, got rc=$RC" $?
+  rc=$?
+  check "$1" "rc=$2, got rc=$RC" "$rc"
 }
 expect_out() {
+  local rc
   grep -qF "$2" <<<"$OUT"
-  check "$1" "output to contain: $2" $?
+  rc=$?
+  check "$1" "output to contain: $2" "$rc"
 }
 expect_noout() {
+  local rc
   ! grep -qF "$2" <<<"$OUT"
-  check "$1" "output NOT to contain: $2" $?
+  rc=$?
+  check "$1" "output NOT to contain: $2" "$rc"
 }
 expect_log() {
-  [[ "$(cat "$STATE/log")" == "$2" ]]
-  check "$1" "az calls [$2], got [$(cat "$STATE/log")]" $?
+  local rc actual
+  actual="$(cat "$STATE/log")"
+  [[ "$actual" == "$2" ]]
+  rc=$?
+  check "$1" "az calls [$2], got [$actual]" "$rc"
 }
 
 echo "bash $BASH_VERSION"
@@ -175,6 +188,17 @@ run
 expect_rc "9" 0
 expect_log "9" "lock delete /subscriptions/x/locks/keep
 group delete hci-locked-rg"
+
+# 10. A bad DELETION_TIMEOUT must be rejected before anything is deleted. It is
+#     read long before it is used, and validating it late means failing with an
+#     arithmetic error after the groups are already gone.
+echo "10. invalid DELETION_TIMEOUT"
+setup
+group hci-a-rg
+DELETION_TIMEOUT=abc run
+expect_rc "10" 1
+expect_out "10" "Invalid DELETION_TIMEOUT: abc"
+expect_log "10" ""
 
 echo
 echo "passed=$PASS failed=$FAIL"

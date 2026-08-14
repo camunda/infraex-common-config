@@ -27,8 +27,12 @@ if [[ -n "$CLEANUP_OLDER_THAN" ]]; then
   echo "Filtering RGs to only those with oldest resource created before: $LIMIT_DATE"
 fi
 
-# Deletion timeout, in seconds, for the verification pass at the end.
+# Deletion timeout, in seconds, for the verification pass at the end. Validated
+# here rather than where it is used: by then groups have already been deleted,
+# and the arithmetic would fail with "abc: unbound variable" instead of naming
+# the offending setting.
 DELETION_TIMEOUT="${DELETION_TIMEOUT:-1800}"
+[[ "$DELETION_TIMEOUT" =~ ^[0-9]+$ ]] || { echo "Invalid DELETION_TIMEOUT: $DELETION_TIMEOUT"; exit 1; }
 
 # ── Pass 1: decide what is eligible ──────────────────────────────────────────
 ELIGIBLE=()
