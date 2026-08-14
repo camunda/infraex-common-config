@@ -1,0 +1,76 @@
+#!/bin/bash
+# Stub for the Azure CLI, covering only the invocations azure_rg_cleanup.sh
+# makes. Put this directory on PATH to run the sweep without touching Azure.
+#
+# State lives in $AZ_STUB_STATE:
+#   groups       one resource group name per line: the ones that exist
+#   created/<RG> ISO-8601 timestamp of the oldest resource in <RG>
+#   locks/<RG>   one lock id per line, optional
+#   undeletable  groups whose deletion is accepted but never completes
+#   log          every mutating call, in order
+set -euo pipefail
+
+STATE="${AZ_STUB_STATE:?AZ_STUB_STATE must be set}"
+
+arg_after() { # arg_after --name "$@"
+  local want="$1"
+  shift
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "$want" ]]; then
+      echo "$2"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}
+
+group="$1"
+action="${2:-}"
+shift 2 || true
+
+case "$group $action" in
+  "group list")
+    # The real call filters on location; every fixture group is in-region.
+    cat "$STATE/groups"
+    ;;
+
+  "resource list")
+    rg="$(arg_after --resource-group "$@")"
+    if [[ -f "$STATE/created/$rg" ]]; then
+      printf '[{"created":"%s"}]\n' "$(cat "$STATE/created/$rg")"
+    else
+      echo '[]'
+    fi
+    ;;
+
+  "lock list")
+    rg="$(arg_after --resource-group "$@")"
+    if [[ -f "$STATE/locks/$rg" ]]; then cat "$STATE/locks/$rg"; fi
+    ;;
+
+  "lock delete")
+    echo "lock delete $(arg_after --ids "$@")" >>"$STATE/log"
+    ;;
+
+  "group delete")
+    rg="$(arg_after --name "$@")"
+    echo "group delete $rg" >>"$STATE/log"
+    # --no-wait: the request is accepted and the group disappears later, unless
+    # the fixture says the deletion wedges, in which case it never does.
+    if ! grep -qxF "$rg" "$STATE/undeletable" 2>/dev/null; then
+      grep -vxF "$rg" "$STATE/groups" >"$STATE/groups.tmp" || true
+      mv "$STATE/groups.tmp" "$STATE/groups"
+    fi
+    ;;
+
+  "group exists")
+    rg="$(arg_after --name "$@")"
+    if grep -qxF "$rg" "$STATE/groups" 2>/dev/null; then echo true; else echo false; fi
+    ;;
+
+  *)
+    echo "stub az: unhandled invocation: $group $action $*" >&2
+    exit 64
+    ;;
+esac

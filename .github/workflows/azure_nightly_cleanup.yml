@@ -21,6 +21,7 @@ on:
         paths:
             - .github/workflows/azure_nightly_cleanup.yml
             - .github/workflows/scripts/azure_rg_cleanup.sh
+            - .github/workflows/scripts/tests/**
 
 # Limit workflow to a single execution per ref
 concurrency:
@@ -28,6 +29,20 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # The sweep runs against a stubbed CLI here. On pull requests the real job
+    # below is forced into DRY_RUN, so it never deletes anything and never
+    # reaches the deletion or verification paths; this is what covers them.
+    sweep-tests:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+            - name: Run the resource group sweep tests
+              run: |
+                  ./.github/workflows/scripts/tests/azure_rg_cleanup_test.sh
+
     azure-cleanup:
         runs-on: ubuntu-latest
         # `azure/login` authenticates with OIDC, so this job — and only this job — needs to
@@ -142,6 +157,7 @@ jobs:
             issues: read
         if: failure()
         needs:
+            - sweep-tests
             - azure-cleanup
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
