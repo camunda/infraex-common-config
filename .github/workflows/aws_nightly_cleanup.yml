@@ -19,6 +19,7 @@ on:
             - .github/workflows/scripts/aws_global_cleanup.sh
             - .github/workflows/scripts/aws_global_db_teardown.sh
             - .github/workflows/scripts/aws_regional_cleanup.sh
+            - .github/workflows/scripts/aws_route53_cleanup.sh
 
 env:
     AWS_PROFILE: infraex
@@ -42,7 +43,7 @@ jobs:
             # Guarantees the pinned yq (.tool-versions) used by the region
             # derivation below, instead of relying on the runner image.
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@bde1b69728d323c1c2d02e19153a8e00382eec4a # 1.8.0
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@4e5ecdb4100b2a50e46b3517cc8c285c80f7ccd5 # 2.0.1
 
             - name: Determine DRY_RUN and matrix-derived regions
               env:
@@ -133,8 +134,8 @@ jobs:
               id: determine-values
               run: |
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      AWS_REGION="${{ github.event.inputs.region }}"
-                      CLEANUP_OLDER_THAN="${{ github.event.inputs.cleanup_older_than }}"
+                      AWS_REGION="${GITHUB_EVENT_INPUTS_REGION}"
+                      CLEANUP_OLDER_THAN="${GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN}"
                   else
                       AWS_REGION="${{ matrix.config.region }}"
                       CLEANUP_OLDER_THAN="${{ matrix.config.cleanup_older_than }}"
@@ -142,6 +143,9 @@ jobs:
 
                   echo "AWS_REGION=$AWS_REGION" | tee -a "$GITHUB_ENV"
                   echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
+              env:
+                  GITHUB_EVENT_INPUTS_REGION: ${{ github.event.inputs.region }}
+                  GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN: ${{ github.event.inputs.cleanup_older_than }}
 
             - name: Check if job should run based on the day
               id: day-check
@@ -216,12 +220,22 @@ jobs:
               if: ${{ env.should_run == 'true' }}
               run: .github/workflows/scripts/aws_regional_cleanup.sh "${{ env.AWS_REGION }}"
 
+            # Runs before cloud-nuke, so the load balancers of the environment being
+            # torn down tonight are still alive and their records are kept. cloud-nuke
+            # removes those load balancers below, and tomorrow's run deletes the
+            # records. Orphans therefore drain with a one-day lag, like the orphaned
+            # target groups handled in aws_regional_cleanup.sh.
+            - name: Delete orphaned Route53 records
+              timeout-minutes: 20
+              if: ${{ env.should_run == 'true' }}
+              run: .github/workflows/scripts/aws_route53_cleanup.sh "${{ env.AWS_REGION }}"
+
             # this token is used to clone the github repository containing the base modules
             - name: Generate token for GitHub
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@472b20a51fb5c7c9ff991ed6177769eab487eb34 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@66bf6e260f2beb42a83284fef490bb96672e8f36 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common

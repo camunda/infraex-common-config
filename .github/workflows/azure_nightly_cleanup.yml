@@ -2,7 +2,7 @@
 name: Azure Scheduled Cleanup of test regions
 
 permissions:
-    id-token: write
+    contents: read
 
 on:
     schedule:
@@ -30,6 +30,11 @@ concurrency:
 jobs:
     azure-cleanup:
         runs-on: ubuntu-latest
+        # `azure/login` authenticates with OIDC, so this job — and only this job — needs to
+        # mint an OIDC token. Vault is reached with AppRole, which needs no extra permission.
+        permissions:
+            contents: read
+            id-token: write
         strategy:
             fail-fast: false # don't propagate failing jobs
             matrix:
@@ -50,8 +55,8 @@ jobs:
               id: determine-values
               run: |
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      AZURE_REGION="${{ github.event.inputs.region }}"
-                      CLEANUP_OLDER_THAN="${{ github.event.inputs.cleanup_older_than }}"
+                      AZURE_REGION="${GITHUB_EVENT_INPUTS_REGION}"
+                      CLEANUP_OLDER_THAN="${GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN}"
                   else
                       AZURE_REGION="${{ matrix.config.region }}"
                       CLEANUP_OLDER_THAN="${{ matrix.config.cleanup_older_than }}"
@@ -59,6 +64,9 @@ jobs:
 
                   echo "AZURE_REGION=$AZURE_REGION" | tee -a "$GITHUB_ENV"
                   echo "CLEANUP_OLDER_THAN=$CLEANUP_OLDER_THAN" | tee -a "$GITHUB_ENV"
+              env:
+                  GITHUB_EVENT_INPUTS_REGION: ${{ github.event.inputs.region }}
+                  GITHUB_EVENT_INPUTS_CLEANUP_OLDER_THAN: ${{ github.event.inputs.cleanup_older_than }}
 
             - name: Check if job should run based on the day
               id: day-check
@@ -127,6 +135,11 @@ jobs:
 
     notify-on-failure:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            # The Slack action checks for an open "silence: <workflow>" issue in this
+            # repository before alerting, and reads it with this token.
+            issues: read
         if: failure()
         needs:
             - azure-cleanup

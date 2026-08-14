@@ -10,8 +10,12 @@
     'helpers:pinGitHubActionDigests',
     ':pinDevDependencies',
   ],
+  // Declared only because Renovate refuses `matchBaseBranches` in a config that
+  // configures no base branch. `$default` resolves to whatever the consuming
+  // repository uses as its default branch; hardcoding 'main' here silently broke
+  // any repository not named that way, and every consumer had to override it.
   baseBranchPatterns: [
-    'main',
+    '$default',
   ],
   ignorePaths: [], // overwrites default to track also test paths
   platformAutomerge: false, // Automerge cannot be applied due to branch security settings. Explicit approval from a maintainer is required, so we do not use or configure automerge in our repositories.
@@ -123,6 +127,34 @@
       enabled: true,
     },
     {
+      // `separateMinorPatch` defaults to false, so Renovate only builds a `major`
+      // and a `non-major` bucket. The `non-major` bucket always aims at the highest
+      // non-major release, so once upstream ships a minor the whole bucket is typed
+      // `minor` and the "Only patch updates" rule above kills it. The patch releases
+      // in between then become unreachable and the dependency freezes on the branch
+      // for good. Splitting the bucket keeps the patch lane open.
+      description: 'Keep patch updates reachable on maintenance branches once a newer minor exists.',
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      separateMinorPatch: true,
+    },
+    {
+      // These two repositories only provide the CI toolchain (reusable workflows,
+      // composite actions, pre-commit hooks). They ship nothing to the reference
+      // architecture a maintenance branch documents, so freezing them buys no
+      // stability and only leaves the branches running stale automation.
+      description: 'Track our own CI tooling on all update types on maintenance branches.',
+      matchPackageNames: [
+        'camunda/infraex-common-config',
+        'camunda/infra-global-github-actions',
+      ],
+      matchBaseBranches: [
+        '/^stable\\/8\\..*/',
+      ],
+      enabled: true,
+    },
+    {
       groupName: 'minor-grouped',
       matchUpdateTypes: [
         'minor',
@@ -155,6 +187,7 @@
       matchPackageNames: [
         'amazon-eks',
         'amazon-rds-postgresql',
+        'aurora-mysql',
         'aurora-postgresql',
         'ghcr.io/cloudnative-pg/postgresql',
         'opensearch',
@@ -167,7 +200,7 @@
       draftPR: true,
       prBodyNotes: [
         '⚠️ **Breaking Changes Possible** ⚠️',
-        "This update includes a new major version of a core infrastructure component (Amazon EKS, OpenSearch, OpenShift, or a PostgreSQL engine/image). See this rule's `matchPackageNames` for the exact set.",
+        "This update includes a new major version of a core infrastructure component (Amazon EKS, OpenSearch, OpenShift, or a PostgreSQL/MySQL engine/image). See this rule's `matchPackageNames` for the exact set.",
         'Such updates typically introduce breaking changes and are only applied **at the beginning of a Camunda 8 release cycle**.',
         'This update **should not** be merged mid-cycle unless explicitly approved by yourself.',
       ],
@@ -298,6 +331,10 @@
     },
     'aurora-pg-camunda': {
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_postgres_versions.txt',
+      'format': 'plain',
+    },
+    'aurora-mysql-camunda': {
+      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/aurora_mysql_versions.txt',
       'format': 'plain',
     },
     // Bitnami Premium image tags published by camunda-deployment-references, one

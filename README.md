@@ -115,3 +115,80 @@ This avoids a blind spot: auditing S3 per-region would silently skip any bucket 
 cloud-nuke does not report ELBv2 target groups. Target groups created for Kubernetes Services of type `LoadBalancer` (OpenShift router, ingress-nginx, Contour, Submariner, ...) are left behind when their load balancer or cluster is deleted, and they silently accumulate until they reach the regional **Target Groups per Region** quota (default 3000). Hitting the cap breaks new ingress load balancer creation with a `TooManyTargetGroups` error.
 
 The audit therefore counts, per permanent region, the total and orphaned (unattached) target groups and compares them against the regional quota. It posts a Slack warning when utilization reaches `ELBV2_TG_USAGE_WARN_PERCENT` (default 80%) of the quota, or when the number of orphaned target groups reaches `ELBV2_TG_ORPHAN_WARN` (default 50). In the CI regions, these orphaned target groups are deleted automatically by the [nightly cleanup](.github/workflows/aws_nightly_cleanup.yml).
+
+## CI trust boundary
+
+A job that runs repository-supplied code must not hold a GitHub write credential.
+
+"Repository-supplied code" is broader than it looks. It is not only the scripts in the
+tree: it is asdf plugins named by `.tool-versions`, pre-commit hooks named by
+`.pre-commit-config.yaml`, terraform providers, `go mod tidy`, anything a build resolves
+from a lockfile. On a `pull_request` run all of it comes from the contributor's branch,
+which for a Renovate pull request means it comes from whatever the dependency update
+pulled in. INC-7027 was a malicious payload in a dependency update; it only had to be
+proposed, not merged.
+
+Pinning actions to a SHA does not address this. Pinning fixes *which* code runs, not what
+that code can reach once it runs.
+
+### The rule
+
+- A job that runs repository code holds no App token, no `secrets.*` it does not strictly
+  need, and sets `persist-credentials: false` so its own `GITHUB_TOKEN` is not left in
+  `.git/config` for that code to find.
+- The credential lives in a separate job that runs only SHA-pinned third-party actions.
+- Installation tokens name `repositories:` explicitly rather than relying on the token
+  action's default.
+- The token is minted last, after any untrusted input has been handled, so it is not alive
+  while that happens and no hook can have planted a `PATH` shim or `BASH_ENV` first.
+- Work crosses the boundary as data, not as execution: the unprivileged job emits a patch
+  artifact, the privileged one applies it. Applying a patch does not execute it, and
+  `git apply` refuses paths outside the work tree.
+
+### The shared implementation
+
+[`commit-patch-global.yml`](.github/workflows/commit-patch-global.yml) is the privileged
+half. It downloads the patch, refuses what it should not commit, applies it, mints a
+repository-scoped token and commits through the API.
+
+```yaml
+jobs:
+    build:
+        # runs the repository's code; no write credential, no App token
+        # uploads its result as a patch artifact
+        ...
+
+    commit:
+        needs: build
+        if: needs.build.outputs.has_changes == 'true'
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@<sha>
+        with:
+            artifact-name: ${{ needs.build.outputs.artifact_name }}
+            head-sha: ${{ github.event.pull_request.head.sha }}
+            head-ref: ${{ github.event.pull_request.head.ref }}
+            commit-message: 'chore: apply automated fixes'
+        secrets:
+            vault-addr: ${{ secrets.VAULT_ADDR }}
+            vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+            vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+```
+
+Tune `max-patch-bytes`, `max-changed-lines` and `refuse-paths-regex` to the producing job:
+a formatter's output should stay small and human-readable, a generator rewriting a fixture
+corpus legitimately runs to megabytes. The guards bound a runaway and refuse patches the
+commit step would silently corrupt; they are not an injection defence, since a hostile
+patch needs three lines rather than a large one.
+
+### What this does not fix
+
+Two residuals, worth stating so the boundary is not read as stronger than it is.
+
+On `pull_request`, GitHub evaluates the workflow file **from the head branch**. Anyone
+with push access can therefore edit the privileged job itself. That is irreducible for any
+workflow holding a secret, and is bounded by fork pull requests receiving no secrets at
+all, plus review of anything touching `.github/`.
+
+If the unprivileged job keeps a Vault approle for cloud credentials, and that approle can
+read the path where the GitHub App private key lives, branch code that exfiltrates it can
+mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
+does not remove that path. Where it applies, scope the Vault role away from the App key.
