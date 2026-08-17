@@ -152,13 +152,15 @@ expect_log "3" "group delete hci-old-rg"
 expect_out "3" "All 1 resource group(s) deleted."
 
 # 4. A node group whose parent is not in the run is genuinely orphaned: nothing
-#    else will reclaim it, so the sweep must.
+#    else will reclaim it, so the sweep must. The line it logs has to say that,
+#    not imply the group is being left alone.
 echo "4. orphaned node group"
 setup
 group MC_hci-gone-rg_hci-gone-aks_testregion "$(aged 20)"
 CLEANUP_OLDER_THAN=12h run
 expect_rc "4" 0
-expect_out "4" "Keeping MC_hci-gone-rg_hci-gone-aks_testregion: node resource group whose parent is not being deleted"
+expect_out "4" "Orphaned MC_hci-gone-rg_hci-gone-aks_testregion: node resource group whose parent is not in this run"
+expect_noout "4" "Keeping"
 expect_log "4" "group delete MC_hci-gone-rg_hci-gone-aks_testregion"
 
 # 5. A parent name containing underscores must still match its node group,

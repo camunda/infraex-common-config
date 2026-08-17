@@ -88,7 +88,7 @@ for RG in ${ELIGIBLE[@]+"${ELIGIBLE[@]}"}; do
       echo "Skipping $RG: node resource group, deleted with its parent"
       continue
     fi
-    echo "Keeping $RG: node resource group whose parent is not being deleted"
+    echo "Orphaned $RG: node resource group whose parent is not in this run"
   fi
   TARGETS+=("$RG")
 done
