@@ -45,8 +45,10 @@ aged() { # aged <hours-ago>, mirroring the date command the sweep itself picks
 wedge() { echo "$1" >>"$STATE/undeletable"; }
 
 run() {
+  local start=$SECONDS
   OUT="$(PATH="$STUB_DIR:$PATH" AZURE_REGION=testregion "$SCRIPT" 2>&1)"
   RC=$?
+  DURATION=$((SECONDS - start))
 }
 
 check() { # check <scenario> <what was expected> <result>
@@ -89,6 +91,26 @@ expect_log() {
   [[ "$actual" == "$2" ]]
   rc=$?
   check "$1" "az calls [$2], got [$actual]" "$rc"
+}
+expect_faster_than() {
+  local rc
+  [[ "$DURATION" -lt "$2" ]]
+  rc=$?
+  check "$1" "run to take less than ${2}s, took ${DURATION}s" "$rc"
+}
+# The failure report must state how long the sweep actually waited, not the
+# timeout it was configured with. Allow a second of slack for slow polls.
+expect_reported_elapsed() {
+  local rc reported drift
+  reported="$(sed -n 's/.*still present after \([0-9]*\)s.*/\1/p' <<<"$OUT")"
+  if [[ -z "$reported" ]]; then
+    check "$1" "a reported wait in the failure output, found none" 1
+    return
+  fi
+  drift=$((reported > DURATION ? reported - DURATION : DURATION - reported))
+  [[ "$drift" -le 1 ]]
+  rc=$?
+  check "$1" "reported wait to match the measured ${DURATION}s, got ${reported}s" "$rc"
 }
 
 echo "bash $BASH_VERSION"
@@ -157,7 +179,8 @@ group hci-wedged-rg "$(aged 20)"
 wedge hci-wedged-rg
 CLEANUP_OLDER_THAN=12h DELETION_TIMEOUT=0 run
 expect_rc "6" 1
-expect_out "6" "Resource groups still present after 0s: hci-wedged-rg"
+expect_out "6" "Resource groups still present after"
+expect_out "6" "hci-wedged-rg"
 expect_out "6" "they are still billing"
 
 # 7. Without an age filter every unprotected group is eligible.
@@ -199,6 +222,18 @@ DELETION_TIMEOUT=abc run
 expect_rc "10" 1
 expect_out "10" "Invalid DELETION_TIMEOUT: abc"
 expect_log "10" ""
+
+# 11. A short timeout must be honoured. The poll interval is 30s, so a loop
+#     that sleeps a flat interval before rechecking the deadline overshoots a
+#     2s budget fifteen times over and then reports the budget, not the wait.
+echo "11. short timeout is not overshot"
+setup
+group hci-wedged-rg
+wedge hci-wedged-rg
+DELETION_TIMEOUT=2 run
+expect_rc "11" 1
+expect_faster_than "11" 15
+expect_reported_elapsed "11"
 
 echo
 echo "passed=$PASS failed=$FAIL"

@@ -132,7 +132,9 @@ done
 # group is visible the same morning instead of being rediscovered by hand.
 if [[ ${#INITIATED[@]} -gt 0 ]]; then
   echo "Waiting up to ${DELETION_TIMEOUT}s for ${#INITIATED[@]} resource group(s) to disappear..."
-  DEADLINE=$(( $(date +%s) + DELETION_TIMEOUT ))
+  STARTED=$(date +%s)
+  DEADLINE=$(( STARTED + DELETION_TIMEOUT ))
+  POLL_INTERVAL=30
 
   while true; do
     REMAINING=()
@@ -143,14 +145,24 @@ if [[ ${#INITIATED[@]} -gt 0 ]]; then
     done
 
     [[ ${#REMAINING[@]} -eq 0 ]] && break
-    [[ $(date +%s) -ge $DEADLINE ]] && break
+
+    LEFT=$(( DEADLINE - $(date +%s) ))
+    [[ $LEFT -le 0 ]] && break
 
     echo "  still present: ${REMAINING[*]}"
-    sleep 30
+    # Never sleep past the deadline: on a short timeout a flat 30s wait
+    # overshoots it several times over and the report below would be a lie.
+    if [[ $LEFT -lt $POLL_INTERVAL ]]; then
+      sleep "$LEFT"
+    else
+      sleep "$POLL_INTERVAL"
+    fi
   done
 
+  ELAPSED=$(( $(date +%s) - STARTED ))
+
   if [[ ${#REMAINING[@]} -gt 0 ]]; then
-    echo "Resource groups still present after ${DELETION_TIMEOUT}s: ${REMAINING[*]}" >&2
+    echo "Resource groups still present after ${ELAPSED}s: ${REMAINING[*]}" >&2
     echo "Their deletion was accepted but did not complete; they are still billing." >&2
     FAILED=true
   else
