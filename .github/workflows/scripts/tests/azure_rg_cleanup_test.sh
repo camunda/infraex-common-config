@@ -27,6 +27,7 @@ setup() {
   : >"$STATE/groups"
   : >"$STATE/log"
   : >"$STATE/undeletable"
+  : >"$STATE/failinit"
 }
 
 group() { # group <name> [created-iso]
@@ -43,6 +44,8 @@ aged() { # aged <hours-ago>, mirroring the date command the sweep itself picks
 }
 
 wedge() { echo "$1" >>"$STATE/undeletable"; }
+
+refuse() { echo "$1" >>"$STATE/failinit"; }
 
 run() {
   local start=$SECONDS
@@ -236,6 +239,20 @@ DELETION_TIMEOUT=2 run
 expect_rc "11" 1
 expect_faster_than "11" 15
 expect_reported_elapsed "11"
+
+# 12. When one deletion is refused outright, the groups that were accepted do
+#     disappear — but the run exits 1, so the log must not claim a clean sweep.
+echo "12. one deletion refused"
+setup
+group hci-ok-rg
+group hci-bad-rg
+refuse hci-bad-rg
+run
+expect_rc "12" 1
+expect_out "12" "Failed to initiate deletion for RG: hci-bad-rg"
+expect_noout "12" "All 1 resource group(s) deleted."
+expect_out "12" "but not every group could be deleted"
+expect_log "12" "group delete hci-ok-rg"
 
 echo
 echo "passed=$PASS failed=$FAIL"

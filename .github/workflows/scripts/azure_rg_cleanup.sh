@@ -165,6 +165,11 @@ if [[ ${#INITIATED[@]} -gt 0 ]]; then
     echo "Resource groups still present after ${ELAPSED}s: ${REMAINING[*]}" >&2
     echo "Their deletion was accepted but did not complete; they are still billing." >&2
     FAILED=true
+  elif [[ "$FAILED" == "true" ]]; then
+    # Some deletion was refused outright above. The ones that were accepted did
+    # complete, but the run is going to exit 1 and the log must not read as if
+    # everything went through.
+    echo "The ${#INITIATED[@]} initiated deletion(s) completed, but not every group could be deleted." >&2
   else
     echo "All ${#INITIATED[@]} resource group(s) deleted."
   fi

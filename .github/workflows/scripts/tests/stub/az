@@ -7,6 +7,7 @@
 #   created/<RG> ISO-8601 timestamp of the oldest resource in <RG>
 #   locks/<RG>   one lock id per line, optional
 #   undeletable  groups whose deletion is accepted but never completes
+#   failinit     groups whose deletion request is refused outright
 #   log          every mutating call, in order
 set -euo pipefail
 
@@ -55,6 +56,10 @@ case "$group $action" in
 
   "group delete")
     rg="$(arg_after --name "$@")"
+    if grep -qxF "$rg" "$STATE/failinit" 2>/dev/null; then
+      echo "stub az: refusing to delete $rg" >&2
+      exit 1
+    fi
     echo "group delete $rg" >>"$STATE/log"
     # --no-wait: the request is accepted and the group disappears later, unless
     # the fixture says the deletion wedges, in which case it never does.
