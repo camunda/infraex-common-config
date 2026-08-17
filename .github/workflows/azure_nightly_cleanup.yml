@@ -45,6 +45,12 @@ jobs:
 
     azure-cleanup:
         runs-on: ubuntu-latest
+        # A red suite means the deletion or verification logic is broken, and
+        # this job deletes real resource groups. Skipping the sweep for a night
+        # costs money; running a broken sweep is how the incident behind this
+        # workflow started. notify-on-failure still alerts either way.
+        needs:
+            - sweep-tests
         # `azure/login` authenticates with OIDC, so this job — and only this job — needs to
         # mint an OIDC token. Vault is reached with AppRole, which needs no extra permission.
         permissions:
