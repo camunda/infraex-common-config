@@ -45,12 +45,19 @@ jobs:
 
     azure-cleanup:
         runs-on: ubuntu-latest
-        # A red suite means the deletion or verification logic is broken, and
-        # this job deletes real resource groups. Skipping the sweep for a night
-        # costs money; running a broken sweep is how the incident behind this
-        # workflow started. notify-on-failure still alerts either way.
         needs:
             - sweep-tests
+        # The suite gates the pull request, not the nightly run. On a pull
+        # request it is reviewing a change to the sweep, so a red suite must
+        # stop it. On a schedule the code has already been through that gate and
+        # has not changed since, so the only thing a red suite can do is cost a
+        # night of cleanup — it does not block the sweep. notify-on-failure
+        # depends on both jobs, so a red suite is still reported either way.
+        #
+        # Written as a condition rather than an `if` on sweep-tests itself so no
+        # job is ever skipped: a skipped dependency has its own propagation
+        # rules, and the Slack alert is not the place to rely on them.
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.sweep-tests.result == 'success') }}
         # `azure/login` authenticates with OIDC, so this job — and only this job — needs to
         # mint an OIDC token. Vault is reached with AppRole, which needs no extra permission.
         permissions:
