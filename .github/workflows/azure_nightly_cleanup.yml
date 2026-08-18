@@ -21,6 +21,7 @@ on:
         paths:
             - .github/workflows/azure_nightly_cleanup.yml
             - .github/workflows/scripts/azure_rg_cleanup.sh
+            - .github/workflows/scripts/tests/**
 
 # Limit workflow to a single execution per ref
 concurrency:
@@ -28,8 +29,35 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # The sweep runs against a stubbed CLI here. On pull requests the real job
+    # below is forced into DRY_RUN, so it never deletes anything and never
+    # reaches the deletion or verification paths; this is what covers them.
+    sweep-tests:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+            - name: Run the resource group sweep tests
+              run: |
+                  ./.github/workflows/scripts/tests/azure_rg_cleanup_test.sh
+
     azure-cleanup:
         runs-on: ubuntu-latest
+        needs:
+            - sweep-tests
+        # The suite gates the pull request, not the nightly run. On a pull
+        # request it is reviewing a change to the sweep, so a red suite must
+        # stop it. On a schedule the code has already been through that gate and
+        # has not changed since, so the only thing a red suite can do is cost a
+        # night of cleanup — it does not block the sweep. notify-on-failure
+        # depends on both jobs, so a red suite is still reported either way.
+        #
+        # Written as a condition rather than an `if` on sweep-tests itself so no
+        # job is ever skipped: a skipped dependency has its own propagation
+        # rules, and the Slack alert is not the place to rely on them.
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.sweep-tests.result == 'success') }}
         # `azure/login` authenticates with OIDC, so this job — and only this job — needs to
         # mint an OIDC token. Vault is reached with AppRole, which needs no extra permission.
         permissions:
@@ -142,6 +170,7 @@ jobs:
             issues: read
         if: failure()
         needs:
+            - sweep-tests
             - azure-cleanup
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
