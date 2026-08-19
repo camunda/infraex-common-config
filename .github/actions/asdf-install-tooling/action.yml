@@ -120,8 +120,24 @@ runs:
         - name: Install library preqrequisites
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
+          # `apt-get update` reads archive.ubuntu.com, which stalls rather than fails: on
+          # 2026-08-19 the identical call in lint-global hung for over nine minutes in four
+          # runs and was killed by the job timeout. apt's own retries do not cover a hung
+          # connection, so the attempt is bounded externally and retried.
           run: |
-              sudo apt-get update
+              set -euo pipefail
+
+              for attempt in 1 2 3; do
+                if sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; then
+                  break
+                fi
+                if [ "$attempt" -eq 3 ]; then
+                  echo "::error::apt-get update failed or hung on three attempts."
+                  exit 1
+                fi
+                echo "::warning::apt-get update failed or hung (attempt ${attempt}/3), retrying."
+                sleep 5
+              done
 
               sudo apt-get install -y build-essential git libexpat1-dev libssl-dev zlib1g-dev \
                   libncurses5-dev libbz2-dev liblzma-dev \
