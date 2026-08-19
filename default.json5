@@ -315,6 +315,22 @@
       ],
       versioning: 'regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
     },
+    {
+      // Aurora MySQL engine versions are compound (e.g. 8.4.mysql_aurora.8.4.7),
+      // so `loose` mis-sorts them (it puts 8.4.10 below 8.4.7). Track the Aurora
+      // engine version after `mysql_aurora.` as major.minor.patch, ignoring the
+      // MySQL-compatibility prefix (8.4/8.0/5.7) — the Aurora-major sequence
+      // (v2→v3→v8) is monotonic, so this orders every published version
+      // correctly, classifies update types accurately, and surfaces cross-line
+      // jumps as majors (caught by the aurora-mysql breaking-change guard above).
+      // Centralised here so consumers only need
+      // `datasource=custom.aurora-mysql-camunda depName=aurora-mysql` with no
+      // inline `versioning=`.
+      matchDatasources: [
+        'custom.aurora-mysql-camunda',
+      ],
+      versioning: 'regex:^\\d+\\.\\d+\\.mysql_aurora\\.(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
+    },
   ],
   'customDatasources': {
     'rosa-camunda': {
