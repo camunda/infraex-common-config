@@ -347,9 +347,12 @@ jobs:
               with:
                   persist-credentials: false
 
+            # Renovate 44 declares `node: ^24.11.0` and means it: it calls `RegExp.escape`,
+            # which older runtimes do not have, and fails on import rather than at a version
+            # check. Pinned rather than left to the runner image, whose default node moves.
             - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
               with:
-                  node-version: 22
+                  node-version: 24
 
             # `--platform=local` reads the checkout and talks to no forge; `--dry-run=lookup`
             # stops before anything would be written. `enabledManagers` holds the run to the
