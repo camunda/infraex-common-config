@@ -110,33 +110,29 @@ jobs:
               with:
                   persist-credentials: false
 
-            # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
-            - name: Install Python dependencies
-              # `apt-get update` reads archive.ubuntu.com, which stalls often enough to matter:
-              # on 2026-08-19 it hung on `noble-security InRelease` for over nine minutes in
-              # four separate runs and each time the job timeout killed the run. apt's own
-              # retries do not cover a connection that hangs rather than fails, so the attempt
-              # is bounded externally and retried.
-              run: |
-                  set -euo pipefail
-
-                  for attempt in 1 2 3; do
-                    if sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; then
-                      break
-                    fi
-                    if [ "$attempt" -eq 3 ]; then
-                      echo "::error::apt-get update failed or hung on three attempts."
-                      exit 1
-                    fi
-                    echo "::warning::apt-get update failed or hung (attempt ${attempt}/3), retrying."
-                    sleep 5
-                  done
-
-                  sudo apt-get install -y libsqlite3-dev libbz2-dev liblzma-dev
-
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@887ed647c59e94535464fdfe2cfa0f33cffee468 # 2.3.3
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@26224a8e51a019dadec867d2c6413b81db1c4411 # 2.3.4
+
+            # What used to stand here was `apt-get install libsqlite3-dev libbz2-dev
+            # liblzma-dev`, on every run, ahead of the step above. It cost 3m45 on 2026-08-19
+            # and bought nothing: the -dev packages are build inputs for CPython, and the only
+            # step that builds CPython is the asdf install above, which installs that same list
+            # itself -- a superset of it -- and only when its cache misses. When that cache
+            # hits, the interpreter arrives prebuilt and needs the runtime libraries, which are
+            # base-system packages; ubuntu-24.04 additionally ships libsqlite3-dev already.
+            #
+            # This assertion replaces the guarantee the apt call was there to provide, at the
+            # cost of a subprocess: the three modules whose absence is what a missing build
+            # dependency looks like are imported before any hook can blame something else.
+            - name: Check the interpreter is complete
+              run: |
+                  set -euo pipefail
+                  if ! python3 -c 'import bz2, lzma, sqlite3'; then
+                    echo "::error::python3 is missing bz2, lzma or sqlite3. The interpreter was built without the matching -dev packages: check the library prerequisites installed by asdf-install-tooling."
+                    exit 1
+                  fi
+                  echo "python3 has bz2, lzma and sqlite3"
 
             # pre-commit/action is deliberately not used: it resolves `actions/cache@v4`, an
             # unpinned reference. GitHub evaluates "Require actions to be pinned to a full-length
@@ -288,7 +284,7 @@ jobs:
         # applies it, mints a repository-scoped App token last and commits through the API. It runs
         # no repository code, which is the whole point: the hooks that produced this patch executed
         # in `lint`, with no credential.
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@4f41fc83a003370fdba17e7cc5a34840640e1248 # 2.3.2
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@26224a8e51a019dadec867d2c6413b81db1c4411 # 2.3.4
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
