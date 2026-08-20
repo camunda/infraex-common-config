@@ -1,0 +1,2 @@
+# renovate: datasource=docker depName=camunda/keycloak
+version: 26.7.0

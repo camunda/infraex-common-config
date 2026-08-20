@@ -1,0 +1,4 @@
+{
+  // No custom managers at all: a broken invocation, not a clean run.
+  customManagers: [],
+}

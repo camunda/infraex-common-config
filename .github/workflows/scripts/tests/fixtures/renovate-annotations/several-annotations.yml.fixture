@@ -1,0 +1,7 @@
+# renovate: datasource=docker depName=camunda/keycloak
+image: docker.io/camunda/keycloak:quay-optimized-26.7.0
+# renovate: datasource=github-releases depName=camunda/camunda
+# the version is not here
+CAMUNDA_VERSION: 8.10.0
+# renovate: datasource=helm depName=camunda-platform registryUrl=https://helm.camunda.io
+CHART_VERSION="15.0.0"

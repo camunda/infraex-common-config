@@ -1,0 +1,15 @@
+{
+  // Two patterns that both match `key: value`, standing in for the overlapping pairs
+  // the real preset carried until #580. Used to prove the checker reports an annotation
+  // extracted more than once.
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/\\.yml$/'],
+      matchStrings: [
+        'datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[^\\n]*: (?<currentValue>\\S+)',
+        'datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[^\\n]*:[ \\t]*(?<currentValue>\\S+)',
+      ],
+    },
+  ],
+}

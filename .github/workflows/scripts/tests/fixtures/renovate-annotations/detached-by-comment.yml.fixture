@@ -1,0 +1,4 @@
+env:
+    # renovate: datasource=github-releases depName=camunda/camunda
+    # TODO: pinned until the next release
+    CAMUNDA_VERSION: 8.10.0
