@@ -131,8 +131,18 @@ expect_noout() {
   check "$1" "output NOT to contain: $2" "$rc"
 }
 
-ANNOTATION='datasource=helm depName=camunda-platform versioning=regex:^15(\.(?<minor>\d+))?$'
-MARKED="$ANNOTATION renovate-inert-ok parked until 8.10 GA"
+# Read out of the fixtures rather than written here, and for the same reason the
+# fixtures exist at all: the preset reads `.sh`, so an annotation spelled out in
+# this file would be a live annotation of this repository -- extracted by
+# Renovate, reported by this very checker, and the suite would fail the
+# repository it is testing. It also keeps the string the report claims Renovate
+# matched identical to the line the checker has to find.
+annotation_of() { # annotation_of <fixture> <line holding the annotation>
+  sed -n "${2}p" "$FIXTURES/$1" | sed 's/^[[:space:]]*# renovate: //'
+}
+
+ANNOTATION="$(annotation_of chart-env.sh.fixture 2)"
+MARKED="$(annotation_of chart-env-marked.sh.fixture 2)"
 
 # 1. A dependency Renovate could read and resolve is not a finding.
 echo "1. usable dependency"
