@@ -194,6 +194,19 @@ expect_out "10" "does not match"
 expect_out "10" "15-dev-latest"
 expect_out "10" "0 sound, 0 broken, 1 extracting"
 
+# 10b. The same annotation, declared parked with the marker `check_renovate_lookup.py`
+#      reads. Both checks look at that state from two sides, so they have to agree on how
+#      it is declared -- and a warning repeated on every run is how a check stops being
+#      read.
+echo "10b. version rejected by its own versioning regex, declared parked"
+setup
+file versioning-mismatch-parked.sh.fixture chart-env.sh
+run
+expect_rc "10b" 0
+expect_noout "10b" "does not match"
+expect_out "10b" "0 sound, 0 broken, 0 extracting"
+expect_out "10b" "1 parked on purpose"
+
 # 11. A versioning regex that does not compile is reported the same way, rather than
 #     taking the checker down with it.
 echo "11. versioning regex that does not compile"

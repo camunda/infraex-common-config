@@ -62,6 +62,12 @@ RE2_GROUP = re.compile(r"\(\?<(?![=!])")
 # itself -- from being reported as a broken annotation.
 ANNOTATION = re.compile(r"datasource=\S+.*depName=|depName=\S+.*datasource=")
 
+# Same marker as `check_renovate_lookup.py`: an annotation deliberately parked on a
+# development version, which its own versioning regex cannot match until the release it
+# is waiting for. The two checks look at the same state from two sides, so they have to
+# agree on how it is declared.
+EXEMPTION = "renovate-inert-ok"
+
 
 @dataclass
 class Manager:
@@ -89,7 +95,8 @@ class Finding:
     # `error` fails the run: an annotation extracting nothing or extracting several times
     # is never intentional. `warning` does not: a version that its own regex versioning
     # rejects can be a deliberate, temporary state -- a pre-release the pattern was not
-    # written for -- and the repository holding it should not be blocked on it.
+    # written for -- and the repository holding it should not be blocked on it. `parked`
+    # is that same state, declared with `renovate-inert-ok`: counted, never printed.
     level: str
     message: str
 
@@ -228,6 +235,17 @@ def judge(
     # any lookup. `extractVersion` does not help -- it applies to the versions upstream
     # publishes, not to the one written in the file.
     if not compiled.search(current_value):
+        if EXEMPTION in text:
+            # Already declared parked on purpose, and `check_renovate_lookup.py` reads the
+            # same marker. Warning about it on every run is noise, and noise on every run
+            # is how a check stops being read. Counted, not reported.
+            return Finding(
+                path=path,
+                line=line,
+                text=text,
+                level="parked",
+                message="",
+            )
         return Finding(
             path=path,
             line=line,
@@ -296,14 +314,17 @@ def main() -> int:
             print(f"{relative}: {found} annotation(s), {len(broken)} broken")
 
     for finding in findings:
-        report(finding)
+        if finding.level != "parked":
+            report(finding)
 
     errors = [f for f in findings if f.level == "error"]
     warnings = [f for f in findings if f.level == "warning"]
+    parked = [f for f in findings if f.level == "parked"]
     print(
         f"checked {annotations} Renovate annotation(s) across {scanned} file(s): "
         f"{annotations - len(findings)} sound, {len(errors)} broken, "
-        f"{len(warnings)} extracting a version their own versioning rejects"
+        f"{len(warnings)} extracting a version their own versioning rejects, "
+        f"{len(parked)} parked on purpose"
     )
     return 1 if errors else 0
 
