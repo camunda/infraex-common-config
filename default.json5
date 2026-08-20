@@ -315,6 +315,16 @@
       ],
       versioning: 'regex:^camunda-platform(-\\d+\\.\\d+)?-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
     },
+    {
+      // Aurora MySQL engine versions are compound (e.g. 8.4.mysql_aurora.8.4.7).
+      // Centralised here so consumers only need
+      // `datasource=custom.aurora-mysql-camunda depName=aurora-mysql` with no
+      // inline `versioning=`.
+      matchDatasources: [
+        'custom.aurora-mysql-camunda',
+      ],
+      versioning: 'regex:^\\d+\\.\\d+\\.mysql_aurora\\.(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$',
+    },
   ],
   'customDatasources': {
     'rosa-camunda': {
