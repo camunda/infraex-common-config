@@ -29,3 +29,7 @@ check-renovate-annotations:
 # Run the Renovate annotation checker against its own fixtures
 test-renovate-annotations:
     ./.github/workflows/scripts/tests/check_renovate_annotations_test.sh
+
+# Run the Renovate lookup checker against its own fixtures
+test-renovate-lookup:
+    ./.github/workflows/scripts/tests/check_renovate_lookup_test.sh

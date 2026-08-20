@@ -23,6 +23,14 @@ on:
                     bulk content (binaries, generated blobs) that a line count does not.
                 default: 65536
                 type: number
+            check-renovate-lookup:
+                description: |
+                    Run Renovate over the repository and fail on annotations it reads and then
+                    drops as unusable. Off by default: a repository adopting it usually has a
+                    few dependencies parked on a development version, which have to be marked
+                    `renovate-inert-ok` before the check can pass.
+                default: false
+                type: boolean
         # Declared so callers can pass these three explicitly instead of `secrets: inherit`,
         # which hands the called workflow every secret the calling repository holds -- Docker
         # Hub, registry and cloud credentials included -- when all it needs is the AppRole that
@@ -323,6 +331,75 @@ jobs:
                   /tmp/renovate-annotations-venv/bin/python \
                     .infraex-common-config/.github/workflows/scripts/check_renovate_annotations.py \
                     --preset .infraex-common-config/default.json5 \
+                    --root .
+
+    renovate-lookup:
+        name: renovate lookup
+        if: ${{ inputs.check-renovate-lookup }}
+        runs-on: ubuntu-latest
+        # `renovate-annotations` proves an annotation is read. This proves what is read can
+        # be updated, which needs Renovate's own versioning implementations and therefore
+        # Renovate itself. Restricted to the regex manager, the run is a lookup over the
+        # annotated dependencies only: measured under two minutes on the largest consumer.
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            # Renovate 44 declares `node: ^24.11.0` and means it: it calls `RegExp.escape`,
+            # which older runtimes do not have, and fails on import rather than at a version
+            # check. Pinned rather than left to the runner image, whose default node moves.
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version: 24
+
+            # `--platform=local` reads the checkout and talks to no forge; `--dry-run=lookup`
+            # stops before anything would be written. `enabledManagers` holds the run to the
+            # regex manager the preset declares, so this resolves the annotated dependencies
+            # and not the repository's whole dependency tree.
+            #
+            # The config Renovate resolves here is the caller's own, so the preset it extends
+            # is the published one -- unlike `renovate-annotations`, which applies the preset
+            # at this workflow's revision. A preset change is therefore observed by this job
+            # only once it is on the default branch.
+            - name: Resolve every annotation the way Renovate does
+              env:
+                  RENOVATE_PLATFORM: local
+                  RENOVATE_DRY_RUN: lookup
+                  RENOVATE_ENABLED_MANAGERS: '["custom.regex"]'
+                  RENOVATE_REPORT_TYPE: file
+                  RENOVATE_REPORT_PATH: ${{ runner.temp }}/renovate-report.json
+                  # Reads public repositories only: the preset this caller extends, and the
+                  # github-tags/github-releases datasources its annotations name. Anonymous
+                  # requests are rate limited hard enough to make the job flaky.
+                  GITHUB_COM_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  # renovate: datasource=npm depName=renovate
+                  RENOVATE_CLI_VERSION="44.35.3"
+                  npx --yes "renovate@${RENOVATE_CLI_VERSION}"
+
+            # Checked out after the Renovate run, and into a subdirectory: the run reads the
+            # workspace, and a second repository sitting in it would have its own files
+            # reported as the caller's.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: .infraex-common-config
+                  persist-credentials: false
+
+            # Fails on a dependency Renovate read and then dropped because its current value
+            # is not a version under the versioning it was given -- an annotation that looks
+            # maintained and can never produce an update.
+            - name: Check that every annotation resolves to an updatable dependency
+              env:
+                  REPORT: ${{ runner.temp }}/renovate-report.json
+              run: |
+                  set -euo pipefail
+                  python3 .infraex-common-config/.github/workflows/scripts/check_renovate_lookup.py \
+                    --report "${REPORT}" \
                     --root .
 
     autofix-apply:
