@@ -1,0 +1,1 @@
+Annotate with `# renovate: datasource=docker depName=camunda/keycloak`, then the version.

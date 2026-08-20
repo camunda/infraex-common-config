@@ -29,7 +29,7 @@ image: docker.io/camunda/keycloak:quay-optimized-26.7.0
 Two rules:
 
 - **The version must be on the line immediately after the annotation.** A comment in between
-  breaks the match, and the annotation then silently updates nothing.
+  breaks the match, and the annotation then updates nothing.
 - **The version must be the last quoted run on its line, or the last thing on the line.**
   `default = "1.36" # major.minor` works, `VERSION=1.36 extra` does not.
 
@@ -42,6 +42,17 @@ The value can be quoted (`VERSION="1.2.3"`, `default = "~> 1.15.0"`,
 updated alongside the tag), or separated by whitespace only (`.tool-versions` entries,
 YAML list items). A leading `release-` is stripped from the version, since it belongs to
 the file rather than to what the datasource publishes.
+
+Neither failure announces itself -- an annotation that matches nothing looks exactly like one
+that works, and one that matches twice only shows up as a duplicate line on the Dependency
+Dashboard -- so `lint-global` checks them. The `renovate annotations` job applies this
+preset's own `customManagers` to the calling repository and fails on any annotation that
+does not extract exactly one dependency. Locally:
+
+```shell
+just check-renovate-annotations   # this repository
+python3 .github/workflows/scripts/check_renovate_annotations.py --preset default.json5 --root ../some-other-repo
+```
 
 ### Bucket Usage
 

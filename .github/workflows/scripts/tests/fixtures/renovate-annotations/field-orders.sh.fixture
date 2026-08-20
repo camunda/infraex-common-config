@@ -1,0 +1,4 @@
+# renovate: datasource=helm depName=camunda-platform registryUrl=https://helm.camunda.io versioning=regex:^15$
+export A_VERSION="15.0.0"
+# renovate: datasource=helm depName=camunda-platform versioning=regex:^15$ registryUrl=https://helm.camunda.io
+export B_VERSION="15.0.0"

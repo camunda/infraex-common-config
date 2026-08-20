@@ -1,0 +1,2 @@
+# The preset reads datasource=docker annotations; see the README.
+image: docker.io/camunda/keycloak:quay-optimized-26.7.0

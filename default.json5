@@ -441,6 +441,12 @@
       // (2), or whitespace-separated (3). (2) and (3) refuse any line holding a quote, and
       // (3) also refuses `=` and `:`.
       //
+      // All three also refuse a value line that opens with `#` or `//`, so an annotation
+      // whose version sits one line further down extracts nothing rather than a word out of
+      // the comment in between -- `# the version is not here` used to yield `here`, a
+      // dependency Renovate keeps until the lookup rejects it, and which hid the fact that
+      // the real version was never read.
+      //
       // The shared prefix reads the annotation fields as a repeated alternation rather
       // than as a fixed sequence, so they are recognised in any order, each captured by a
       // single group -- which is what removes the need for one matchString per order --
@@ -453,7 +459,7 @@
         //    `"camunda/camunda:8.10.0-alpha3"`, and the Go idiom
         //    `helpers.GetEnv("HELM_CHART_VERSION", "14.8.0")` -- the reason the prefix is
         //    greedy, since there the version is the second quoted run, not the first.
-        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[^\\n]*["\'](?:(?<packageName>[^\\s"\':]+):)?(?<currentValue>[^"\'\\n]+)["\']',
+        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[ \\t]*(?:[^\\s#/]|/[^/])[^\\n]*["\'](?:(?<packageName>[^\\s"\':]+):)?(?<currentValue>[^"\'\\n]+)["\']',
         // 2. Unquoted value behind `=` or `:`, taking the first such delimiter:
         //    `SUBCTL_VERSION=0.24.0`, `version: 8.19.19`, `channel: release-2.17` (the
         //    `release-` prefix belongs to the file, not to the version the datasource
@@ -461,11 +467,11 @@
         //    including a pinned digest as in `image: kindest/node:v1.34.0@sha256:...`.
         //    The value has to end the line, apart from a quote-free trailing comment, so a
         //    line that continues into something else is left to pattern 1.
-        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[^\\n"\']*?[=:][ \\t]*(?:(?<packageName>[^\\s"\':]+):)?(?:release-)?(?<currentValue>[A-Za-z0-9][^\\s"\':=@]*)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[ \\t]*(?:#[^"\'\\n]*)?\\r?\\n',
+        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[ \\t]*(?:[^\\s#/]|/[^/])[^\\n"\']*?[=:][ \\t]*(?:(?<packageName>[^\\s"\':]+):)?(?:release-)?(?<currentValue>[A-Za-z0-9][^\\s"\':=@]*)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[ \\t]*(?:#[^"\'\\n]*)?\\r?\\n',
         // 3. Whitespace-separated value, for lines that carry no delimiter at all:
         //    `.tool-versions` entries such as `terraform 1.15.0`, and YAML list items
         //    such as `- 1.2.3`.
-        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[^\\n=:"\']*?[ \\t]+(?:release-)?(?<currentValue>[A-Za-z0-9][^\\s"\':=@]*)[ \\t]*(?:#[^"\'\\n]*)?\\r?\\n',
+        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[ \\t]*(?:[^\\s#/]|/[^/])[^\\n=:"\']*?[ \\t]+(?:release-)?(?<currentValue>[A-Za-z0-9][^\\s"\':=@]*)[ \\t]*(?:#[^"\'\\n]*)?\\r?\\n',
       ],
       versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}',
     },
