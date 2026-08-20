@@ -93,7 +93,12 @@ runs:
               # Now generate a final hash of the combined hashes (this is the "hash of hashes")
               FINAL_HASH=$(echo -n "$COMBINED_HASHES" | sha256sum | awk '{print $1}')
 
-              echo "cache_key=${RUNNER_OS}-${DETECTED_ARCH}-${INPUTS_VERSION}-tooling-${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              # Emitted as three values, not one, because the fallbacks below are prefixes of
+              # the primary key and every consumer has to agree on where they cut.
+              PREFIX="${RUNNER_OS}-${DETECTED_ARCH}-${INPUTS_VERSION}-tooling-"
+              echo "cache_key=${PREFIX}${FINAL_HASH}-week-${WEEK_NUMBER}" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key_tools_prefix=${PREFIX}${FINAL_HASH}-" | tee -a "$GITHUB_OUTPUT"
+              echo "cache_key_any_prefix=${PREFIX}" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_path=$HOME/.asdf" | tee -a "$GITHUB_OUTPUT"
               echo "cache_asdf_bin_path=$HOME/.local/bin/asdf" | tee -a "$GITHUB_OUTPUT"
           env:
@@ -114,14 +119,40 @@ runs:
                   ${{ steps.cache-key.outputs.cache_asdf_bin_path }}
               # invalidate the cache every week as we might need dependencies of the packages
               key: ${{ steps.cache-key.outputs.cache_key }}
+              # The weekly segment used to make this key unreachable from one Monday to the
+              # next, and the tools hash made a single version bump throw the whole toolchain
+              # away -- 4m23 of recompiling on 2026-08-19, dominated by CPython. Neither is
+              # necessary: a non-exact restore leaves `cache-hit` false, so the install steps
+              # below still run and `asdf install` adds whatever the restored ~/.asdf is
+              # missing. Falling back first to the same tools from another week, then to any
+              # toolchain at all, turns a full rebuild into installing the delta.
+              restore-keys: |
+                  ${{ steps.cache-key.outputs.cache_key_tools_prefix }}
+                  ${{ steps.cache-key.outputs.cache_key_any_prefix }}
 
         # Some ASDF packages require Python to be compiled with lzma support
         # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
         - name: Install library preqrequisites
           if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
           shell: bash
+          # `apt-get update` reads archive.ubuntu.com, which stalls rather than fails: on
+          # 2026-08-19 the identical call in lint-global hung for over nine minutes in four
+          # runs and was killed by the job timeout. apt's own retries do not cover a hung
+          # connection, so the attempt is bounded externally and retried.
           run: |
-              sudo apt-get update
+              set -euo pipefail
+
+              for attempt in 1 2 3; do
+                if sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; then
+                  break
+                fi
+                if [ "$attempt" -eq 3 ]; then
+                  echo "::error::apt-get update failed or hung on three attempts."
+                  exit 1
+                fi
+                echo "::warning::apt-get update failed or hung (attempt ${attempt}/3), retrying."
+                sleep 5
+              done
 
               sudo apt-get install -y build-essential git libexpat1-dev libssl-dev zlib1g-dev \
                   libncurses5-dev libbz2-dev liblzma-dev \
@@ -217,9 +248,22 @@ runs:
               ASDF_PYTHON_EXTRA_CONFIGURE_OPTIONS: --with-lzma
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
 
+        # An entry written during a pull request run lives on `refs/pull/N/merge` and no other
+        # pull request can read it, while it competes for the same 10 GB repository budget as
+        # the `main` entries every run does read -- in camunda/infraex-common-config, 115 MB
+        # per pull request against a single, months-stale entry on `main`. So: the default
+        # branch always refreshes, and a pull request writes only when it had to install
+        # something the cache could not supply, meaning it matched nothing or matched a
+        # toolchain built from a different .tool-versions. A restore that differed only by
+        # week is already complete, and rewriting it would buy nothing.
+        #
+        # `cache: false` now also means no write. It previously read nothing and saved anyway,
+        # which let a caller that opted out of the cache overwrite the entry every other caller
+        # depends on.
         - name: Cache installed tools
           id: cache-tools
-          if: ${{ steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'true' && steps.cache-asdf-check.outputs.cache-hit != 'true' && ((github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
+              || !startsWith(steps.cache-asdf-check.outputs.cache-matched-key, steps.cache-key.outputs.cache_key_tools_prefix)) }}
           uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
           with:
               path: |

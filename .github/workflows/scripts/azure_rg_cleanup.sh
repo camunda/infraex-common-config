@@ -6,6 +6,9 @@ PROTECTED_RG_LIST="NetworkWatcherRG Default-ActivityLogAlertsRG rg-infraex-globa
 
 CLEANUP_OLDER_THAN="${CLEANUP_OLDER_THAN:-}"
 
+FAILED=false
+REMAINING=()
+
 # Detect operating system and set the appropriate date command
 if [[ "$(uname)" == "Darwin" ]]; then
     date_command="gdate"
@@ -23,6 +26,16 @@ if [[ -n "$CLEANUP_OLDER_THAN" ]]; then
   LIMIT_DATE=$($date_command -u -d "$MIN_HOURS hours ago" +"%Y-%m-%dT%H:%M:%SZ")
   echo "Filtering RGs to only those with oldest resource created before: $LIMIT_DATE"
 fi
+
+# Deletion timeout, in seconds, for the verification pass at the end. Validated
+# here rather than where it is used: by then groups have already been deleted,
+# and the arithmetic would fail with "abc: unbound variable" instead of naming
+# the offending setting.
+DELETION_TIMEOUT="${DELETION_TIMEOUT:-1800}"
+[[ "$DELETION_TIMEOUT" =~ ^[0-9]+$ ]] || { echo "Invalid DELETION_TIMEOUT: $DELETION_TIMEOUT"; exit 1; }
+
+# ── Pass 1: decide what is eligible ──────────────────────────────────────────
+ELIGIBLE=()
 
 for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); do
   [[ -z "$RG" ]] && continue
@@ -49,6 +62,41 @@ for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); d
     fi
   fi
 
+  ELIGIBLE+=("$RG")
+done
+
+# ── Pass 2: leave AKS node resource groups to AKS ────────────────────────────
+# An AKS cluster owns its `MC_<parent>_<cluster>_<region>` node resource group
+# and deletes it as part of its own teardown. Deleting it directly while the
+# parent is also being deleted races that teardown and can leave the cluster
+# wedged in a Failed state, which then blocks the parent for good. Only delete
+# such a group when its parent is not in this run, i.e. when it is genuinely
+# orphaned.
+TARGETS=()
+
+for RG in ${ELIGIBLE[@]+"${ELIGIBLE[@]}"}; do
+  if [[ "$RG" == MC_* ]]; then
+    OWNED=false
+    for PARENT in ${ELIGIBLE[@]+"${ELIGIBLE[@]}"}; do
+      [[ "$PARENT" == MC_* ]] && continue
+      if [[ "$RG" == "MC_${PARENT}_"* ]]; then
+        OWNED=true
+        break
+      fi
+    done
+    if [[ "$OWNED" == "true" ]]; then
+      echo "Skipping $RG: node resource group, deleted with its parent"
+      continue
+    fi
+    echo "Orphaned $RG: node resource group whose parent is not in this run"
+  fi
+  TARGETS+=("$RG")
+done
+
+# ── Pass 3: delete ───────────────────────────────────────────────────────────
+INITIATED=()
+
+for RG in ${TARGETS[@]+"${TARGETS[@]}"}; do
   az lock list --resource-group "$RG" --query "[].id" -o tsv | while read -r LOCK_ID; do
     [[ -z "$LOCK_ID" ]] && continue
 
@@ -68,8 +116,65 @@ for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); d
   else
     if az group delete --name "$RG" --yes --no-wait; then
       echo "Initiated deletion of RG: $RG"
+      INITIATED+=("$RG")
     else
       echo "Failed to initiate deletion for RG: $RG"
+      FAILED=true
     fi
   fi
 done
+
+# ── Pass 4: verify ───────────────────────────────────────────────────────────
+# `--no-wait` only reports that the request was accepted. A deletion that fails
+# afterwards, which is the usual outcome for a cluster stuck in a Failed state,
+# leaves the group running and billing with nothing to signal it. Wait for the
+# groups to actually disappear and fail the job if they do not, so a wedged
+# group is visible the same morning instead of being rediscovered by hand.
+if [[ ${#INITIATED[@]} -gt 0 ]]; then
+  echo "Waiting up to ${DELETION_TIMEOUT}s for ${#INITIATED[@]} resource group(s) to disappear..."
+  STARTED=$(date +%s)
+  DEADLINE=$(( STARTED + DELETION_TIMEOUT ))
+  POLL_INTERVAL=30
+
+  while true; do
+    REMAINING=()
+    for RG in ${INITIATED[@]+"${INITIATED[@]}"}; do
+      if [[ "$(az group exists --name "$RG")" == "true" ]]; then
+        REMAINING+=("$RG")
+      fi
+    done
+
+    [[ ${#REMAINING[@]} -eq 0 ]] && break
+
+    LEFT=$(( DEADLINE - $(date +%s) ))
+    [[ $LEFT -le 0 ]] && break
+
+    echo "  still present: ${REMAINING[*]}"
+    # Never sleep past the deadline: on a short timeout a flat 30s wait
+    # overshoots it several times over and the report below would be a lie.
+    if [[ $LEFT -lt $POLL_INTERVAL ]]; then
+      sleep "$LEFT"
+    else
+      sleep "$POLL_INTERVAL"
+    fi
+  done
+
+  ELAPSED=$(( $(date +%s) - STARTED ))
+
+  if [[ ${#REMAINING[@]} -gt 0 ]]; then
+    echo "Resource groups still present after ${ELAPSED}s: ${REMAINING[*]}" >&2
+    echo "Their deletion was accepted but did not complete; they are still billing." >&2
+    FAILED=true
+  elif [[ "$FAILED" == "true" ]]; then
+    # Some deletion was refused outright above. The ones that were accepted did
+    # complete, but the run is going to exit 1 and the log must not read as if
+    # everything went through.
+    echo "The ${#INITIATED[@]} initiated deletion(s) completed, but not every group could be deleted." >&2
+  else
+    echo "All ${#INITIATED[@]} resource group(s) deleted."
+  fi
+fi
+
+if [[ "$FAILED" == "true" ]]; then
+  exit 1
+fi

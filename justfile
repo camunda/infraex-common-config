@@ -17,3 +17,7 @@ asdf-plugins:
 # Install tools using asdf
 asdf-install: asdf-plugins
     asdf install
+
+# Run the Azure resource group sweep against a stubbed CLI
+test-azure-cleanup:
+    ./.github/workflows/scripts/tests/azure_rg_cleanup_test.sh
