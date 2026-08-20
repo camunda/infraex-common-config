@@ -52,7 +52,12 @@ jobs:
     lint:
         name: pre-commit
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        # A run that misses both caches installs the asdf toolchain and rebuilds every hook
+        # environment: measured at 8m11 and 8m19 on 2026-08-19, against a 10-minute budget.
+        # The margin was thin enough that a slow `apt-get update` took the job over, and a job
+        # killed by this timeout counts as cancelled, so the post steps never save what it
+        # just built -- the next run then starts cold again.
+        timeout-minutes: 20
         # Repository-supplied pre-commit hooks execute in this job, so it is handed nothing
         # worth stealing: no App token, no `secrets.*` reference, and a GITHUB_TOKEN held to
         # `contents: read` by the workflow-level permissions and never written to disk, since
@@ -107,8 +112,26 @@ jobs:
 
             # Required for pre-commit to work with Python referenced in .tool-versions for Ubuntu >= 24.04
             - name: Install Python dependencies
+              # `apt-get update` reads archive.ubuntu.com, which stalls often enough to matter:
+              # on 2026-08-19 it hung on `noble-security InRelease` for over nine minutes in
+              # four separate runs and each time the job timeout killed the run. apt's own
+              # retries do not cover a connection that hangs rather than fails, so the attempt
+              # is bounded externally and retried.
               run: |
-                  sudo apt-get update
+                  set -euo pipefail
+
+                  for attempt in 1 2 3; do
+                    if sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; then
+                      break
+                    fi
+                    if [ "$attempt" -eq 3 ]; then
+                      echo "::error::apt-get update failed or hung on three attempts."
+                      exit 1
+                    fi
+                    echo "::warning::apt-get update failed or hung (attempt ${attempt}/3), retrying."
+                    sleep 5
+                  done
+
                   sudo apt-get install -y libsqlite3-dev libbz2-dev liblzma-dev
 
             # Setup tool cache
@@ -149,6 +172,7 @@ jobs:
                     exit 1
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
+                  echo "pre_commit=${actual}" | tee -a "$GITHUB_OUTPUT"
 
                   # The interpreter identity has to be part of the cache key. Callers are not
                   # required to pin python in .tool-versions -- when they do not, python comes
@@ -158,11 +182,28 @@ jobs:
                   # never saved, reinstalling on every run.
                   echo "python=$(python3 --version 2>&1 | tr ' ' '-')" | tee -a "$GITHUB_OUTPUT"
 
-            - name: Cache pre-commit hook environments
-              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+            - name: Restore pre-commit hook environments
+              id: precommit_cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/pre-commit
-                  key: pre-commit-2|${{ runner.os }}|${{ steps.toolchain.outputs.python }}|${{ hashFiles('.pre-commit-config.yaml', '.tool-versions') }}
+                  # Only .pre-commit-config.yaml is hashed. The previous key hashed
+                  # .tool-versions as well, so bumping terraform, awscli or yq -- none of which
+                  # a hook environment is built from -- threw away every environment. What that
+                  # file does contribute is the pre-commit version, which owns the cache layout,
+                  # so it is named explicitly instead.
+                  key: pre-commit-3|${{ runner.os }}|${{ steps.toolchain.outputs.python }}|pre-commit-${{ steps.toolchain.outputs.pre_commit }}|${{ hashFiles('.pre-commit-config.yaml')
+                      }}
+                  # Without these the key was all-or-nothing: Renovate bumping one hook rev --
+                  # the most common pull request in these repositories -- rebuilt all of them.
+                  # pre-commit indexes its environments by repo and rev in db.db and installs
+                  # only what is missing, so a near-miss restore is worth having: the bumped
+                  # hook is rebuilt and the rest are reused. Environments belonging to a removed
+                  # hook are inert, and the interpreter that could make a restored environment
+                  # invalid is pinned in both fallbacks.
+                  restore-keys: |
+                      pre-commit-3|${{ runner.os }}|${{ steps.toolchain.outputs.python }}|pre-commit-${{ steps.toolchain.outputs.pre_commit }}|
+                      pre-commit-3|${{ runner.os }}|${{ steps.toolchain.outputs.python }}|
 
             - name: Run pre-commit
               id: pre_commit_check_first_run
@@ -172,6 +213,25 @@ jobs:
               id: pre_commit_check_second_run
               if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' }}
               run: pre-commit run --show-diff-on-failure --color=always --all-files --verbose
+
+            # Saving from every pull request run was self-defeating: an entry written on
+            # `refs/pull/N/merge` is readable only by that pull request, so each one paid
+            # 100-150 MB of the repository's 10 GB budget for something no other run could use,
+            # and evicted the `main` entries every run does read. Hence: on the default branch,
+            # where the scope is shared, refresh whenever the exact key missed; on a pull
+            # request, write only when nothing matched at all, so a cold branch still seeds
+            # itself for its own later runs and a partial hit costs nothing.
+            #
+            # `!cancelled()` rather than the implicit `success()`: on the auto-fix path the
+            # first pre-commit run has failed by definition, and the environments it just built
+            # are exactly what the next run should not have to rebuild.
+            - name: Save pre-commit hook environments
+              if: ${{ !cancelled() && steps.precommit_cache.outputs.cache-hit != 'true' && (steps.precommit_cache.outputs.cache-matched-key == '' || (github.event_name
+                  == 'push' && github.ref_name == github.event.repository.default_branch)) }}
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/pre-commit
+                  key: ${{ steps.precommit_cache.outputs.cache-primary-key }}
 
             # The first pre-commit run checks the files. If the second run passes, pre-commit
             # applied automatic fixes; if it still fails, pre-commit could not resolve the issue
