@@ -1,3 +1,3 @@
 spec:
-    # renovate: datasource=docker depName=camunda/keycloak versioning=regex:^quay-optimized-(?<major>\d+)$
+    # renovate: datasource=docker depName=camunda/keycloak versioning=regex:^quay-optimized-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
     image: docker.io/camunda/keycloak:quay-optimized-26.7.0

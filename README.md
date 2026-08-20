@@ -47,7 +47,12 @@ Neither failure announces itself -- an annotation that matches nothing looks exa
 that works, and one that matches twice only shows up as a duplicate line on the Dependency
 Dashboard -- so `lint-global` checks them. The `renovate annotations` job applies this
 preset's own `customManagers` to the calling repository and fails on any annotation that
-does not extract exactly one dependency. Locally:
+does not extract exactly one dependency.
+
+It also warns, without failing, when the version an annotation extracts cannot match its own
+`versioning=regex:` -- `15-dev-latest` against `^15(\.(?<minor>\d+))?(\.(?<patch>\d+))?$`,
+for instance. Renovate drops such a value as invalid, so the annotation updates nothing; that
+is sometimes deliberate and temporary, which is why it warns rather than blocks. Locally:
 
 ```shell
 just check-renovate-annotations   # this repository

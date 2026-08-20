@@ -1,0 +1,2 @@
+# renovate: datasource=helm depName=camunda-platform versioning=regex:^15(\.(?<minor>\d+
+export CHART_VERSION="15.0.0"

@@ -19,7 +19,14 @@ Both ways this can go wrong are silent:
 
 So this reads the preset's own `customManagers` and applies them the way Renovate does,
 rather than reimplementing what they are supposed to accept. Exactly one match per
-annotation, no more, no less.
+annotation, no more, no less. Both are errors.
+
+A third failure is just as silent and not always a mistake: the version the annotation
+extracts may be one its own `versioning=regex:` cannot match -- a chart pinned to
+`15-dev-latest` under `^15(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?$`, a build carrying a
+`-SNAPSHOT` suffix the pattern predates. Renovate extracts the dependency and then drops
+the value as invalid, so nothing is updated, but the pin is often deliberate and temporary.
+That one is reported as a warning and does not fail the run.
 
 The patterns are written for RE2, which Renovate uses for user-supplied regular
 expressions. Python's `re` covers every construct they use -- no lookaround, no
@@ -78,8 +85,13 @@ class Manager:
 class Finding:
     path: str
     line: int
-    count: int
     text: str
+    # `error` fails the run: an annotation extracting nothing or extracting several times
+    # is never intentional. `warning` does not: a version that its own regex versioning
+    # rejects can be a deliberate, temporary state -- a pre-release the pattern was not
+    # written for -- and the repository holding it should not be blocked on it.
+    level: str
+    message: str
 
 
 def load_managers(preset_path: Path) -> list[Manager]:
@@ -131,16 +143,16 @@ def tracked_files(root: Path) -> list[str]:
 def check_file(
     content: str, relative: str, managers: list[Manager]
 ) -> tuple[int, list[Finding]]:
-    """Return how many annotations the file holds, and which of them do not extract once."""
+    """Return how many annotations the file holds, and what is wrong with them."""
     # Every pattern in the preset starts at `datasource=`, so a match begins exactly where
     # its annotation does: the two can be keyed on the same offset.
-    extractions: dict[int, int] = {}
+    extractions: dict[int, list[re.Match[str]]] = {}
     for manager in managers:
         if not manager.reads(relative):
             continue
         for regex in manager.regexes:
             for match in regex.finditer(content):
-                extractions[match.start()] = extractions.get(match.start(), 0) + 1
+                extractions.setdefault(match.start(), []).append(match)
 
     annotations = 0
     findings = []
@@ -149,37 +161,92 @@ def check_file(
         column = line.find("datasource=")
         if column >= 0 and ANNOTATION.search(line):
             annotations += 1
-            count = extractions.get(offset + column, 0)
-            if count != 1:
-                findings.append(
-                    Finding(
-                        path=relative,
-                        line=line_number,
-                        count=count,
-                        text=line.strip(),
-                    )
-                )
+            matches = extractions.get(offset + column, [])
+            finding = judge(matches, relative, line_number, line.strip())
+            if finding:
+                findings.append(finding)
         offset += len(line) + 1
     return annotations, findings
 
 
+def judge(
+    matches: list[re.Match[str]], path: str, line: int, text: str
+) -> Finding | None:
+    """What, if anything, is wrong with one annotation."""
+    if not matches:
+        return Finding(
+            path=path,
+            line=line,
+            text=text,
+            level="error",
+            message=(
+                "this Renovate annotation extracts nothing, so the dependency it names "
+                "is never updated. The version has to be on the line immediately after "
+                "the annotation, and to be the last quoted run on that line or the last "
+                "thing on it."
+            ),
+        )
+    if len(matches) > 1:
+        return Finding(
+            path=path,
+            line=line,
+            text=text,
+            level="error",
+            message=(
+                f"this Renovate annotation extracts {len(matches)} dependencies instead "
+                "of one, so the same update is reported several times. Two patterns in "
+                "the preset's customManagers overlap here."
+            ),
+        )
+
+    groups = matches[0].groupdict()
+    versioning = groups.get("versioning") or ""
+    current_value = groups.get("currentValue") or ""
+    if not versioning.startswith("regex:"):
+        # Only `regex:` versionings can be evaluated here. semver, loose, docker and the
+        # rest are Renovate implementations, and guessing at them would report failures
+        # that are not there.
+        return None
+
+    pattern = versioning[len("regex:") :]
+    try:
+        compiled = re.compile(RE2_GROUP.sub("(?P<", pattern))
+    except re.error as error:
+        return Finding(
+            path=path,
+            line=line,
+            text=text,
+            level="warning",
+            message=(
+                f"the versioning regex on this annotation does not compile ({error}), "
+                "so Renovate cannot use it to order versions."
+            ),
+        )
+
+    # Renovate's regex versioning runs the pattern against the version as-is, and treats a
+    # value it cannot match as invalid: the dependency is extracted, then dropped before
+    # any lookup. `extractVersion` does not help -- it applies to the versions upstream
+    # publishes, not to the one written in the file.
+    if not compiled.search(current_value):
+        return Finding(
+            path=path,
+            line=line,
+            text=text,
+            level="warning",
+            message=(
+                f"this Renovate annotation extracts '{current_value}', which its own "
+                f"versioning regex '{pattern}' does not match. Renovate drops that as an "
+                "invalid value, so the dependency is never updated -- either the version "
+                "carries a suffix the pattern does not allow, or the pattern is stale."
+            ),
+        )
+    return None
+
+
 def report(finding: Finding) -> None:
-    if finding.count == 0:
-        message = (
-            "this Renovate annotation extracts nothing, so the dependency it names is "
-            "never updated. The version has to be on the line immediately after the "
-            "annotation, and to be the last quoted run on that line or the last thing "
-            "on it."
-        )
-    else:
-        message = (
-            f"this Renovate annotation extracts {finding.count} dependencies instead of "
-            "one, so the same update is reported several times. Two patterns in the "
-            "preset's customManagers overlap here."
-        )
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        print(f"::error file={finding.path},line={finding.line}::{message}")
-    print(f"{finding.path}:{finding.line}: {message}", file=sys.stderr)
+        print(f"::{finding.level} file={finding.path},line={finding.line}::{finding.message}")
+    print(f"{finding.path}:{finding.line}: {finding.level}: {finding.message}", file=sys.stderr)
     print(f"  {finding.text}", file=sys.stderr)
 
 
@@ -231,12 +298,14 @@ def main() -> int:
     for finding in findings:
         report(finding)
 
+    errors = [f for f in findings if f.level == "error"]
+    warnings = [f for f in findings if f.level == "warning"]
     print(
         f"checked {annotations} Renovate annotation(s) across {scanned} file(s): "
-        f"{annotations - len(findings)} extract exactly one dependency, "
-        f"{len(findings)} do not"
+        f"{annotations - len(findings)} sound, {len(errors)} broken, "
+        f"{len(warnings)} extracting a version their own versioning rejects"
     )
-    return 1 if findings else 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

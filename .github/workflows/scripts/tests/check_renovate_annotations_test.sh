@@ -101,7 +101,7 @@ file annotated-image.yml.fixture image.yml
 run
 expect_rc "1" 0
 expect_out "1" "checked 1 Renovate annotation(s)"
-expect_out "1" "1 extract exactly one dependency, 0 do not"
+expect_out "1" "1 sound, 0 broken, 0 extracting"
 
 # 2. A comment between the annotation and the version. The annotation reads the
 #    comment or nothing at all, and the dependency below silently stops being
@@ -113,7 +113,7 @@ run
 expect_rc "2" 1
 expect_out "2" "extracts nothing"
 expect_out "2" "detached.yml:2"
-expect_out "2" "0 extract exactly one dependency, 1 do not"
+expect_out "2" "0 sound, 1 broken, 0 extracting"
 
 # 3. Two patterns matching the same line: one dependency reported several times,
 #    which is what #517 saw on the Dependency Dashboard.
@@ -161,7 +161,7 @@ file several-annotations.yml.fixture many.yml
 run
 expect_rc "7" 1
 expect_out "7" "checked 3 Renovate annotation(s)"
-expect_out "7" "2 extract exactly one dependency, 1 do not"
+expect_out "7" "2 sound, 1 broken, 0 extracting"
 expect_out "7" "many.yml:3"
 
 # 8. The annotation fields are read in any order, so neither order may be
@@ -171,7 +171,7 @@ setup
 file field-orders.sh.fixture orders.sh
 run
 expect_rc "8" 0
-expect_out "8" "2 extract exactly one dependency, 0 do not"
+expect_out "8" "2 sound, 0 broken, 0 extracting"
 
 # 9. A preset with nothing to apply is a broken invocation, not a clean run.
 echo "9. preset without custom managers"
@@ -181,6 +181,36 @@ file annotated-image.yml.fixture image.yml
 run
 expect_rc "9" 1
 expect_out "9" "declares no regex customManagers"
+
+# 10. A version its own regex versioning cannot match is extracted and then dropped by
+#     Renovate as invalid, so the dependency never updates. Reported, but as a warning:
+#     a chart pinned to a dev tag before a release is a deliberate, temporary state.
+echo "10. version rejected by its own versioning regex"
+setup
+file versioning-mismatch.sh.fixture chart-env.sh
+run
+expect_rc "10" 0
+expect_out "10" "does not match"
+expect_out "10" "15-dev-latest"
+expect_out "10" "0 sound, 0 broken, 1 extracting"
+
+# 11. A versioning regex that does not compile is reported the same way, rather than
+#     taking the checker down with it.
+echo "11. versioning regex that does not compile"
+setup
+file versioning-uncompilable.sh.fixture chart-env.sh
+run
+expect_rc "11" 0
+expect_out "11" "does not compile"
+
+# 12. semver, loose, docker and the rest are Renovate implementations. Guessing at them
+#     here would invent failures, so a non-regex versioning is left alone.
+echo "12. non-regex versioning is not second-guessed"
+setup
+file versioning-not-regex.sh.fixture chart-env.sh
+run
+expect_rc "12" 0
+expect_out "12" "1 sound, 0 broken, 0 extracting"
 
 echo
 echo "passed=$PASS failed=$FAIL"
