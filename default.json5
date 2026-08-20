@@ -503,7 +503,13 @@
         //    `"camunda/camunda:8.10.0-alpha3"`, and the Go idiom
         //    `helpers.GetEnv("HELM_CHART_VERSION", "14.8.0")` -- the reason the prefix is
         //    greedy, since there the version is the second quoted run, not the first.
-        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[ \\t]*(?:[^\\s#/]|/[^/])[^\\n]*["\'](?:(?<packageName>[^\\s"\':]+):)?(?<currentValue>[^"\'\\n]+)["\']',
+        //
+        //    A shell default may also sit inside the quotes, `"${CHART_VERSION:-14.0.0}"`.
+        //    Without the `${NAME:-` alternative the `:` of that expansion reads as an image
+        //    tag separator, which yielded package `${CHART_VERSION` at version `-14.0.0}`:
+        //    extracted, then dropped by Renovate as invalid, so the pin never moved. A
+        //    packageName now has to start alphanumeric, which no expansion does.
+        'datasource=(?<datasource>\\S+)(?:[ \\t]+(?:depName=(?<depName>\\S+)|versioning=(?<versioning>\\S+)|registryUrl=(?<registryUrl>\\S+)|extractVersion=(?<extractVersion>\\S+)|depType=(?<depType>\\S+)|\\S+))+[ \\t]*\\r?\\n[ \\t]*(?:[^\\s#/]|/[^/])[^\\n]*["\'](?:\\$\\{[A-Za-z_][A-Za-z0-9_]*:-)?(?:(?<packageName>[A-Za-z0-9][^\\s"\':]*):)?(?<currentValue>[^"\'\\n{}]+)\\}?["\']',
         // 2. Unquoted value behind `=` or `:`, taking the first such delimiter:
         //    `SUBCTL_VERSION=0.24.0`, `version: 8.19.19`, `channel: release-2.17` (the
         //    `release-` prefix belongs to the file, not to the version the datasource

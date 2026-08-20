@@ -225,6 +225,17 @@ run
 expect_rc "12" 0
 expect_out "12" "1 sound, 0 broken, 0 extracting"
 
+# 13. A shell default inside the quotes. The `:` of `${NAME:-...}` is not an image tag
+#     separator, and reading it as one gave package `${CHART_VERSION` at version
+#     `-14.0.0}` -- extracted, then dropped by Renovate as invalid, so the pin never
+#     moved. Guards the preset, not just the checker.
+echo "13. shell default expansion inside the quotes"
+setup
+file shell-default-expansion.sh.fixture chart-env.sh
+run
+expect_rc "13" 0
+expect_out "13" "1 sound, 0 broken, 0 extracting"
+
 echo
 echo "passed=$PASS failed=$FAIL"
 [[ "$FAIL" == "0" ]]
