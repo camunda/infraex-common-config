@@ -21,3 +21,11 @@ asdf-install: asdf-plugins
 # Run the Azure resource group sweep against a stubbed CLI
 test-azure-cleanup:
     ./.github/workflows/scripts/tests/azure_rg_cleanup_test.sh
+
+# Check that every Renovate version annotation in this repository extracts one dependency
+check-renovate-annotations:
+    ./.github/workflows/scripts/check_renovate_annotations.py --preset default.json5 --root .
+
+# Run the Renovate annotation checker against its own fixtures
+test-renovate-annotations:
+    ./.github/workflows/scripts/tests/check_renovate_annotations_test.sh

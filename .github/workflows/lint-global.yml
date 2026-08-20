@@ -273,6 +273,58 @@ jobs:
                   # bot committed.
                   retention-days: 1
 
+    renovate-annotations:
+        name: renovate annotations
+        runs-on: ubuntu-latest
+        # No asdf, no hook environments, nothing cached: the check reads files and applies
+        # regular expressions to them. It runs beside `lint` rather than inside it because
+        # it needs a second checkout in the workspace, and `lint` turns everything in the
+        # workspace into the auto-fix patch.
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            # The preset has to be the one this workflow was resolved from, not whatever
+            # `main` holds when the job runs: the check applies the preset's own
+            # customManagers, so reading them from another commit would report failures for
+            # patterns the caller is not running against, and the script and the preset it
+            # reads would come from two different revisions. `job.workflow_repository` and
+            # `job.workflow_sha` name the reusable workflow's own source, which is exactly
+            # the pair wanted here.
+            #
+            # Checked out second, and into a subdirectory: `actions/checkout` cleans its
+            # target, so the caller's checkout has to come first.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: .infraex-common-config
+                  persist-credentials: false
+
+            # In a virtualenv rather than with a bare `pip install`: the runner image's
+            # interpreter is externally managed, and a caller is free to put its own python
+            # on PATH through .tool-versions. Neither is worth negotiating with for one
+            # pure-python parser.
+            - name: Install the JSON5 parser the preset is written in
+              run: |
+                  set -euo pipefail
+                  python3 -m venv /tmp/renovate-annotations-venv
+                  # renovate: datasource=pypi depName=json5
+                  JSON5_VERSION="0.15.0"
+                  /tmp/renovate-annotations-venv/bin/pip install --quiet "json5==${JSON5_VERSION}"
+
+            # Fails on an annotation that extracts nothing -- a dependency that looks
+            # covered and is never updated -- and on one that extracts several times, which
+            # is what overlapping patterns in the preset produce.
+            - name: Check Renovate annotations
+              run: |
+                  /tmp/renovate-annotations-venv/bin/python \
+                    .infraex-common-config/.github/workflows/scripts/check_renovate_annotations.py \
+                    --preset .infraex-common-config/default.json5 \
+                    --root .
+
     autofix-apply:
         name: Commit pre-commit fixes
         needs: lint
