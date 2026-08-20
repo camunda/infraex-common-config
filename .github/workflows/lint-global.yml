@@ -284,7 +284,7 @@ jobs:
         # applies it, mints a repository-scoped App token last and commits through the API. It runs
         # no repository code, which is the whole point: the hooks that produced this patch executed
         # in `lint`, with no credential.
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@4f41fc83a003370fdba17e7cc5a34840640e1248 # 2.3.2
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@887ed647c59e94535464fdfe2cfa0f33cffee468 # 2.3.3
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
