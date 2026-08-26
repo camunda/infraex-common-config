@@ -43,7 +43,7 @@ jobs:
             # Guarantees the pinned yq (.tool-versions) used by the region
             # derivation below, instead of relying on the runner image.
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@9d485973624ec326ef0e92c73191b6c0f26ad39e # 2.3.6
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@07d834a5174bbe971e1c0ab961a8605d389953a8 # 2.3.7
 
             - name: Determine DRY_RUN and matrix-derived regions
               env:
@@ -76,7 +76,7 @@ jobs:
                   echo "ACTIVE_REGIONS=$ACTIVE_REGIONS" | tee -a "$GITHUB_ENV"
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@66d8360fde057c0e4820dcd501dbbc325d9d60c1 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@a222449d7f9cccc9cb08d8c890776b82022775c6 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -197,7 +197,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
             - name: Configure AWS CLI
               if: ${{ env.should_run == 'true' }}
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@66d8360fde057c0e4820dcd501dbbc325d9d60c1 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@a222449d7f9cccc9cb08d8c890776b82022775c6 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -235,7 +235,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@787bec31b4ae6b70702321d0331676e88cfea9c5 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f8345269e8c056befbef81adbf8abeb0683d0136 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
