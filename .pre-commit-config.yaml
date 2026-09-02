@@ -27,7 +27,7 @@ repos:
             args: [-ignore=SC2155, -ignore=property "workflow_(sha|repository|ref|file_path)" is not defined]
 
     - repo: https://github.com/renovatebot/pre-commit-hooks
-      rev: 44.46.2
+      rev: 44.59.1
       hooks:
           - id: renovate-config-validator
             # --no-global is required: when the CLI is handed filenames it defaults to
@@ -45,7 +45,7 @@ repos:
           - id: yamlfmt
 
     - repo: https://github.com/zizmorcore/zizmor-pre-commit
-      rev: v1.29.0
+      rev: v1.30.0
       hooks:
           # Static analysis of GitHub Actions workflows and actions.
           # Threshold is `high` because the repository still carries ~30 medium and ~55

@@ -377,7 +377,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # renovate: datasource=npm depName=renovate
-                  RENOVATE_CLI_VERSION="44.46.3"
+                  RENOVATE_CLI_VERSION="44.59.1"
                   npx --yes "renovate@${RENOVATE_CLI_VERSION}"
 
             # Checked out after the Renovate run, and into a subdirectory: the run reads the
