@@ -27,7 +27,7 @@ repos:
             args: [-ignore=SC2155, -ignore=property "workflow_(sha|repository|ref|file_path)" is not defined]
 
     - repo: https://github.com/renovatebot/pre-commit-hooks
-      rev: 44.59.1
+      rev: 44.65.5
       hooks:
           - id: renovate-config-validator
             # --no-global is required: when the CLI is handed filenames it defaults to
