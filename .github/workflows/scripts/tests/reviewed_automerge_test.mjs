@@ -15,6 +15,9 @@ const { extractPackageFile } = await load('modules/manager/terraform/extract.js'
 const { GlobalConfig } = await load('config/global.js');
 GlobalConfig.set({ localDir: process.cwd() });
 const JSON5 = require(require.resolve('json5', { paths: [renovate] }));
+const YAML = require(require.resolve('js-yaml', { paths: [renovate] }));
+const version = require(resolve(renovate, 'package.json')).version;
+const hooks = YAML.load(readFileSync('.pre-commit-config.yaml', 'utf8')).repos;
 const base = JSON5.parse(readFileSync('default.json5', 'utf8'));
 const overlay = existsSync('reviewed-automerge.json5')
   ? JSON5.parse(readFileSync('reviewed-automerge.json5', 'utf8')) : {};
@@ -35,6 +38,12 @@ function equal(actual, expected, message) {
 }
 
 const eligible = await policy();
+equal(hooks.find((repo) => repo.repo === 'https://github.com/renovatebot/pre-commit-hooks').rev,
+  version, 'validator pin matches tested Renovate runtime');
+equal(hooks.flatMap((repo) => repo.hooks).find((hook) => hook.id === 'reviewed-automerge-policy').additional_dependencies,
+  [`renovate@${version}`], 'policy dependency pin matches tested Renovate runtime');
+equal(config.vulnerabilityAlerts.automerge, false, 'native vulnerability-alert override stays manual');
+equal(config.lockFileMaintenance.automerge, false, 'native lockfile-maintenance override stays manual');
 equal(eligible.automerge, true, 'allow reviewed AWS provider patch');
 const extracted = await extractPackageFile(`terraform {
   required_providers {
@@ -78,4 +87,4 @@ equal((await policy({}, { automerge: false, ...base })).groupName, 'patch-groupe
 equal(base.extends.includes(':automergeDisabled'), true, 'default retains disabled preset');
 equal(JSON5.parse(readFileSync('.github/renovate.json5', 'utf8')).extends,
   ['github>camunda/infraex-common-config:default.json5'], 'local adoption remains disabled');
-console.log(`${checks} policy checks passed using Renovate ${require(resolve(renovate, 'package.json')).version}`);
+console.log(`${checks} policy checks passed using Renovate ${version}`);
