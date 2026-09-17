@@ -15,6 +15,112 @@ Create a file `.github/renovate.json5`:
 }
 ```
 
+### Reviewed automerge (opt-in, not active by default)
+
+[`reviewed-automerge.json5`](reviewed-automerge.json5) lets Renovate perform the final
+merge **after human approval and required checks**. It does not auto-approve, bypass
+branch protection, restore the old merge workflow, or give CI a merge credential.
+This repository does not opt in. Adopting the preset is a separate, reviewed change
+in each consuming repository, after the checklist below is satisfied.
+
+The initial allowlist is deliberately narrow: `hashicorp/aws` and
+`hashicorp/azurerm` **patch** updates extracted by the native Terraform manager from
+`.tf` files outside `.github/` and `scripts/`. Eligible updates leave the shared patch
+group and get individual PRs. Every other package, manager, update type, lockfile
+maintenance and security-remediation PR stays manual. A provider is executable code,
+not a trusted dependency just because its namespace is allowlisted.
+
+Eligible releases wait **seven days**, with missing release timestamps blocking
+eligibility. Renovate merges PRs itself (`platformAutomerge: false`), checks test
+statuses, and rebases behind-base branches. Native GitHub automerge need not be
+enabled. The age window applies before Renovate proposes a new eligible release;
+it does not retroactively quarantine an existing PR or stop someone opening one
+manually. Review or close pre-existing candidates during rollout.
+
+#### Activation checklist
+
+Do not adopt until a maintainer has verified all of these in the consumer:
+
+1. Require at least one relevant test **by exact check name**, plus the security and
+   eligibility checks below. Require an up-to-date branch, human approval of the
+   latest push, and dismissal of stale approvals. Renovate must have no ruleset or
+   branch-protection bypass. A setting saying "require checks" with an empty check
+   list is not sufficient. At investigation time, this repository had that empty
+   list; this PR does not change repository settings.
+2. Audit **every** PR job before enabling automation. Dependency installs, Terraform
+   providers, hooks and scripts must run on disposable runners without write tokens,
+   persistent checkout credentials, cloud secrets, or Vault roles that can retrieve
+   the App key. Protect privileged workflows and their inputs. See the
+   [CI trust boundary](#ci-trust-boundary); passing a scan does not repair a credential
+   boundary. Do not reuse untrusted artifacts or executable caches in privileged jobs.
+3. Add a required, trusted-base eligibility check for the exact PR head SHA. Read the
+   complete diff as **data**, without checking out or executing PR code. Verify the
+   Renovate App identity, same-repository head, allowlisted provider/version changes,
+   and the complete file set, including generated `.terraform.lock.hcl` changes.
+   Reject extra HCL logic, new sources/registries, scripts, workflows, binaries,
+   symlinks, truncated diffs and fetch errors. A Renovate `matchFileNames` rule matches
+   the dependency's manifest, **not every changed file**. Recheck after every push;
+   never authorize from a branch prefix, PR title, label or earlier SHA's result.
+4. Require fresh scans of the proposed artifacts with supported vulnerability and
+   malware coverage, plus workflow/static checks where relevant. Fail on scanner
+   errors, missing reports or missing coverage rather than converting them to green.
+   The repository's existing `zizmor` hook checks Actions configuration, not Terraform
+   provider binaries. Do not claim an OSV/Trivy/Semgrep result covers artifacts or
+   ecosystems it did not inspect. If provider artifact coverage cannot be supplied,
+   keep these updates manual. Confirm the incident owner's acceptance before rollout.
+
+After those checks, add the overlay **after** the default preset:
+
+```json5
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "github>camunda/infraex-common-config:default.json5",
+    "github>camunda/infraex-common-config:reviewed-automerge.json5",
+  ],
+}
+```
+
+Audit the consumer's resolved configuration: local/package rules can override a
+shared preset. Do not append broad `automerge: true` rules. Pilot one repository;
+confirm a recent release and missing timestamp are held, unrelated changes stay
+manual, failing/missing checks block merging, and a new push needs fresh approval.
+To roll back, remove the overlay, inspect already-open candidates and disable any
+separately enabled platform automerge. No workflow or repository setting is changed
+by removing this preset.
+
+#### Why not restore `automerge-global`?
+
+[PR #542](https://github.com/camunda/infraex-common-config/pull/542) removed the App-token
+approval/merge steps for INC-7027. [Commit a236223](https://github.com/camunda/infraex-common-config/commit/a236223e4c63b67b404333351095901869a55767)
+later deleted the leftover checkout and three-hour waiter, which could no longer merge.
+Its removal did not disable an active merge path. The commit records two archived,
+SHA-pinned callers, `camunda-tf-eks-module` and `camunda-tf-rosa`; deleting a file on
+`main` does not revoke those historical versions. Audit and replace those pins
+**before** re-enabling their Actions if either repository is unarchived.
+
+The incident involved malicious dependency code executing **before merge**. Small
+diffs, trusted bot authors, patch versions, release age and high merge confidence are
+useful triage signals, not authorization or proof of safety. Malware can fit in one
+line or arrive through a signed upstream release. Vulnerability databases lag new
+attacks; a clean scan cannot prove absence. Text from PRs, release notes and dependency
+sources is also untrusted input to any LLM reviewer: its verdict must never grant
+approval, tokens or a merge. Human review plus enforced isolation remains necessary.
+
+Policy tests run Renovate's actual rule matcher, Terraform extractor and release-age
+logic, with the same exact Renovate version as the schema validator:
+
+```shell
+just test-reviewed-automerge
+```
+
+These tests verify configuration behavior, not live GitHub protections, malware
+detection, or an end-to-end merge. Those are mandatory consumer rollout checks.
+See Renovate's [automerge](https://docs.renovatebot.com/key-concepts/automerge/),
+[release-age](https://docs.renovatebot.com/configuration-options/#minimumreleaseage)
+and [Terraform provider datasource](https://docs.renovatebot.com/modules/datasource/terraform-provider/)
+documentation for platform and timestamp limitations.
+
 ### Version Annotations
 
 The preset ships a custom manager that updates versions written anywhere -- shell scripts,

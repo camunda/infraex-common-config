@@ -33,3 +33,7 @@ test-renovate-annotations:
 # Run the Renovate lookup checker against its own fixtures
 test-renovate-lookup:
     ./.github/workflows/scripts/tests/check_renovate_lookup_test.sh
+
+# Exercise reviewed automerge rules using the same pinned Renovate as validation
+test-reviewed-automerge:
+    pre-commit run reviewed-automerge-policy --all-files --verbose
