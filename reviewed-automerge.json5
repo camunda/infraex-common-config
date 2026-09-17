@@ -1,0 +1,42 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  // Opt in AFTER default.json5, only after the README activation checklist.
+  // This does not supply approval or enforce repository protection settings.
+  automerge: false,
+  platformAutomerge: false,
+  vulnerabilityAlerts: {
+    automerge: false,
+  },
+  lockFileMaintenance: {
+    automerge: false,
+  },
+  packageRules: [
+    {
+      description: 'Keep every dependency manual unless explicitly allowed below.',
+      matchPackageNames: ['*'],
+      automerge: false,
+    },
+    {
+      description: 'Merge individual reviewed AWS/Azure provider patches after checks and release ageing.',
+      matchManagers: ['terraform'],
+      matchDatasources: ['terraform-provider'],
+      matchPackageNames: ['hashicorp/aws', 'hashicorp/azurerm'],
+      matchUpdateTypes: ['patch'],
+      matchFileNames: ['**/*.tf', '!**/.github/**', '!**/scripts/**'],
+      automerge: true,
+      automergeType: 'pr',
+      platformAutomerge: false,
+      ignoreTests: false,
+      rebaseWhen: 'behind-base-branch',
+      groupName: null,
+      minimumReleaseAge: '7 days',
+      minimumReleaseAgeBehaviour: 'timestamp-required',
+      internalChecksFilter: 'strict',
+    },
+    {
+      description: 'Security remediations require explicit manual handling, even for allowlisted packages.',
+      matchJsonata: ['isVulnerabilityAlert = true'],
+      automerge: false,
+    },
+  ],
+}

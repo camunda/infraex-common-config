@@ -37,7 +37,18 @@ repos:
             # The upstream pattern only matches renovate/renovaterc filenames, so
             # default.json5 -- the preset every consumer repository extends -- was
             # never validated. Keep the upstream alternative verbatim and add ours.
-            files: (^|/).?renovate(?:rc)?(?:\.json5?)?$|^default\.json5$
+            files: (^|/).?renovate(?:rc)?(?:\.json5?)?$|^(default|reviewed-automerge)\.json5$
+
+    - repo: local
+      hooks:
+          - id: reviewed-automerge-policy
+            name: reviewed automerge policy (Renovate)
+            language: node
+            language_version: lts
+            additional_dependencies: [renovate@44.66.0]
+            entry: node .github/workflows/scripts/tests/reviewed_automerge_test.mjs
+            files: ^(default\.json5|reviewed-automerge\.json5|\.github/renovate\.json5|\.github/workflows/scripts/tests/reviewed_automerge_test\.mjs|\.pre-commit-config\.yaml)$
+            pass_filenames: false
 
     - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
       rev: 0.2.3
