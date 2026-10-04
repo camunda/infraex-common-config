@@ -76,7 +76,7 @@ jobs:
                   echo "ACTIVE_REGIONS=$ACTIVE_REGIONS" | tee -a "$GITHUB_ENV"
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@8e9725bc271bb5815423a5f822b649acb505b6a5 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@be2fb0e58bbfacd19f29efb8d528db1b992c905c # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -197,7 +197,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common AWS_SECRET_KEY;
             - name: Configure AWS CLI
               if: ${{ env.should_run == 'true' }}
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@8e9725bc271bb5815423a5f822b649acb505b6a5 # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@be2fb0e58bbfacd19f29efb8d528db1b992c905c # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -235,7 +235,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@fdeb893edb0bfd8f3664a0747a93f8cf453c16f1 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@5251cf2838875fd6cab406a1ffa16af1355474a8 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
