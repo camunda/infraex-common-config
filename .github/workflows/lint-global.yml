@@ -7,8 +7,11 @@ on:
     workflow_call:
         inputs:
             autofix-actor:
-                description: Name of the actor that will trigger auto-fix
-                default: renovate[bot]
+                description: >-
+                    Space-separated list of actors allowed to trigger auto-fix. Includes the
+                    scheduled-maintenance bot, whose push onto a Renovate branch becomes the
+                    triggering actor of the next lint run.
+                default: renovate[bot] infraex-misc[bot]
                 type: string
             autofix-max-changed-lines:
                 description: |
@@ -89,7 +92,7 @@ jobs:
                   # Auto-fix needs a privileged App token, so it is restricted to the designated
                   # bot actor AND to same-repository pull requests. A fork head is never checked
                   # out in the job that holds that token.
-                  if [[ "${ACTOR}" == "${AUTOFIX_ACTOR}" && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
+                  if [[ " ${AUTOFIX_ACTOR} " == *" ${ACTOR} "* && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
                     echo "autofix_pr=true" | tee -a "$GITHUB_OUTPUT"
                   else
                     echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
