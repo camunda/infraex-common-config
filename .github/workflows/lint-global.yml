@@ -323,7 +323,7 @@ jobs:
                   set -euo pipefail
                   python3 -m venv /tmp/renovate-annotations-venv
                   # renovate: datasource=pypi depName=json5
-                  JSON5_VERSION="0.15.0"
+                  JSON5_VERSION="0.17.3"
                   /tmp/renovate-annotations-venv/bin/pip install --quiet "json5==${JSON5_VERSION}"
 
             # Fails on an annotation that extracts nothing -- a dependency that looks
@@ -380,7 +380,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # renovate: datasource=npm depName=renovate
-                  RENOVATE_CLI_VERSION="44.134.1"
+                  RENOVATE_CLI_VERSION="44.149.2"
                   npx --yes "renovate@${RENOVATE_CLI_VERSION}"
 
             # Checked out after the Renovate run, and into a subdirectory: the run reads the
