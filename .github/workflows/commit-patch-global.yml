@@ -123,7 +123,7 @@ jobs:
                   persist-credentials: false
 
             - name: Download the patch
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: ${{ inputs.artifact-name }}
                   path: ${{ runner.temp }}
@@ -244,7 +244,7 @@ jobs:
             # it is not alive while the untrusted patch is downloaded, measured and applied.
             - name: Generate token for GitHub
               id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@5251cf2838875fd6cab406a1ffa16af1355474a8 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@a82386064fbdf975fade9d99c98a2af9b506496a # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: ${{ inputs.vault-secret-path }}
