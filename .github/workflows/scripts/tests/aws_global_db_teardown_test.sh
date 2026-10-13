@@ -27,7 +27,7 @@ case "\$*" in
 esac
 STUB
   chmod +x "$stub/aws"
-  PATH="$stub:$PATH" CLEANUP_REGIONS="eu-west-2 eu-west-3" GLOBAL_DB_POLL_SECONDS=0 \
+  PATH="$stub:$PATH" DRY_RUN=false CLEANUP_REGIONS="eu-west-2 eu-west-3" GLOBAL_DB_POLL_SECONDS=0 \
     bash "$SCRIPT" 2>&1
 }
 
