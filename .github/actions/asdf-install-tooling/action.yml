@@ -235,7 +235,22 @@ runs:
                   asdf plugin update --all
 
                   # Install the tools specified in the current .tool-versions file
-                  asdf install
+                  # A cold install including Python takes about seven minutes. Allow headroom,
+                  # but bound stalled downloads; retries skip versions already installed.
+                  for attempt in 1 2 3; do
+                    if timeout --kill-after=30s 15m asdf install; then
+                      break
+                    else
+                      install_status=$?
+                    fi
+                    if [ "$attempt" -eq 3 ]; then
+                      echo "::error::asdf install failed or timed out on three attempts (exit ${install_status})."
+                      exit "$install_status"
+                    fi
+                    retry_delay=$((10 * 3 ** (attempt - 1)))
+                    echo "::warning::asdf install failed or timed out (attempt ${attempt}/3, exit ${install_status}), retrying in ${retry_delay}s."
+                    sleep "$retry_delay"
+                  done
 
                   # return to the root dir
                   cd - || exit

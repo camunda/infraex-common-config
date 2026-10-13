@@ -7,8 +7,11 @@ on:
     workflow_call:
         inputs:
             autofix-actor:
-                description: Name of the actor that will trigger auto-fix
-                default: renovate[bot]
+                description: >-
+                    Space-separated list of actors allowed to trigger auto-fix. Includes the
+                    scheduled-maintenance bot, whose push onto a Renovate branch becomes the
+                    triggering actor of the next lint run.
+                default: renovate[bot] infraex-misc[bot]
                 type: string
             autofix-max-changed-lines:
                 description: |
@@ -89,7 +92,7 @@ jobs:
                   # Auto-fix needs a privileged App token, so it is restricted to the designated
                   # bot actor AND to same-repository pull requests. A fork head is never checked
                   # out in the job that holds that token.
-                  if [[ "${ACTOR}" == "${AUTOFIX_ACTOR}" && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
+                  if [[ " ${AUTOFIX_ACTOR} " == *" ${ACTOR} "* && "${EVENT_NAME}" == "pull_request" && "${HEAD_REPO}" == "${BASE_REPO}" ]]; then
                     echo "autofix_pr=true" | tee -a "$GITHUB_OUTPUT"
                   else
                     echo "autofix_pr=false" | tee -a "$GITHUB_OUTPUT"
@@ -120,7 +123,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@07d834a5174bbe971e1c0ab961a8605d389953a8 # 2.3.7
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@fc5fa6ee1e142bf583e9f01e749bc31654ff07ac # 2.3.8
 
             # What used to stand here was `apt-get install libsqlite3-dev libbz2-dev
             # liblzma-dev`, on every run, ahead of the step above. It cost 3m45 on 2026-08-19
@@ -272,7 +275,7 @@ jobs:
               # by definition on every path that reaches here, so the implicit `success()` would
               # skip this step and leave autofix-apply with no artifact to download.
               if: ${{ !cancelled() && steps.patch.outputs.has_fixes == 'true' }}
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: ${{ steps.mode.outputs.artifact_name }}
                   path: autofix.patch
@@ -320,7 +323,7 @@ jobs:
                   set -euo pipefail
                   python3 -m venv /tmp/renovate-annotations-venv
                   # renovate: datasource=pypi depName=json5
-                  JSON5_VERSION="0.15.0"
+                  JSON5_VERSION="0.17.3"
                   /tmp/renovate-annotations-venv/bin/pip install --quiet "json5==${JSON5_VERSION}"
 
             # Fails on an annotation that extracts nothing -- a dependency that looks
@@ -350,7 +353,7 @@ jobs:
             # Renovate 44 declares `node: ^24.11.0` and means it: it calls `RegExp.escape`,
             # which older runtimes do not have, and fails on import rather than at a version
             # check. Pinned rather than left to the runner image, whose default node moves.
-            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
               with:
                   node-version: 24
 
@@ -377,7 +380,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # renovate: datasource=npm depName=renovate
-                  RENOVATE_CLI_VERSION="44.134.1"
+                  RENOVATE_CLI_VERSION="44.151.4"
                   npx --yes "renovate@${RENOVATE_CLI_VERSION}"
 
             # Checked out after the Renovate run, and into a subdirectory: the run reads the
@@ -413,7 +416,7 @@ jobs:
         # applies it, mints a repository-scoped App token last and commits through the API. It runs
         # no repository code, which is the whole point: the hooks that produced this patch executed
         # in `lint`, with no credential.
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@07d834a5174bbe971e1c0ab961a8605d389953a8 # 2.3.7
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@fc5fa6ee1e142bf583e9f01e749bc31654ff07ac # 2.3.8
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
