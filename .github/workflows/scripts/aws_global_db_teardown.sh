@@ -30,6 +30,14 @@ DRY_RUN=${DRY_RUN:-false}
 # regions are wiped). Defaults to all cleanup regions.
 ACTIVE_REGIONS="${ACTIVE_REGIONS:-$CLEANUP_REGIONS}"
 
+# Seconds between membership polls. Overridden by the offline tests.
+POLL_SECONDS="${GLOBAL_DB_POLL_SECONDS:-10}"
+
+# Global databases this run could not tear down. A member that never leaves
+# (e.g. an Aurora replica stuck in `creating`) blocks cloud-nuke every night,
+# so it must fail the job and reach notify-on-failure instead of a green run.
+unresolved=()
+
 # Function to execute a command or simulate it if DRY_RUN is true
 execute_or_simulate() {
     local cmd="$1"
@@ -201,7 +209,7 @@ for global_cluster_id in $global_cluster_ids; do
                     break
                 fi
                 echo "Primary detach not ready yet (secondaries still detaching): ${detach_err}"
-                sleep 10
+                sleep "$POLL_SECONDS"
             done
             if [ "$primary_detached" != true ]; then
                 echo "Warning: could not detach primary $primary_arn from $global_cluster_id after ~5 min; leaving it for the next run"
@@ -233,7 +241,7 @@ for global_cluster_id in $global_cluster_ids; do
                 break
             fi
             echo "Waiting for $remaining member(s) to detach from $global_cluster_id..."
-            sleep 10
+            sleep "$POLL_SECONDS"
         done
     fi
 
@@ -241,5 +249,13 @@ for global_cluster_id in $global_cluster_ids; do
         delete_global_cluster "$global_cluster_id" "$delete_region"
     else
         echo "Warning: global database $global_cluster_id not confirmed empty (remaining=$remaining); leaving it for the next run"
+        unresolved+=("$global_cluster_id")
     fi
 done
+
+if [ "${#unresolved[@]}" -gt 0 ]; then
+    for id in "${unresolved[@]}"; do
+        echo "::error title=Aurora Global Database not torn down::$id still has members after the detach. cloud-nuke cannot delete its clusters until they leave. A member stuck in a transitional state (e.g. creating) needs AWS support."
+    done
+    exit 1
+fi
