@@ -11,7 +11,7 @@ on:
                     Space-separated list of actors allowed to trigger auto-fix. Includes the
                     scheduled-maintenance bot, whose push onto a Renovate branch becomes the
                     triggering actor of the next lint run.
-                default: renovate[bot] infraex-misc[bot]
+                default: renovate[bot] smx-misc[bot]
                 type: string
             autofix-max-changed-lines:
                 description: |
