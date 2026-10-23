@@ -233,6 +233,23 @@
         'group:go',
       ],
     },
+    {
+      // Renovate leaves the go.mod `go` directive untouched by default and only bumps
+      // `toolchain`. Repositories pinning the version in `go` alone (read by
+      // actions/setup-go `go-version-file`) would otherwise freeze on it.
+      // https://docs.renovatebot.com/modules/manager/gomod/#updating-of-go-mod-and-toolchain-directives
+      description: 'Bump the go.mod go directive like the other Go version pins.',
+      matchManagers: [
+        'gomod',
+      ],
+      matchDepNames: [
+        'go',
+      ],
+      matchDepTypes: [
+        'golang',
+      ],
+      rangeStrategy: 'bump',
+    },
     // limit the PR creation for the Renovate pre-commit hook (it's released very frequently)
     {
       matchPackageNames: [
