@@ -393,6 +393,29 @@ if [ -n "$eip_allocations" ]; then
     done <<< "$eip_allocations"
 fi
 
+echo "Deleting orphaned RDS DB subnet groups"
+# cloud-nuke never deletes DB subnet groups when --older-than is set: the RDS API
+# gives them no creation time, and cloud-nuke excludes resources without one
+# whenever a time filter is active (gruntwork-io/cloud-nuke#1134). They then pile
+# up against the regional quota of 50. A group whose VPC no longer exists cannot
+# serve any database, whatever its age, so the age window does not apply.
+# List groups before VPCs, so a group created in between always finds its VPC.
+subnet_groups=$(paginate "aws rds describe-db-subnet-groups --region $region" "DBSubnetGroups[].[DBSubnetGroupName,VpcId]" | tr '\t' '\n' | paste - - || true)
+# No paginate helper here: it hides failures, and an empty VPC list would mark every group as orphaned.
+live_vpc_ids=$(aws ec2 describe-vpcs --region "$region" --query "Vpcs[].VpcId" --output text | tr '\t' '\n')
+
+if [ -n "$subnet_groups" ]; then
+    while IFS=$'\t' read -r subnet_group_name subnet_group_vpc
+    do
+        [ -z "$subnet_group_name" ] && continue
+        if grep -qxF "$subnet_group_vpc" <<< "$live_vpc_ids"; then
+            continue
+        fi
+        echo "Deleting DB subnet group: $subnet_group_name (VPC $subnet_group_vpc no longer exists)"
+        execute_or_simulate "aws rds delete-db-subnet-group --region $region --db-subnet-group-name $subnet_group_name" || true
+    done <<< "$subnet_groups"
+fi
+
 echo "Deleting CloudWatch Log Groups"
 # Delete CloudWatch Log Groups (they accumulate storage costs). This runs only in
 # ephemeral test regions, where log groups left behind by deleted resources
