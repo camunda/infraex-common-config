@@ -15,7 +15,7 @@ Use it with `if: failure()`
 | `vault_role_id` | <p>The role ID used for authentication with Vault</p> | `true` | `""` |
 | `vault_secret_id` | <p>The secret ID used for authentication with Vault</p> | `true` | `""` |
 | `slack_channel_id` | <p>The Slack channel ID where the notification will be sent.</p> | `false` | `C076N4G1162` |
-| `slack_mention_people` | <p>The Slack people to mention in the notification.</p> | `false` | `@infraex-medic` |
+| `slack_mention_people` | <p>The Slack people to mention in the notification.</p> | `false` | `<!subteam^S0CBB7Y72SV>` |
 | `disable_silence_check` | <p>Disable silence check. By default, alerts can be disabled by creating an issue in the repository with the label alert-management and with the title: silence: name of your workflow</p> | `false` | `false` |
 | `branch` | <p>The branch the workflow is testing. Used to add severity context to the Slack alert. Defaults to auto-detection: <code>github.base_ref</code> for PRs (target branch), <code>github.ref_name</code> for push/schedule events. Alerts on <code>stable/*</code> branches include a prominent severity marker.</p> | `false` | `""` |
 | `repeat_threshold` | <p>Number of consecutive failures at or above which the alert is prefixed with a "REPEATED FAILURE (Nx)" escalation marker. Set to <code>0</code> to disable the prefix (the count is still tracked and exposed as the <code>consecutive_failures</code> output).</p> | `false` | `3` |
@@ -67,7 +67,7 @@ This action is a `composite` action.
     # The Slack people to mention in the notification.
     #
     # Required: false
-    # Default: @infraex-medic
+    # Default: <!subteam^S0CBB7Y72SV>
 
     disable_silence_check:
     # Disable silence check.
