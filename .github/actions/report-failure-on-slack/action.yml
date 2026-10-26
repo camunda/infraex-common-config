@@ -20,7 +20,7 @@ inputs:
         default: C076N4G1162 # infraex-alerts
     slack_mention_people:
         description: The Slack people to mention in the notification.
-        default: '@infraex-medic'
+        default: <!subteam^S0CBB7Y72SV>
     disable_silence_check:
         description: |
             Disable silence check.

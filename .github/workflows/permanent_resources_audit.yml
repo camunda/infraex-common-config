@@ -31,8 +31,8 @@ env:
 
     PROVIDER: ${{ github.event.inputs.provider || 'all' }}
 
-    # Tag infraex-medic on scheduled/manual runs, skip on PRs
-    SLACK_MENTION: ${{ github.event_name != 'pull_request' && '<!subteam^S06NTRBMWUD> please' || 'Please' }}
+    # Tag smx-medic on scheduled/manual runs, skip on PRs
+    SLACK_MENTION: ${{ github.event_name != 'pull_request' && '<!subteam^S0CBB7Y72SV> please' || 'Please' }}
 
     # Regions excluded from permanent audit as they are cleaned daily or weekly (see README.md)
     AWS_EXCLUDED_REGIONS: '["eu-west-2", "eu-west-3", "eu-central-2", "eu-north-1", "eu-south-1", "us-east-1", "us-east-2"]'

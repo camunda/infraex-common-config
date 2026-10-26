@@ -31,7 +31,7 @@ inputs:
     slack_mention_people:
         description: |
             Optional Slack handles or group mentions to cc on the warning
-            (for example `@infraex-medic`). Left empty by default because
+            (for example `@smx-medic`). Left empty by default because
             warnings are advisory and should not page people. Broadcast
             mentions (`<!here>`, `<!channel>`, `<!everyone>`) are defused so a
             warning cannot page a whole channel; user and usergroup mentions
