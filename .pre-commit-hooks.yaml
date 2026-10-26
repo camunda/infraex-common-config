@@ -13,5 +13,5 @@
           The dependency-guard action-pin rule matches `@<sha> # <version>` with one space.
           Any other spacing makes the scanner veto every Renovate pin update on that line.
       language: pygrep
-      entry: uses:\s*\S+@[0-9a-f]{40}(\s{2,}|\t)#
+      entry: uses:\s*\S+@[0-9a-f]{40}["']?(\s{2,}|\t)#
       files: ^\.github/(workflows/[^/]+|actions/.+/action)\.ya?ml$
