@@ -399,7 +399,8 @@ echo "Deleting orphaned RDS DB subnet groups"
 # whenever a time filter is active (gruntwork-io/cloud-nuke#1134). They then pile
 # up against the regional quota of 50. A group whose VPC no longer exists cannot
 # serve any database, whatever its age, so the age window does not apply.
-live_vpc_ids=$(paginate "aws ec2 describe-vpcs --region $region" "Vpcs[].VpcId" | tr '\t' '\n')
+# No paginate helper here: it hides failures, and an empty VPC list would mark every group as orphaned.
+live_vpc_ids=$(aws ec2 describe-vpcs --region "$region" --query "Vpcs[].VpcId" --output text | tr '\t' '\n')
 subnet_groups=$(paginate "aws rds describe-db-subnet-groups --region $region" "DBSubnetGroups[].[DBSubnetGroupName,VpcId]" | tr '\t' '\n' | paste - - || true)
 
 if [ -n "$subnet_groups" ]; then
