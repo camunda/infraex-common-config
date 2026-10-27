@@ -81,3 +81,19 @@ export SUCCESS_ON=4
 check 'persistent failure preserves error and exit status' 56 3 '10 30 '
 export TEST_MODE=hang
 check 'stalled process ignoring TERM is killed and retries stay bounded' 137 3 '10 30 '
+
+# verify-tools.sh: a restored toolchain missing one pinned version must be reported.
+unset -f asdf timeout sleep
+mkdir -p "$TEST_DIR/bin" "$TEST_DIR/data/installs/python/3.14.8"
+cat > "$TEST_DIR/bin/asdf" <<'FAKE'
+#!/usr/bin/env bash
+[ "$1" = where ] && [ -d "$TEST_DIR/data/installs/$2/$3" ]
+FAKE
+chmod +x "$TEST_DIR/bin/asdf"
+printf '# comment\npython 3.14.9\ngolang system\n' > "$TEST_DIR/.tool-versions"
+verify() { PATH="$TEST_DIR/bin:$PATH" HOME="$TEST_DIR/home" INPUTS_TOOL_VERSIONS_FILES="$TEST_DIR/.tool-versions" bash "$HERE/verify-tools.sh"; }
+out=$(verify) && { echo 'FAIL: missing python 3.14.9 not detected' >&2; exit 1; }
+[ "$out" = 'python 3.14.9' ]
+mkdir -p "$TEST_DIR/data/installs/python/3.14.9"
+verify > /dev/null
+echo 'PASS: verify-tools reports missing pinned versions and accepts a complete toolchain'

@@ -130,10 +130,29 @@ runs:
                   ${{ steps.cache-key.outputs.cache_key_tools_prefix }}
                   ${{ steps.cache-key.outputs.cache_key_any_prefix }}
 
+        # The key only proves a cache entry with this name exists, not that it holds every
+        # version in .tool-versions: an exact-key entry holding python 3.14.8 and 3.15.0 for a
+        # file pinning 3.14.9 made jobs fail with `No version is set for command python3`
+        # (exit 126). An exact hit that fails this check falls through to the normal install.
+        - name: Verify restored tools match .tool-versions
+          id: verify-restored
+          if: ${{ inputs.cache == 'true' && steps.cache-asdf-check.outputs.cache-hit == 'true' }}
+          shell: bash
+          run: |
+              if missing=$("${ACTION_PATH}/verify-tools.sh"); then
+                echo "complete=true" | tee -a "$GITHUB_OUTPUT"
+              else
+                echo "::warning::Restored cache is incomplete, reinstalling. Missing: $(echo "$missing" | paste -sd, -)"
+                echo "complete=false" | tee -a "$GITHUB_OUTPUT"
+              fi
+          env:
+              ACTION_PATH: ${{ github.action_path }}
+              INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+
         # Some ASDF packages require Python to be compiled with lzma support
         # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
         - name: Install library preqrequisites
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'false' || steps.verify-restored.outputs.complete != 'true' }}
           shell: bash
           # `apt-get update` reads archive.ubuntu.com, which stalls rather than fails: on
           # 2026-08-19 the identical call in lint-global hung for over nine minutes in four
@@ -162,7 +181,7 @@ runs:
         - name: Install asdf when no cache hit
           id: install
           shell: bash
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'false' || steps.verify-restored.outputs.complete != 'true' }}
           run: |
               set -euxo pipefail
 
@@ -203,7 +222,7 @@ runs:
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'false' || steps.verify-restored.outputs.complete != 'true' }}
           shell: bash
           run: |
               set -euxo pipefail
@@ -261,6 +280,18 @@ runs:
               done
           env:
               ASDF_PYTHON_EXTRA_CONFIGURE_OPTIONS: --with-lzma
+              INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+
+        # Runs before the save step, so a toolchain that fails here is never cached.
+        - name: Verify installed tools match .tool-versions
+          shell: bash
+          run: |
+              if ! missing=$("${ACTION_PATH}/verify-tools.sh"); then
+                echo "::error::Tools from .tool-versions are not installed: $(echo "$missing" | paste -sd, -)"
+                exit 1
+              fi
+          env:
+              ACTION_PATH: ${{ github.action_path }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
 
         # An entry written during a pull request run lives on `refs/pull/N/merge` and no other
