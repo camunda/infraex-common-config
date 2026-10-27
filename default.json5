@@ -234,6 +234,16 @@
       ],
     },
     {
+      // A floating base image moves without a commit, and the InfraEx dependency scanner
+      // vetoes a FROM bump that carries no digest. Scoped to Dockerfiles: docker:pinDigests
+      // would also pin every image tag in Helm values and manifests.
+      description: 'Pin Dockerfile base images by digest.',
+      matchManagers: [
+        'dockerfile',
+      ],
+      pinDigests: true,
+    },
+    {
       // Renovate leaves the go.mod `go` directive untouched by default and only bumps
       // `toolchain`. Repositories pinning the version in `go` alone (read by
       // actions/setup-go `go-version-file`) would otherwise freeze on it.
