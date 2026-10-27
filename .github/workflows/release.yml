@@ -89,8 +89,10 @@ jobs:
                   fi
 
                   # gh release create reuses an existing tag instead of moving it to --target.
-                  if tag_sha=$(gh api "repos/${GH_REPO}/commits/${next}" --jq '.sha' 2>/dev/null) \
-                    && [ "${tag_sha}" != "${head}" ]; then
+                  # matching-refs returns [] for an absent tag, so an API error fails the step.
+                  tag_sha=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${next}" \
+                    --jq ".[] | select(.ref == \"refs/tags/${next}\") | .object.sha")
+                  if [ -n "${tag_sha}" ] && [ "${tag_sha}" != "${head}" ]; then
                     echo "::error::Tag ${next} already exists at ${tag_sha}, not at main ${head}."
                     exit 1
                   fi
