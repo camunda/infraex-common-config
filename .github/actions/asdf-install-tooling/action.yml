@@ -130,10 +130,35 @@ runs:
                   ${{ steps.cache-key.outputs.cache_key_tools_prefix }}
                   ${{ steps.cache-key.outputs.cache_key_any_prefix }}
 
+        # An exact key match is not proof the toolchain is complete. On 2026-10-26 an entry
+        # keyed on a .tool-versions pinning python 3.14.9 held only 3.14.8, and every job that
+        # restored it failed at its first python3 call until the weekly key rolled over.
+        # Check that each pinned version is installed and reinstall when one is not.
+        - name: Verify the cached tools
+          id: verify-cache
+          if: ${{ steps.cache-asdf-check.outputs.cache-hit == 'true' }}
+          shell: bash
+          run: |
+              set -euo pipefail
+              missing=0
+              IFS=',' read -r -a tool_versions_files <<< "${INPUTS_TOOL_VERSIONS_FILES}"
+              for tool_file in "${tool_versions_files[@]}"; do
+                [ -f "$tool_file" ] || continue
+                while read -r plugin version _; do
+                  if [ ! -d "${ASDF_DATA_DIR:-$HOME/.asdf}/installs/${plugin}/${version}" ]; then
+                    echo "::warning::The restored cache lacks ${plugin} ${version} from ${tool_file}; reinstalling."
+                    missing=1
+                  fi
+                done < <(awk '!/^#/ && NF >= 2 {print $1, $2}' "$tool_file")
+              done
+              echo "complete=$([ "$missing" -eq 0 ] && echo true || echo false)" | tee -a "$GITHUB_OUTPUT"
+          env:
+              INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+
         # Some ASDF packages require Python to be compiled with lzma support
         # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
         - name: Install library preqrequisites
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' || steps.verify-cache.outputs.complete == 'false' }}
           shell: bash
           # `apt-get update` reads archive.ubuntu.com, which stalls rather than fails: on
           # 2026-08-19 the identical call in lint-global hung for over nine minutes in four
@@ -203,7 +228,7 @@ runs:
 
         - name: Install asdf plugins and tools from .tool-versions
           id: tools-plugins-install
-          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' }}
+          if: ${{ inputs.cache == 'false' || steps.cache-asdf-check.outputs.cache-hit != 'true' || steps.verify-cache.outputs.complete == 'false' }}
           shell: bash
           run: |
               set -euxo pipefail

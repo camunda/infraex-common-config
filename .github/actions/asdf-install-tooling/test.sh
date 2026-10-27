@@ -81,3 +81,24 @@ export SUCCESS_ON=4
 check 'persistent failure preserves error and exit status' 56 3 '10 30 '
 export TEST_MODE=hang
 check 'stalled process ignoring TERM is killed and retries stay bounded' 137 3 '10 30 '
+
+# The verify-cache step: a restored cache that lacks a pinned version is not complete.
+awk '
+  /id: verify-cache/ { step = 1 }
+  step && /run: \|/ { script = 1; next }
+  script && /^          env:/ { exit }
+  script { sub(/^              /, ""); print }
+' "$HERE/action.yml" > "$TEST_DIR/verify.sh"
+mkdir -p "$TEST_DIR/data/installs/python/3.14.8" "$TEST_DIR/data/installs/golang/1.27.2"
+printf '# pins\npython 3.14.9\ngolang 1.27.2\n' > "$TEST_DIR/verify.tool-versions"
+verify() {
+  : > "$TEST_DIR/verify.out"
+  ASDF_DATA_DIR="$TEST_DIR/data" GITHUB_OUTPUT="$TEST_DIR/verify.out" \
+    INPUTS_TOOL_VERSIONS_FILES="$TEST_DIR/verify.tool-versions" bash "$TEST_DIR/verify.sh" >/dev/null
+  cat "$TEST_DIR/verify.out"
+}
+[ "$(verify)" = 'complete=false' ] || { echo 'FAIL: missing python 3.14.9 not detected' >&2; exit 1; }
+echo 'PASS: verify-cache detects a missing pinned version'
+mkdir -p "$TEST_DIR/data/installs/python/3.14.9"
+[ "$(verify)" = 'complete=true' ] || { echo 'FAIL: complete cache reported incomplete' >&2; exit 1; }
+echo 'PASS: verify-cache accepts a complete cache'
