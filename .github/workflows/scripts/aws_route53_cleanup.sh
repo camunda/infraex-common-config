@@ -91,9 +91,18 @@ if ! opensearch_domains=$(aws opensearch list-domain-names --region "$region" \
     exit 1
 fi
 for domain in $opensearch_domains; do
-    collect_endpoints "OpenSearch domain $domain" \
-        aws opensearch describe-domain --region "$region" --domain-name "$domain" \
-        --query 'DomainStatus.[Endpoint,Endpoints.vpc]' --output text || exit 1
+    # A domain deleted since the listing has no live endpoint left to protect.
+    if ! output=$(aws opensearch describe-domain --region "$region" --domain-name "$domain" \
+            --query 'DomainStatus.[Endpoint,Endpoints.vpc]' --output text 2>&1); then
+        if grep -q "ResourceNotFoundException" <<< "$output"; then
+            echo "OpenSearch domain $domain was deleted during the scan, skipping it"
+            continue
+        fi
+        echo "Cannot list OpenSearch domain $domain in $region, aborting to avoid deleting live records:" >&2
+        echo "$output" >&2
+        exit 1
+    fi
+    printf '%s\n' "$output" >> "$endpoints_file"
 done
 
 # "None" is what the CLI prints for a domain that has no VPC endpoint.

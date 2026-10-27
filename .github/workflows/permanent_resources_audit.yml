@@ -145,7 +145,8 @@ jobs:
               run: |
                   curl -LO \
                     --retry 5 \
-                    --max-time 15 \
+                    --connect-timeout 15 \
+                    --max-time 300 \
                     --retry-delay 30 \
                     https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
                   chmod +x cloud-nuke_linux_amd64
