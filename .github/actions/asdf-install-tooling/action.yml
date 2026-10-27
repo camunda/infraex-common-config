@@ -144,12 +144,17 @@ runs:
               IFS=',' read -r -a tool_versions_files <<< "${INPUTS_TOOL_VERSIONS_FILES}"
               for tool_file in "${tool_versions_files[@]}"; do
                 [ -f "$tool_file" ] || continue
-                while read -r plugin version _; do
+                # One `<plugin> <version>` per pinned version: a line may pin several.
+                while read -r plugin version; do
+                  case "$version" in
+                    system | path:*) continue ;; # outside the cache
+                    ref:*) version="ref-${version#ref:}" ;; # asdf's install directory name
+                  esac
                   if [ ! -d "${ASDF_DATA_DIR:-$HOME/.asdf}/installs/${plugin}/${version}" ]; then
                     echo "::warning::The restored cache lacks ${plugin} ${version} from ${tool_file}; reinstalling."
                     missing=1
                   fi
-                done < <(awk '!/^#/ && NF >= 2 {print $1, $2}' "$tool_file")
+                done < <(sed 's/#.*//' "$tool_file" | awk 'NF >= 2 {for (i = 2; i <= NF; i++) print $1, $i}')
               done
               echo "complete=$([ "$missing" -eq 0 ] && echo true || echo false)" | tee -a "$GITHUB_OUTPUT"
           env:

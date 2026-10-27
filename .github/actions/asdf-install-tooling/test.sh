@@ -102,3 +102,10 @@ echo 'PASS: verify-cache detects a missing pinned version'
 mkdir -p "$TEST_DIR/data/installs/python/3.14.9"
 [ "$(verify)" = 'complete=true' ] || { echo 'FAIL: complete cache reported incomplete' >&2; exit 1; }
 echo 'PASS: verify-cache accepts a complete cache'
+printf 'python 3.14.9 3.14.7 # secondary pin\nnodejs system\nkubectl path:/opt/kubectl\nlua ref:main\n' > "$TEST_DIR/verify.tool-versions"
+mkdir -p "$TEST_DIR/data/installs/lua/ref-main"
+[ "$(verify)" = 'complete=false' ] || { echo 'FAIL: missing secondary pin 3.14.7 not detected' >&2; exit 1; }
+echo 'PASS: verify-cache checks every version of a line'
+mkdir -p "$TEST_DIR/data/installs/python/3.14.7"
+[ "$(verify)" = 'complete=true' ] || { echo 'FAIL: system, path: or ref: selector reported missing' >&2; exit 1; }
+echo 'PASS: verify-cache maps ref: and skips system and path:'
