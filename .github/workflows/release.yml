@@ -90,8 +90,13 @@ jobs:
 
                   # gh release create reuses an existing tag instead of moving it to --target.
                   # matching-refs returns [] for an absent tag, so an API error fails the step.
-                  tag_sha=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${next}" \
-                    --jq ".[] | select(.ref == \"refs/tags/${next}\") | .object.sha")
+                  tag_ref=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${next}" \
+                    --jq ".[] | select(.ref == \"refs/tags/${next}\") | .ref")
+                  # commits/<tag> peels annotated tags to their commit.
+                  tag_sha=""
+                  if [ -n "${tag_ref}" ]; then
+                    tag_sha=$(gh api "repos/${GH_REPO}/commits/${next}" --jq '.sha')
+                  fi
                   if [ -n "${tag_sha}" ] && [ "${tag_sha}" != "${head}" ]; then
                     echo "::error::Tag ${next} already exists at ${tag_sha}, not at main ${head}."
                     exit 1
