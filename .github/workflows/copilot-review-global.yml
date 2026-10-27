@@ -51,6 +51,7 @@ jobs:
             IS_LIVE: >-
                 ${{ !startsWith(github.event.pull_request.head.ref, 'schedules/') }}
         permissions:
+            issues: read # silence check of the failure notification
             pull-requests: write
         steps:
             - name: Request Copilot review

@@ -268,6 +268,7 @@ permissions: {}
 jobs:
     copilot-review:
         permissions:
+            issues: read
             pull-requests: write
         uses: camunda/infraex-common-config/.github/workflows/copilot-review-global.yml@<sha> # <version>
         with:
