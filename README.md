@@ -237,6 +237,50 @@ read the path where the GitHub App private key lives, branch code that exfiltrat
 mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
 does not remove that path. Where it applies, scope the Vault role away from the App key.
 
+## Release
+
+[`release-global.yml`](.github/workflows/release-global.yml) publishes a semver GitHub Release
+with generated notes when the default branch has commits since the newest published `X.Y.Z`
+release. It refuses a tag that exists at another commit, and publishes a draft left by an
+earlier run when the draft targets the same commit.
+
+```yaml
+---
+name: Release
+
+on:
+    schedule:
+        - cron: 17 9 * * 1-5
+    workflow_dispatch:
+        inputs:
+            bump:
+                type: choice
+                options: [patch, minor, major]
+                default: patch
+            dry_run:
+                type: boolean
+                default: false
+
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+    release:
+        permissions:
+            contents: write
+        uses: camunda/infraex-common-config/.github/workflows/release-global.yml@<sha> # <version>
+        with:
+            bump: ${{ inputs.bump || 'patch' }}
+            dry-run: ${{ inputs.dry_run || false }}
+```
+
+- A tag ruleset that protects the release tags blocks GITHUB_TOKEN. Set `app-token: true` and
+  pass the `VAULT_*` secrets to create the release with the SMX - Misc App, then add the App as
+  a bypass actor of the ruleset. `contents: read` is then enough.
+
 ## Copilot code review
 
 The `copilot_code_review` ruleset rule requests a Copilot review on every pull request to the
