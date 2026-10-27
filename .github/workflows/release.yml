@@ -1,0 +1,143 @@
+---
+# desc: publish a semver GitHub Release when main has commits since the last published release
+name: Release
+
+# Patch bump on schedule; pick the bump by hand through workflow_dispatch for minor/major releases.
+# Consumers pin this repository by release SHA, so a change only reaches them once it is released.
+
+on:
+    schedule:
+        - cron: 17 9 * * 1-5
+    workflow_dispatch:
+        inputs:
+            bump:
+                description: Version part to bump
+                type: choice
+                options: [patch, minor, major]
+                default: patch
+            dry_run:
+                description: Compute the next version without publishing
+                type: boolean
+                default: false
+
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+# Every write goes through the GitHub App token: `*.*.*` tags are protected by the
+# `Tag Protection: tsemver` ruleset, which GITHUB_TOKEN cannot bypass.
+permissions:
+    contents: read
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Generate token for GitHub
+              id: generate-github-token
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@7b31f83bbaa79b0fe698d0b71cae0bc9189b7ac9 # main
+              with:
+                  github-app-id-vault-key: GITHUB_APP_ID
+                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
+                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
+                  vault-auth-method: approle
+                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-url: ${{ secrets.VAULT_ADDR }}
+                  owner: camunda
+                  repositories: infraex-common-config
+
+            - name: Create GitHub Release
+              env:
+                  GH_TOKEN: ${{ steps.generate-github-token.outputs.token }}
+                  GH_REPO: ${{ github.repository }}
+                  BUMP: ${{ inputs.bump || 'patch' }}
+                  DRY_RUN: ${{ inputs.dry_run || false }}
+              run: |
+                  set -euo pipefail
+
+                  head=$(gh api "repos/${GH_REPO}/commits/main" --jq '.sha')
+
+                  # Baseline: newest published (non-draft) semver release, so a draft left
+                  # by a failed run is retried instead of counted as released.
+                  last=$(gh release list --limit 50 --exclude-drafts --json tagName --jq '.[].tagName' \
+                    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+                  if [ -z "${last}" ]; then
+                    echo "::error::No published semver release found to bump from."
+                    exit 1
+                  fi
+
+                  ahead=$(gh api "repos/${GH_REPO}/compare/${last}...${head}" --jq '.ahead_by')
+                  echo "main ${head} is ${ahead} commit(s) ahead of ${last}"
+                  if [ "${ahead}" -eq 0 ]; then
+                    echo "Nothing to release."
+                    exit 0
+                  fi
+
+                  IFS=. read -r major minor patch <<< "${last}"
+                  case "${BUMP}" in
+                    major) next="$((major + 1)).0.0" ;;
+                    minor) next="${major}.$((minor + 1)).0" ;;
+                    *)     next="${major}.${minor}.$((patch + 1))" ;;
+                  esac
+                  echo "Next release: ${next}"
+
+                  if [ "${DRY_RUN}" = "true" ]; then
+                    echo "Dry run, not publishing."
+                    exit 0
+                  fi
+
+                  # gh release create reuses an existing tag instead of moving it to --target.
+                  # matching-refs returns [] for an absent tag, so an API error fails the step.
+                  tag_ref=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${next}" \
+                    --jq ".[] | select(.ref == \"refs/tags/${next}\") | .ref")
+                  # commits/<tag> peels annotated tags to their commit.
+                  tag_sha=""
+                  if [ -n "${tag_ref}" ]; then
+                    tag_sha=$(gh api "repos/${GH_REPO}/commits/${next}" --jq '.sha')
+                  fi
+                  if [ -n "${tag_sha}" ] && [ "${tag_sha}" != "${head}" ]; then
+                    echo "::error::Tag ${next} already exists at ${tag_sha}, not at main ${head}."
+                    exit 1
+                  fi
+
+                  # A draft left by an earlier run blocks gh release create: publish it if it targets head.
+                  if draft_target=$(gh release view "${next}" --json isDraft,targetCommitish \
+                    --jq 'select(.isDraft) | .targetCommitish' 2>/dev/null) && [ -n "${draft_target}" ]; then
+                    if [ "${draft_target}" != "${head}" ]; then
+                      echo "::error::Draft release ${next} targets ${draft_target}, not main ${head}."
+                      exit 1
+                    fi
+                    gh release edit "${next}" --draft=false --latest
+                    exit 0
+                  fi
+
+                  gh release create "${next}" \
+                    --target "${head}" \
+                    --title "${next}" \
+                    --generate-notes \
+                    --notes-start-tag "${last}" \
+                    --latest
+
+    notify-on-failure:
+        runs-on: ubuntu-latest
+        if: failure() && github.event_name == 'schedule'
+        # `report-failure-on-slack` reads the open `silence: <workflow>` issues to decide whether
+        # the alert is muted; without `issues: read` it alerts anyway.
+        permissions:
+            contents: read
+            issues: read
+        needs:
+            - release
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            - name: Notify in Slack in case of failure
+              uses: ./.github/actions/report-failure-on-slack
+              with:
+                  vault_addr: ${{ secrets.VAULT_ADDR }}
+                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
