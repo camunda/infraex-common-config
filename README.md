@@ -248,7 +248,7 @@ Renovate pull request then gets a review.
 from a workflow instead:
 
 - On `opened` and `ready_for_review`, for a pull request that is not a draft and whose author
-  is not in `skip-authors` (default `renovate[bot]` and `dependabot[bot]`).
+  is not in `skip-authors` (default `renovate[bot]`, `dependabot[bot]` and `smx-misc[bot]`).
 - On `labeled` with `ai-review`, for any pull request, drafts and skipped authors included.
   Remove the label and add it again to request a new review.
 
@@ -272,7 +272,7 @@ jobs:
         uses: camunda/infraex-common-config/.github/workflows/copilot-review-global.yml@<sha> # <version>
         with:
             skip-authors: '["renovate[bot]", "smx-misc[bot]"]'
-            slack-channel-id: <channel-id> # optional: notify when the request fails
+            slack-channel-id: <channel-id> # optional: default #team-smx-alerts or #team-smx-test, `none` to disable
         secrets:
             VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
             VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
