@@ -1,0 +1,73 @@
+---
+name: copilot-review-global
+
+on:
+    workflow_call:
+        inputs:
+            skip-authors:
+                description: >-
+                    JSON array of pull request author logins that never get an automatic Copilot
+                    review. The `ai-review` label still requests one on their pull requests.
+                default: '["renovate[bot]", "dependabot[bot]", "smx-misc[bot]"]'
+                type: string
+            slack-channel-id:
+                description: >-
+                    Slack channel notified when the review request fails. Empty selects
+                    #team-smx-alerts (with an @smx-medic mention), or #team-smx-test for pull
+                    requests from a `schedules/*` branch.
+                    `none` disables the notification, and the Vault secrets are then not needed.
+                default: ''
+                type: string
+        secrets:
+            VAULT_ADDR:
+                description: Vault server URL, used only by the failure notification.
+                required: false
+            VAULT_ROLE_ID:
+                description: Vault AppRole role ID, used only by the failure notification.
+                required: false
+            VAULT_SECRET_ID:
+                description: Vault AppRole secret ID, used only by the failure notification.
+                required: false
+
+permissions: {}
+
+jobs:
+    request:
+        name: Request Copilot review
+        if: >-
+            (github.event.action == 'labeled' && github.event.label.name == 'ai-review') ||
+            (contains(fromJSON('["opened", "ready_for_review"]'), github.event.action) &&
+             !github.event.pull_request.draft &&
+             !contains(fromJSON(inputs.skip-authors), github.event.pull_request.user.login))
+        concurrency:
+            group: >-
+                ${{ github.event.action == 'labeled' && github.event.label.name != 'ai-review'
+                    && format('{0}-ignored-{1}', github.workflow, github.run_id)
+                    || format('{0}-{1}', github.workflow, github.event.pull_request.number) }}
+            cancel-in-progress: true
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        env:
+            IS_LIVE: >-
+                ${{ !startsWith(github.event.pull_request.head.ref, 'schedules/') }}
+        permissions:
+            issues: read # silence check of the failure notification
+            pull-requests: write
+        steps:
+            - name: Request Copilot review
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR: ${{ github.event.pull_request.number }}
+                  REPO: ${{ github.repository }}
+              run: gh api -X POST "repos/${REPO}/pulls/${PR}/requested_reviewers" -f 'reviewers[]=copilot-pull-request-reviewer[bot]' --silent
+
+            - name: Notify Slack on failure
+              if: failure() && inputs.slack-channel-id != 'none'
+              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@06dbc3c3960fe23138de789e3bf80065fe6c52e0 # 2.3.11
+              with:
+                  vault_addr: ${{ secrets.VAULT_ADDR }}
+                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
+                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  slack_channel_id: ${{ inputs.slack-channel-id || (env.IS_LIVE == 'true' && 'C076N4G1162' || 'C07E4FF6YMB') }}
+                  slack_mention_people: ${{ env.IS_LIVE == 'true' && '<!subteam^S0CBB7Y72SV>' || '' }}
+                  disable_silence_check: ${{ env.IS_LIVE == 'true' && 'false' || 'true' }}

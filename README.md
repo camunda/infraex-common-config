@@ -236,3 +236,61 @@ If the unprivileged job keeps a Vault approle for cloud credentials, and that ap
 read the path where the GitHub App private key lives, branch code that exfiltrates it can
 mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
 does not remove that path. Where it applies, scope the Vault role away from the App key.
+
+## Copilot code review
+
+The `copilot_code_review` ruleset rule requests a Copilot review on every pull request to the
+branches it targets. It has no author filter: its only parameters are `review_on_push` and
+`review_draft_pull_requests`, and a ruleset bypass actor does not stop the request. Every
+Renovate pull request then gets a review.
+
+[`copilot-review-global.yml`](.github/workflows/copilot-review-global.yml) requests the review
+from a workflow instead:
+
+- On `opened` and `ready_for_review`, for a pull request that is not a draft and whose author
+  is not in `skip-authors` (default `renovate[bot]`, `dependabot[bot]` and `smx-misc[bot]`).
+- On `labeled` with `ai-review`, for any pull request, drafts and skipped authors included.
+  Remove the label and add it again to request a new review.
+
+A `labeled` event for any other label runs in its own concurrency group, so it never cancels
+a pending request.
+
+```yaml
+---
+name: Copilot review
+
+on:
+    pull_request_target:
+        types: [opened, ready_for_review, labeled]
+
+permissions: {}
+
+jobs:
+    copilot-review:
+        permissions:
+            issues: read
+            pull-requests: write
+        uses: camunda/infraex-common-config/.github/workflows/copilot-review-global.yml@<sha> # <version>
+        with:
+            skip-authors: '["renovate[bot]", "smx-misc[bot]"]'
+            slack-channel-id: <channel-id> # optional: default #team-smx-alerts or #team-smx-test, `none` to disable
+        secrets:
+            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+            VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+            VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+```
+
+- `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
+  fork gets a read-only token. The workflow checks out nothing, so no pull request code runs
+  next to the write token. List the caller under `dangerous-triggers` in the repository's
+  `zizmor.yml`.
+- `pull_request_target` runs the caller from the pull request's base branch. A branch without
+  the caller gets no automatic review: backport the caller to every branch that needs one.
+- Remove the `copilot_code_review` rule from the repository's rulesets once the caller is on
+  the default branch. Until then the ruleset still requests a review for the skipped authors.
+- Billing: GitHub bills a review that a bot requests to the organization, not to the pull
+  request author's Copilot entitlement
+  ([Copilot code review](https://docs.github.com/en/copilot/concepts/agents/code-review)). The
+  request comes from `github-actions[bot]`, so this applies to every review the workflow
+  requests. Nothing changes where the organization already bills Copilot code review to
+  itself.
