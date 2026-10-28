@@ -31,6 +31,10 @@ permissions:
 
 jobs:
     release:
+        # release-global mints the App token after a Vault OIDC/JWT login.
+        permissions:
+            contents: read
+            id-token: write
         uses: ./.github/workflows/release-global.yml
         with:
             bump: ${{ inputs.bump || 'patch' }}
@@ -38,8 +42,9 @@ jobs:
             app-token: true
         secrets:
             VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-            VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
-            VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 
     notify-on-failure:
         runs-on: ubuntu-latest
@@ -49,6 +54,7 @@ jobs:
         permissions:
             contents: read
             issues: read
+            id-token: write # Vault OIDC/JWT auth
         needs:
             - release
         steps:
@@ -60,5 +66,6 @@ jobs:
               uses: ./.github/actions/report-failure-on-slack
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
-                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_jwt_path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE }}

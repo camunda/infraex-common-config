@@ -137,9 +137,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: true
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
@@ -168,6 +169,7 @@ jobs:
             # The Slack action checks for an open "silence: <workflow>" issue in this
             # repository before alerting, and reads it with this token.
             issues: read
+            id-token: write # Vault OIDC/JWT auth
         if: failure()
         needs:
             - sweep-tests
@@ -181,5 +183,6 @@ jobs:
               uses: ./.github/actions/report-failure-on-slack
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
-                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_jwt_path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE }}

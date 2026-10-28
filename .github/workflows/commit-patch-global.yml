@@ -92,15 +92,22 @@ on:
         secrets:
             vault-addr:
                 required: true
-            vault-role-id:
+            vault-jwt-path:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication.
                 required: true
-            vault-secret-id:
+            vault-jwt-role:
+                description: Vault role for GitHub OIDC (JWT) authentication.
+                required: true
+            vault-jwt-audience:
+                description: GitHub OIDC audience for Vault (JWT) authentication.
                 required: true
 
 # The write is carried by the App token, never by GITHUB_TOKEN, which only reads the
-# branch and the ref.
+# branch and the ref. `id-token: write` lets the job log in to Vault with GitHub OIDC; the
+# calling job has to grant it too.
 permissions:
     contents: read
+    id-token: write
 
 jobs:
     commit:
@@ -251,9 +258,10 @@ jobs:
                   github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
                   github-app-private-key-vault-path: ${{ inputs.vault-secret-path }}
                   repositories: ${{ inputs.token-repositories || github.event.repository.name }}
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.vault-role-id }}
-                  vault-auth-secret-id: ${{ secrets.vault-secret-id }}
+                  vault-auth-method: jwt
+                  vault-auth-jwt-path: ${{ secrets.vault-jwt-path }}
+                  vault-auth-jwt-role: ${{ secrets.vault-jwt-role }}
+                  vault-auth-jwt-audience: ${{ secrets.vault-jwt-audience }}
                   vault-url: ${{ secrets.vault-addr }}
 
             - name: Commit the changes

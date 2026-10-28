@@ -205,6 +205,9 @@ jobs:
     commit:
         needs: build
         if: needs.build.outputs.has_changes == 'true'
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
         uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@<sha>
         with:
             artifact-name: ${{ needs.build.outputs.artifact_name }}
@@ -213,8 +216,9 @@ jobs:
             commit-message: 'chore: apply automated fixes'
         secrets:
             vault-addr: ${{ secrets.VAULT_ADDR }}
-            vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
-            vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+            vault-jwt-path: ${{ secrets.VAULT_JWT_PATH }}
+            vault-jwt-role: ${{ secrets.VAULT_JWT_ROLE }}
+            vault-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
 Tune `max-patch-bytes`, `max-changed-lines` and `refuse-paths-regex` to the producing job:
@@ -232,7 +236,7 @@ with push access can therefore edit the privileged job itself. That is irreducib
 workflow holding a secret, and is bounded by fork pull requests receiving no secrets at
 all, plus review of anything touching `.github/`.
 
-If the unprivileged job keeps a Vault approle for cloud credentials, and that approle can
+If the unprivileged job keeps a Vault login for cloud credentials, and that Vault role can
 read the path where the GitHub App private key lives, branch code that exfiltrates it can
 mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
 does not remove that path. Where it applies, scope the Vault role away from the App key.
@@ -278,8 +282,9 @@ jobs:
 ```
 
 - A tag ruleset that protects the release tags blocks GITHUB_TOKEN. Set `app-token: true` and
-  pass the `VAULT_*` secrets to create the release with the SMX - Misc App, then add the App as
-  a bypass actor of the ruleset. `contents: read` is then enough.
+  pass the `VAULT_ADDR` and `VAULT_JWT_*` secrets to create the release with the SMX - Misc App,
+  then add the App as a bypass actor of the ruleset. `contents: read` plus `id-token: write`
+  (Vault OIDC login) is then enough.
 
 ## Copilot code review
 

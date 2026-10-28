@@ -89,6 +89,9 @@ jobs:
 
     aws-permanent-audit:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
         needs: aws-list-regions
         if: needs.aws-list-regions.outputs.regions != '' && needs.aws-list-regions.outputs.regions != '[]'
         strategy:
@@ -107,9 +110,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: false
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
@@ -583,6 +587,9 @@ jobs:
 
     aws-s3-global-audit:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
         needs: triage
         if: needs.triage.outputs.run_aws == 'true'
         steps:
@@ -596,9 +603,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: false
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
@@ -814,9 +822,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: true
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
@@ -860,9 +869,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: true
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AZURE_CLIENT_ID;
@@ -1102,6 +1112,12 @@ jobs:
 
     notify-on-failure:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            # The Slack action checks for an open "silence: <workflow>" issue in this
+            # repository before alerting, and reads it with this token.
+            issues: read
+            id-token: write # Vault OIDC/JWT auth
         if: failure()
         needs:
             - aws-list-regions
@@ -1118,5 +1134,6 @@ jobs:
               uses: ./.github/actions/report-failure-on-slack
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
-                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_jwt_path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE }}

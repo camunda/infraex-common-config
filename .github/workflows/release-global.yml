@@ -23,14 +23,18 @@ on:
             VAULT_ADDR:
                 description: Vault server URL, used only with `app-token`.
                 required: false
-            VAULT_ROLE_ID:
-                description: Vault AppRole role ID, used only with `app-token`.
+            VAULT_JWT_PATH:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication, used only with `app-token`.
                 required: false
-            VAULT_SECRET_ID:
-                description: Vault AppRole secret ID, used only with `app-token`.
+            VAULT_JWT_ROLE:
+                description: Vault role for GitHub OIDC (JWT) authentication, used only with `app-token`.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: GitHub OIDC audience for Vault (JWT) authentication, used only with `app-token`.
                 required: false
 
-# The caller grants `contents: write` when `app-token` is false.
+# The caller grants `contents: write` when `app-token` is false, and `id-token: write` (Vault
+# OIDC login) when it is true.
 jobs:
     release:
         runs-on: ubuntu-latest
@@ -44,9 +48,10 @@ jobs:
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
                   github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
                   github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault-auth-method: jwt
+                  vault-auth-jwt-path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault-auth-jwt-role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault-auth-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
                   owner: camunda
                   repositories: ${{ github.event.repository.name }}

@@ -18,11 +18,16 @@ inputs:
     vault_addr:
         description: The address of the Vault instance.
         required: true
-    vault_role_id:
-        description: The role ID used for authentication with Vault.
+    vault_jwt_path:
+        description: |
+            The Vault auth backend path for GitHub OIDC (JWT) authentication.
+            The calling job needs the `id-token: write` permission.
         required: true
-    vault_secret_id:
-        description: The secret ID used for authentication with Vault.
+    vault_jwt_role:
+        description: The Vault role for GitHub OIDC (JWT) authentication.
+        required: true
+    vault_jwt_audience:
+        description: The GitHub OIDC audience for Vault (JWT) authentication.
         required: true
     slack_channel_id:
         description: The Slack channel ID where the warning will be sent.
@@ -181,9 +186,10 @@ runs:
           uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
           with:
               url: ${{ inputs.vault_addr }}
-              method: approle
-              roleId: ${{ inputs.vault_role_id }}
-              secretId: ${{ inputs.vault_secret_id }}
+              method: jwt
+              path: ${{ inputs.vault_jwt_path }}
+              role: ${{ inputs.vault_jwt_role }}
+              jwtGithubAudience: ${{ inputs.vault_jwt_audience }}
               exportEnv: false
               secrets: |
                   secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
