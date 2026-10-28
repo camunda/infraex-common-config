@@ -341,4 +341,4 @@ jobs:
   requests. Nothing changes where the organization already bills Copilot code review to
   itself.
 
-autofix test   
+autofix test
