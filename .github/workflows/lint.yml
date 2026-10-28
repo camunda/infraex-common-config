@@ -14,4 +14,5 @@ jobs:
         uses: ./.github/workflows/lint-global.yml
         with:
             check-renovate-lookup: true
+            autofix-actor: kellervater
         secrets: inherit
