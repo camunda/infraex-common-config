@@ -8,6 +8,9 @@ on:
 
 jobs:
     lint:
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth of the auto-fix job
         uses: ./.github/workflows/lint-global.yml
         with:
             check-renovate-lookup: true

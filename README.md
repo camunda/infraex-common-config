@@ -313,6 +313,7 @@ jobs:
     copilot-review:
         permissions:
             issues: read
+            id-token: write # Vault OIDC/JWT auth of the failure notification
             pull-requests: write
         uses: camunda/infraex-common-config/.github/workflows/copilot-review-global.yml@<sha> # <version>
         with:
@@ -320,8 +321,9 @@ jobs:
             slack-channel-id: <channel-id> # optional: default #team-smx-alerts or #team-smx-test, `none` to disable
         secrets:
             VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-            VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
-            VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
 - `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
