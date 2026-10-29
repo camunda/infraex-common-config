@@ -65,6 +65,9 @@ jobs:
                 ${{ !startsWith(github.event.pull_request.head.ref, 'schedules/') }}
         permissions:
             issues: read # silence check of the failure notification
+            # Callers run on `pull_request_target`, so a fork pull request gets an OIDC token here.
+            # That is safe only while no step in this job checks out or runs pull request code:
+            # never add a checkout step.
             id-token: write # Vault OIDC/JWT auth of the failure notification
             pull-requests: write
         steps:
