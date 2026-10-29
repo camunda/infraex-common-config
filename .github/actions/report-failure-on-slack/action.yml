@@ -20,6 +20,16 @@ inputs:
     vault_jwt_audience:
         description: The GitHub OIDC audience for Vault (JWT) authentication
         required: true
+    vault_secret_path:
+        description: |
+            The Vault path holding the Slack bot token. Callers outside InfraEx must point it
+            at their own team's secret, never at the InfraEx one.
+        required: false
+        default: secret/data/products/infrastructure-experience/ci/common
+    vault_slack_token_key:
+        description: The key of the Slack bot token in the Vault secret.
+        required: false
+        default: SLACK_BOT_TOKEN
     slack_channel_id:
         description: The Slack channel ID where the notification will be sent.
         default: C076N4G1162 # infraex-alerts
@@ -283,7 +293,7 @@ runs:
               jwtGithubAudience: ${{ inputs.vault_jwt_audience }}
               exportEnv: false
               secrets: |
-                  secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
+                  ${{ inputs.vault_secret_path }} ${{ inputs.vault_slack_token_key }} | SLACK_BOT_TOKEN;
 
         - name: Notify in Slack in case of failure
           id: slack-notification

@@ -221,6 +221,9 @@ jobs:
             vault-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
+Callers outside InfraEx must set `vault-secret-path` (and the `vault-github-app-*-key` inputs if
+the key names differ) to their own GitHub App secret; the default is the InfraEx one.
+
 Tune `max-patch-bytes`, `max-changed-lines` and `refuse-paths-regex` to the producing job:
 a formatter's output should stay small and human-readable, a generator rewriting a fixture
 corpus legitimately runs to megabytes. The guards bound a runaway and refuse patches the
@@ -285,6 +288,9 @@ jobs:
   pass the `VAULT_ADDR` and `VAULT_JWT_*` secrets to create the release with the SMX - Misc App,
   then add the App as a bypass actor of the ruleset. `contents: read` plus `id-token: write`
   (Vault OIDC login) is then enough.
+  Callers outside InfraEx must set `vault-secret-path` (and `vault-github-app-id-key` /
+  `vault-github-app-private-key-key` if the key names differ) to their own App secret; the default
+  is the InfraEx one.
 
 ## Copilot code review
 
