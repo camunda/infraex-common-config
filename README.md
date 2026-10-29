@@ -326,6 +326,8 @@ jobs:
             VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
+- Callers outside InfraEx must set `vault-secret-path` (and `vault-slack-token-key` if the key
+  differs) to their own team's Slack bot token secret. The default is the InfraEx one.
 - `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
   fork gets a read-only token. The workflow checks out nothing, so no pull request code runs
   next to the write token. List the caller under `dangerous-triggers` in the repository's

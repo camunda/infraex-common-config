@@ -34,6 +34,20 @@ on:
                     `renovate-inert-ok` before the check can pass.
                 default: false
                 type: boolean
+            vault-secret-path:
+                description: >-
+                    Vault path holding the GitHub App id and private key used by the auto-fix job.
+                    Callers outside InfraEx must use their own App.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault-github-app-id-key:
+                description: Key of the GitHub App id in the Vault secret.
+                default: GITHUB_APP_ID
+                type: string
+            vault-github-app-private-key-key:
+                description: Key of the GitHub App private key in the Vault secret.
+                default: GITHUB_APP_PRIVATE_KEY
+                type: string
         # Declared so callers can pass these four explicitly instead of `secrets: inherit`,
         # which hands the called workflow every secret the calling repository holds -- Docker
         # Hub, registry and cloud credentials included -- when all it needs is the Vault login
@@ -423,7 +437,7 @@ jobs:
         permissions:
             contents: read
             id-token: write # Vault OIDC/JWT auth
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@559daa2cf6fe9852be7b5046523668c011a320da # main
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@02306e482364266ddbf06978331076f5f7b4b687 # main
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
@@ -433,6 +447,9 @@ jobs:
             commit-message: 'chore: update files from pre-commit run'
             max-patch-bytes: ${{ inputs.autofix-max-patch-bytes }}
             max-changed-lines: ${{ inputs.autofix-max-changed-lines }}
+            vault-secret-path: ${{ inputs.vault-secret-path }}
+            vault-github-app-id-key: ${{ inputs.vault-github-app-id-key }}
+            vault-github-app-private-key-key: ${{ inputs.vault-github-app-private-key-key }}
             # No refuse-paths-regex on purpose: reformatting `.github/workflows` is exactly what a
             # pre-commit hook legitimately does here, so the CI-definition guard other callers set
             # would reject the normal case.

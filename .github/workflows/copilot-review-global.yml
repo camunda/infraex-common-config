@@ -18,6 +18,16 @@ on:
                     `none` disables the notification, and the Vault secrets are then not needed.
                 default: ''
                 type: string
+            vault-secret-path:
+                description: >-
+                    Vault path holding the Slack bot token for the failure notification. Callers
+                    outside InfraEx must use their own team's secret.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault-slack-token-key:
+                description: Key of the Slack bot token in the Vault secret.
+                default: SLACK_BOT_TOKEN
+                type: string
         secrets:
             VAULT_ADDR:
                 description: Vault server URL, used only by the failure notification.
@@ -67,12 +77,14 @@ jobs:
 
             - name: Notify Slack on failure
               if: failure() && inputs.slack-channel-id != 'none'
-              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@559daa2cf6fe9852be7b5046523668c011a320da # main
+              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@02306e482364266ddbf06978331076f5f7b4b687 # main
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
                   vault_jwt_path: ${{ secrets.VAULT_JWT_PATH }}
                   vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE }}
                   vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
+                  vault_secret_path: ${{ inputs.vault-secret-path }}
+                  vault_slack_token_key: ${{ inputs.vault-slack-token-key }}
                   slack_channel_id: ${{ inputs.slack-channel-id || (env.IS_LIVE == 'true' && 'C076N4G1162' || 'C07E4FF6YMB') }}
                   slack_mention_people: ${{ env.IS_LIVE == 'true' && '<!subteam^S0CBB7Y72SV>' || '' }}
                   disable_silence_check: ${{ env.IS_LIVE == 'true' && 'false' || 'true' }}
