@@ -86,6 +86,14 @@ outputs:
 runs:
     using: composite
     steps:
+        - name: Check the caller grants id-token
+          shell: bash
+          run: |
+              if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                  echo "::error::The calling job must grant 'permissions: id-token: write'. Without it the Vault login fails and no Slack message is sent."
+                  exit 1
+              fi
+
         - name: Check for Silence Issue
           id: silence-check
           if: ${{ inputs.disable_silence_check == 'false' }}

@@ -101,14 +101,14 @@ on:
             vault-addr:
                 required: true
             vault-jwt-path:
-                description: Vault auth backend path for GitHub OIDC (JWT) authentication.
-                required: true
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_PATH` variable.
+                required: false
             vault-jwt-role:
-                description: Vault role for GitHub OIDC (JWT) authentication.
-                required: true
+                description: Vault role for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_ROLE` variable.
+                required: false
             vault-jwt-audience:
-                description: GitHub OIDC audience for Vault (JWT) authentication.
-                required: true
+                description: GitHub OIDC audience for Vault (JWT) authentication. Optional; falls back to the `VAULT_JWT_AUDIENCE` variable.
+                required: false
 
 # The write is carried by the App token, never by GITHUB_TOKEN, which only reads the
 # branch and the ref. `id-token: write` lets the job log in to Vault with GitHub OIDC; the
@@ -267,9 +267,9 @@ jobs:
                   github-app-private-key-vault-path: ${{ inputs.vault-secret-path }}
                   repositories: ${{ inputs.token-repositories || github.event.repository.name }}
                   vault-auth-method: jwt
-                  vault-auth-jwt-path: ${{ secrets.vault-jwt-path }}
-                  vault-auth-jwt-role: ${{ secrets.vault-jwt-role }}
-                  vault-auth-jwt-audience: ${{ secrets.vault-jwt-audience }}
+                  vault-auth-jwt-path: ${{ secrets.vault-jwt-path || vars.VAULT_JWT_PATH }}
+                  vault-auth-jwt-role: ${{ secrets.vault-jwt-role || vars.VAULT_JWT_ROLE }}
+                  vault-auth-jwt-audience: ${{ secrets.vault-jwt-audience || vars.VAULT_JWT_AUDIENCE }}
                   vault-url: ${{ secrets.vault-addr }}
 
             - name: Commit the changes

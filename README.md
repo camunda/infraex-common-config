@@ -244,6 +244,23 @@ read the path where the GitHub App private key lives, branch code that exfiltrat
 mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
 does not remove that path. Where it applies, scope the Vault role away from the App key.
 
+## Vault login for callers
+
+The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`) and the workflows
+`commit-patch-global`, `release-global` (with `app-token`), `lint-global` and
+`copilot-review-global` log in to Vault with GitHub OIDC. To migrate a caller, in this order:
+
+1. **Grant `id-token: write` to the calling job.** Without it, `commit-patch-global` stops at
+   startup, and the Slack actions and `release-global` fail with an explicit error. A notifier job
+   runs only on `failure()`, so its error appears on that run and not on a green pull request:
+   migrate the callers before you take the major update.
+2. Provide `VAULT_ADDR` as a secret.
+3. Provide `VAULT_JWT_PATH`, `VAULT_JWT_ROLE` and `VAULT_JWT_AUDIENCE`. They are not secret values.
+   The reusable workflows read the secret of that name first, then the organization or repository
+   variable of the same name, so a caller that defines them as variables passes nothing. The Slack
+   actions take them as inputs: pass `${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}`.
+4. Outside InfraEx, also set the secret path and key inputs to your own secret.
+
 ## Release
 
 [`release-global.yml`](.github/workflows/release-global.yml) publishes a semver GitHub Release
