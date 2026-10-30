@@ -440,7 +440,7 @@ jobs:
         permissions:
             contents: read
             id-token: write # Vault OIDC/JWT auth
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@8b0a462680ae5c3b2800a1546681ecf00aeb4d26 # main
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@8266d2676bb5ae4236101d3ffc464b26fb0fab9e # 3.0.0
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
