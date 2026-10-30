@@ -205,6 +205,9 @@ jobs:
     commit:
         needs: build
         if: needs.build.outputs.has_changes == 'true'
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
         uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@<sha>
         with:
             artifact-name: ${{ needs.build.outputs.artifact_name }}
@@ -213,9 +216,13 @@ jobs:
             commit-message: 'chore: apply automated fixes'
         secrets:
             vault-addr: ${{ secrets.VAULT_ADDR }}
-            vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
-            vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+            vault-jwt-path: ${{ secrets.VAULT_JWT_PATH }}
+            vault-jwt-role: ${{ secrets.VAULT_JWT_ROLE }}
+            vault-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
+
+Callers outside InfraEx must set `vault-secret-path` (and the `vault-github-app-*-key` inputs if
+the key names differ) to their own GitHub App secret; the default is the InfraEx one.
 
 Tune `max-patch-bytes`, `max-changed-lines` and `refuse-paths-regex` to the producing job:
 a formatter's output should stay small and human-readable, a generator rewriting a fixture
@@ -232,10 +239,27 @@ with push access can therefore edit the privileged job itself. That is irreducib
 workflow holding a secret, and is bounded by fork pull requests receiving no secrets at
 all, plus review of anything touching `.github/`.
 
-If the unprivileged job keeps a Vault approle for cloud credentials, and that approle can
+If the unprivileged job keeps a Vault login for cloud credentials, and that Vault role can
 read the path where the GitHub App private key lives, branch code that exfiltrates it can
 mint a token regardless. Splitting the jobs removes the token sitting next to the code; it
 does not remove that path. Where it applies, scope the Vault role away from the App key.
+
+## Vault login for callers
+
+The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`) and the workflows
+`commit-patch-global`, `release-global` (with `app-token`), `lint-global` and
+`copilot-review-global` log in to Vault with GitHub OIDC. To migrate a caller, in this order:
+
+1. **Grant `id-token: write` to the calling job.** Without it, `commit-patch-global` stops at
+   startup, and the Slack actions and `release-global` fail with an explicit error. A notifier job
+   runs only on `failure()`, so its error appears on that run and not on a green pull request:
+   migrate the callers before you take the major update.
+2. Provide `VAULT_ADDR` as a secret.
+3. Provide `VAULT_JWT_PATH`, `VAULT_JWT_ROLE` and `VAULT_JWT_AUDIENCE`. They are not secret values.
+   The reusable workflows read the secret of that name first, then the organization or repository
+   variable of the same name, so a caller that defines them as variables passes nothing. The Slack
+   actions take them as inputs: pass `${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}`.
+4. Outside InfraEx, also set the secret path and key inputs to your own secret.
 
 ## Release
 
@@ -278,8 +302,12 @@ jobs:
 ```
 
 - A tag ruleset that protects the release tags blocks GITHUB_TOKEN. Set `app-token: true` and
-  pass the `VAULT_*` secrets to create the release with the SMX - Misc App, then add the App as
-  a bypass actor of the ruleset. `contents: read` is then enough.
+  pass the `VAULT_ADDR` and `VAULT_JWT_*` secrets to create the release with the SMX - Misc App,
+  then add the App as a bypass actor of the ruleset. `contents: read` plus `id-token: write`
+  (Vault OIDC login) is then enough.
+  Callers outside InfraEx must set `vault-secret-path` (and `vault-github-app-id-key` /
+  `vault-github-app-private-key-key` if the key names differ) to their own App secret; the default
+  is the InfraEx one.
 
 ## Copilot code review
 
