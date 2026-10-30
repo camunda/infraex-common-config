@@ -326,6 +326,7 @@ jobs:
             VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
+- Grant `id-token: write` to the calling job first: the Vault login of the failure notification fails without it. `VAULT_JWT_PATH`, `VAULT_JWT_ROLE` and `VAULT_JWT_AUDIENCE` may be organization variables instead of secrets.
 - Callers outside InfraEx must set `vault-secret-path` (and `vault-slack-token-key` if the key
   differs) to their own team's Slack bot token secret. The default is the InfraEx one.
 - `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
