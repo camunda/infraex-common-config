@@ -12,8 +12,11 @@ Use it with `if: failure()`
 | name | description | required | default |
 | --- | --- | --- | --- |
 | `vault_addr` | <p>The address of the Vault instance</p> | `true` | `""` |
-| `vault_role_id` | <p>The role ID used for authentication with Vault</p> | `true` | `""` |
-| `vault_secret_id` | <p>The secret ID used for authentication with Vault</p> | `true` | `""` |
+| `vault_jwt_path` | <p>The Vault auth backend path for GitHub OIDC (JWT) authentication. The calling job needs the <code>id-token: write</code> permission.</p> | `true` | `""` |
+| `vault_jwt_role` | <p>The Vault role for GitHub OIDC (JWT) authentication</p> | `true` | `""` |
+| `vault_jwt_audience` | <p>The GitHub OIDC audience for Vault (JWT) authentication</p> | `true` | `""` |
+| `vault_secret_path` | <p>The Vault path holding the Slack bot token. Callers outside InfraEx must point it at their own team's secret, never at the InfraEx one.</p> | `false` | `secret/data/products/infrastructure-experience/ci/common` |
+| `vault_slack_token_key` | <p>The key of the Slack bot token in the Vault secret.</p> | `false` | `SLACK_BOT_TOKEN` |
 | `slack_channel_id` | <p>The Slack channel ID where the notification will be sent.</p> | `false` | `C076N4G1162` |
 | `slack_mention_people` | <p>The Slack people to mention in the notification.</p> | `false` | `<!subteam^S0CBB7Y72SV>` |
 | `disable_silence_check` | <p>Disable silence check. By default, alerts can be disabled by creating an issue in the repository with the label alert-management and with the title: silence: name of your workflow</p> | `false` | `false` |
@@ -45,17 +48,37 @@ This action is a `composite` action.
     # Required: true
     # Default: ""
 
-    vault_role_id:
-    # The role ID used for authentication with Vault
+    vault_jwt_path:
+    # The Vault auth backend path for GitHub OIDC (JWT) authentication.
+    # The calling job needs the `id-token: write` permission.
     #
     # Required: true
     # Default: ""
 
-    vault_secret_id:
-    # The secret ID used for authentication with Vault
+    vault_jwt_role:
+    # The Vault role for GitHub OIDC (JWT) authentication
     #
     # Required: true
     # Default: ""
+
+    vault_jwt_audience:
+    # The GitHub OIDC audience for Vault (JWT) authentication
+    #
+    # Required: true
+    # Default: ""
+
+    vault_secret_path:
+    # The Vault path holding the Slack bot token. Callers outside InfraEx must point it
+    # at their own team's secret, never at the InfraEx one.
+    #
+    # Required: false
+    # Default: secret/data/products/infrastructure-experience/ci/common
+
+    vault_slack_token_key:
+    # The key of the Slack bot token in the Vault secret.
+    #
+    # Required: false
+    # Default: SLACK_BOT_TOKEN
 
     slack_channel_id:
     # The Slack channel ID where the notification will be sent.

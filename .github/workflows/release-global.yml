@@ -19,34 +19,62 @@ on:
                     Needed when a tag ruleset protects the release tags: GITHUB_TOKEN cannot bypass it.
                 default: false
                 type: boolean
+            vault-secret-path:
+                description: Vault path holding the GitHub App id and private key, used only with `app-token`. Callers outside InfraEx must use their own
+                    App.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault-github-app-id-key:
+                description: Key of the GitHub App id in the Vault secret.
+                default: GITHUB_APP_ID
+                type: string
+            vault-github-app-private-key-key:
+                description: Key of the GitHub App private key in the Vault secret.
+                default: GITHUB_APP_PRIVATE_KEY
+                type: string
         secrets:
             VAULT_ADDR:
                 description: Vault server URL, used only with `app-token`.
                 required: false
-            VAULT_ROLE_ID:
-                description: Vault AppRole role ID, used only with `app-token`.
+            VAULT_JWT_PATH:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication, used only with `app-token`. Optional; falls back to the `VAULT_JWT_PATH`
+                    variable.
                 required: false
-            VAULT_SECRET_ID:
-                description: Vault AppRole secret ID, used only with `app-token`.
+            VAULT_JWT_ROLE:
+                description: Vault role for GitHub OIDC (JWT) authentication, used only with `app-token`. Optional; falls back to the `VAULT_JWT_ROLE` variable.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: GitHub OIDC audience for Vault (JWT) authentication, used only with `app-token`. Optional; falls back to the `VAULT_JWT_AUDIENCE`
+                    variable.
                 required: false
 
-# The caller grants `contents: write` when `app-token` is false.
+# The caller grants `contents: write` when `app-token` is false, and `id-token: write` (Vault
+# OIDC login) when it is true.
 jobs:
     release:
         runs-on: ubuntu-latest
         steps:
+            - name: Check the caller grants id-token
+              if: inputs.app-token
+              run: |
+                  if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                      echo "::error::With app-token the calling job must grant 'permissions: id-token: write' for the Vault login."
+                      exit 1
+                  fi
+
             - name: Generate token for GitHub
               id: generate-github-token
               if: inputs.app-token
               uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@7b31f83bbaa79b0fe698d0b71cae0bc9189b7ac9 # main
               with:
-                  github-app-id-vault-key: GITHUB_APP_ID
-                  github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
-                  github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+                  github-app-id-vault-key: ${{ inputs.vault-github-app-id-key }}
+                  github-app-id-vault-path: ${{ inputs.vault-secret-path }}
+                  github-app-private-key-vault-key: ${{ inputs.vault-github-app-private-key-key }}
+                  github-app-private-key-vault-path: ${{ inputs.vault-secret-path }}
+                  vault-auth-method: jwt
+                  vault-auth-jwt-path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
+                  vault-auth-jwt-role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
+                  vault-auth-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
                   owner: camunda
                   repositories: ${{ github.event.repository.name }}

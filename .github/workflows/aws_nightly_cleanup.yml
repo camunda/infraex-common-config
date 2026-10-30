@@ -98,6 +98,9 @@ jobs:
 
     aws-cleanup:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
         # Wait for the global-DB teardown so cloud-nuke sees standalone clusters,
         # but still run (best-effort) even if that teardown had issues.
         needs: aws-global-db-teardown
@@ -196,9 +199,10 @@ jobs:
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
                   url: ${{ secrets.VAULT_ADDR }}
-                  method: approle
-                  roleId: ${{ secrets.VAULT_ROLE_ID }}
-                  secretId: ${{ secrets.VAULT_SECRET_ID }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   exportEnv: false
                   secrets: |
                       secret/data/products/infrastructure-experience/ci/common AWS_ACCESS_KEY;
@@ -250,9 +254,10 @@ jobs:
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common
                   github-app-private-key-vault-key: GITHUB_APP_PRIVATE_KEY
                   github-app-private-key-vault-path: secret/data/products/infrastructure-experience/ci/common
-                  vault-auth-method: approle
-                  vault-auth-role-id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault-auth-secret-id: ${{ secrets.VAULT_SECRET_ID}}
+                  vault-auth-method: jwt
+                  vault-auth-jwt-path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault-auth-jwt-role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault-auth-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
                   vault-url: ${{ secrets.VAULT_ADDR }}
                   owner: camunda
                   repositories: infraex-terraform
@@ -344,6 +349,12 @@ jobs:
 
     notify-on-failure:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            # The Slack action checks for an open "silence: <workflow>" issue in this
+            # repository before alerting, and reads it with this token.
+            issues: read
+            id-token: write # Vault OIDC/JWT auth
         if: failure()
         needs:
             - aws-global-db-teardown
@@ -357,5 +368,6 @@ jobs:
               uses: ./.github/actions/report-failure-on-slack
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
-                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_jwt_path: ${{ secrets.VAULT_JWT_PATH }}
+                  vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE }}
+                  vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
