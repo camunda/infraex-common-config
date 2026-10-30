@@ -18,15 +18,31 @@ on:
                     `none` disables the notification, and the Vault secrets are then not needed.
                 default: ''
                 type: string
+            vault-secret-path:
+                description: >-
+                    Vault path holding the Slack bot token for the failure notification. Callers
+                    outside InfraEx must use their own team's secret.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault-slack-token-key:
+                description: Key of the Slack bot token in the Vault secret.
+                default: SLACK_BOT_TOKEN
+                type: string
         secrets:
             VAULT_ADDR:
                 description: Vault server URL, used only by the failure notification.
                 required: false
-            VAULT_ROLE_ID:
-                description: Vault AppRole role ID, used only by the failure notification.
+            VAULT_JWT_PATH:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication, used only by the failure notification. Optional; falls back to
+                    the `VAULT_JWT_PATH` variable.
                 required: false
-            VAULT_SECRET_ID:
-                description: Vault AppRole secret ID, used only by the failure notification.
+            VAULT_JWT_ROLE:
+                description: Vault role for GitHub OIDC (JWT) authentication, used only by the failure notification. Optional; falls back to the `VAULT_JWT_ROLE`
+                    variable.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: GitHub OIDC audience for Vault (JWT) authentication, used only by the failure notification. Optional; falls back to the `VAULT_JWT_AUDIENCE`
+                    variable.
                 required: false
 
 permissions: {}
@@ -52,6 +68,10 @@ jobs:
                 ${{ !startsWith(github.event.pull_request.head.ref, 'schedules/') }}
         permissions:
             issues: read # silence check of the failure notification
+            # Callers run on `pull_request_target`, so a fork pull request gets an OIDC token here.
+            # That is safe only while no step in this job checks out or runs pull request code:
+            # never add a checkout step.
+            id-token: write # Vault OIDC/JWT auth of the failure notification
             pull-requests: write
         steps:
             - name: Request Copilot review
@@ -63,11 +83,14 @@ jobs:
 
             - name: Notify Slack on failure
               if: failure() && inputs.slack-channel-id != 'none'
-              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@06dbc3c3960fe23138de789e3bf80065fe6c52e0 # 2.3.11
+              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@8266d2676bb5ae4236101d3ffc464b26fb0fab9e # 3.0.0
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
-                  vault_role_id: ${{ secrets.VAULT_ROLE_ID }}
-                  vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+                  vault_jwt_path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
+                  vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
+                  vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
+                  vault_secret_path: ${{ inputs.vault-secret-path }}
+                  vault_slack_token_key: ${{ inputs.vault-slack-token-key }}
                   slack_channel_id: ${{ inputs.slack-channel-id || (env.IS_LIVE == 'true' && 'C076N4G1162' || 'C07E4FF6YMB') }}
                   slack_mention_people: ${{ env.IS_LIVE == 'true' && '<!subteam^S0CBB7Y72SV>' || '' }}
                   disable_silence_check: ${{ env.IS_LIVE == 'true' && 'false' || 'true' }}

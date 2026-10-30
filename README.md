@@ -341,6 +341,7 @@ jobs:
     copilot-review:
         permissions:
             issues: read
+            id-token: write # Vault OIDC/JWT auth of the failure notification
             pull-requests: write
         uses: camunda/infraex-common-config/.github/workflows/copilot-review-global.yml@<sha> # <version>
         with:
@@ -348,10 +349,14 @@ jobs:
             slack-channel-id: <channel-id> # optional: default #team-smx-alerts or #team-smx-test, `none` to disable
         secrets:
             VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-            VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
-            VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
+- Grant `id-token: write` to the calling job first: the Vault login of the failure notification fails without it. `VAULT_JWT_PATH`, `VAULT_JWT_ROLE` and `VAULT_JWT_AUDIENCE` may be organization variables instead of secrets.
+- Callers outside InfraEx must set `vault-secret-path` (and `vault-slack-token-key` if the key
+  differs) to their own team's Slack bot token secret. The default is the InfraEx one.
 - `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
   fork gets a read-only token. The workflow checks out nothing, so no pull request code runs
   next to the write token. List the caller under `dangerous-triggers` in the repository's

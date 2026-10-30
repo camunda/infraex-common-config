@@ -34,23 +34,44 @@ on:
                     `renovate-inert-ok` before the check can pass.
                 default: false
                 type: boolean
-        # Declared so callers can pass these three explicitly instead of `secrets: inherit`,
+            vault-secret-path:
+                description: >-
+                    Vault path holding the GitHub App id and private key used by the auto-fix job.
+                    Callers outside InfraEx must use their own App.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault-github-app-id-key:
+                description: Key of the GitHub App id in the Vault secret.
+                default: GITHUB_APP_ID
+                type: string
+            vault-github-app-private-key-key:
+                description: Key of the GitHub App private key in the Vault secret.
+                default: GITHUB_APP_PRIVATE_KEY
+                type: string
+        # Declared so callers can pass these four explicitly instead of `secrets: inherit`,
         # which hands the called workflow every secret the calling repository holds -- Docker
-        # Hub, registry and cloud credentials included -- when all it needs is the AppRole that
-        # mints the auto-fix App token.
+        # Hub, registry and cloud credentials included -- when all it needs is the Vault login
+        # that mints the auto-fix App token.
         #
-        # All three are optional: a repository that never auto-fixes (no `autofix-actor` run)
-        # never reaches the job that reads them. Existing callers using `secrets: inherit` keep
-        # working unchanged, since inherit satisfies declared secrets too.
+        # All four are optional: a repository that never auto-fixes (no `autofix-actor` run)
+        # never reaches the job that reads them. `secrets: inherit` satisfies them too.
+        #
+        # The calling job has to grant `id-token: write` for the Vault OIDC/JWT login.
         secrets:
             VAULT_ADDR:
                 description: Vault server URL, used only by the auto-fix job.
                 required: false
-            VAULT_ROLE_ID:
-                description: Vault AppRole role ID, used only by the auto-fix job.
+            VAULT_JWT_PATH:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication, used only by the auto-fix job. Optional; falls back to the `VAULT_JWT_PATH`
+                    variable.
                 required: false
-            VAULT_SECRET_ID:
-                description: Vault AppRole secret ID, used only by the auto-fix job.
+            VAULT_JWT_ROLE:
+                description: Vault role for GitHub OIDC (JWT) authentication, used only by the auto-fix job. Optional; falls back to the `VAULT_JWT_ROLE`
+                    variable.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: GitHub OIDC audience for Vault (JWT) authentication, used only by the auto-fix job. Optional; falls back to the `VAULT_JWT_AUDIENCE`
+                    variable.
                 required: false
 
 # The auto-fix commit is created with a dedicated GitHub App token in a separate job,
@@ -416,7 +437,10 @@ jobs:
         # applies it, mints a repository-scoped App token last and commits through the API. It runs
         # no repository code, which is the whole point: the hooks that produced this patch executed
         # in `lint`, with no credential.
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@06dbc3c3960fe23138de789e3bf80065fe6c52e0 # 2.3.11
+        permissions:
+            contents: read
+            id-token: write # Vault OIDC/JWT auth
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@8266d2676bb5ae4236101d3ffc464b26fb0fab9e # 3.0.0
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
@@ -426,6 +450,9 @@ jobs:
             commit-message: 'chore: update files from pre-commit run'
             max-patch-bytes: ${{ inputs.autofix-max-patch-bytes }}
             max-changed-lines: ${{ inputs.autofix-max-changed-lines }}
+            vault-secret-path: ${{ inputs.vault-secret-path }}
+            vault-github-app-id-key: ${{ inputs.vault-github-app-id-key }}
+            vault-github-app-private-key-key: ${{ inputs.vault-github-app-private-key-key }}
             # No refuse-paths-regex on purpose: reformatting `.github/workflows` is exactly what a
             # pre-commit hook legitimately does here, so the CI-definition guard other callers set
             # would reject the normal case.
@@ -433,5 +460,6 @@ jobs:
             # `secrets: inherit` would not work: the callee names its secrets vault-addr and so on,
             # while the caller supplies VAULT_ADDR. They have to be mapped.
             vault-addr: ${{ secrets.VAULT_ADDR }}
-            vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
-            vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+            vault-jwt-path: ${{ secrets.VAULT_JWT_PATH }}
+            vault-jwt-role: ${{ secrets.VAULT_JWT_ROLE }}
+            vault-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE }}
