@@ -47,7 +47,7 @@ jobs:
             # Guarantees the pinned yq (.tool-versions) used by the region
             # derivation below, instead of relying on the runner image.
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@06dbc3c3960fe23138de789e3bf80065fe6c52e0 # 2.3.11
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@1b311ce46123ef00739e21eb870dcb4584fc39a2 # 2.4.1
 
             - name: Determine DRY_RUN and matrix-derived regions
               env:
