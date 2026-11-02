@@ -3,4 +3,16 @@
   extends: [
     "github>camunda/infraex-common-config:default.json5"
   ],
+  packageRules: [
+    {
+      // This repository pins its own actions and workflows. With the shared
+      // `separateMajorMinor: true`, a new major splits them into a minor bump to the
+      // last 2.x release and a Friday-only major PR (2.3.11 -> 2.4.1 instead of 3.0.0).
+      // Self-references always target the latest release, in one update, without waiting.
+      description: 'Bump self-references straight to the latest release.',
+      matchPackageNames: ['camunda/infraex-common-config'],
+      separateMajorMinor: false,
+      schedule: ['at any time'],
+    },
+  ],
 }
