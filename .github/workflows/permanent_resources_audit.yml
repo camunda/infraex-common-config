@@ -71,7 +71,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@025bbe0d737380bc9330630d02d4382ad4f6728a # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@997ae06f593869ce66e9bf8aa20a6bc753b6d3c6 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -119,7 +119,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@025bbe0d737380bc9330630d02d4382ad4f6728a # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@997ae06f593869ce66e9bf8aa20a6bc753b6d3c6 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -612,7 +612,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@025bbe0d737380bc9330630d02d4382ad4f6728a # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@997ae06f593869ce66e9bf8aa20a6bc753b6d3c6 # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
