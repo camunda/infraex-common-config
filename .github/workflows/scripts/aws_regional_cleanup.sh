@@ -434,6 +434,12 @@ if [ -n "$log_groups" ]; then
             continue
         fi
 
+        # Managed by IT through CloudFormation StackSets (MAP auto-tagging, ...)
+        if [[ "$log_group" == /aws/lambda/StackSet-* ]]; then
+            echo "Skipping log group: $log_group (IT StackSet)"
+            continue
+        fi
+
         if [[ "$log_group" == *DO_NOT_DELETE* ]]; then
             echo "Skipping log group: $log_group (protected)"
             continue

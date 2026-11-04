@@ -15,7 +15,13 @@ SKIP_ROLES=(
   "aws-ec2-spot-fleet-tagging-role*"
   "ref-arch-*"
   "Wiz*"
-  "stacksets-exec-17b1ba2d4b46b1c7ed312b029f146659"
+  # Managed by IT through CloudFormation StackSets: never delete
+  "stacksets-exec-*"
+  "StackSet-*"
+  "ExpelAssumeRole"
+  "VigieAccessRole"
+  "doitintl_dci_cloudconnect"
+  "doit-cloudflow-camunda-connection"
 )
 
 SKIP_POLICIES=(
@@ -25,6 +31,9 @@ SKIP_POLICIES=(
   "*/OrganizationAccountAccessRole*"
   "*/ref-arch*"
   "*/Wiz*"
+  # Managed by IT through CloudFormation StackSets: never delete
+  "*/ExpelAccessPolicy"
+  "*/StackSet-*"
 )
 
 # Parse arguments
