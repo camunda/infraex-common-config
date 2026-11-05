@@ -371,12 +371,12 @@ jobs:
               with:
                   persist-credentials: false
 
-            # Renovate 44 declares `node: ^24.11.0` and means it: it calls `RegExp.escape`,
+            # Renovate 44 declares `node: ^24.11.0 || ^26.13.0` and means it: it calls `RegExp.escape`,
             # which older runtimes do not have, and fails on import rather than at a version
             # check. Pinned rather than left to the runner image, whose default node moves.
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
               with:
-                  node-version: 24
+                  node-version: 26
 
             # `--platform=local` reads the checkout and talks to no forge; `--dry-run=lookup`
             # stops before anything would be written. `enabledManagers` holds the run to the
@@ -401,7 +401,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # renovate: datasource=npm depName=renovate
-                  RENOVATE_CLI_VERSION="44.206.2"
+                  RENOVATE_CLI_VERSION="44.219.0"
                   npx --yes "renovate@${RENOVATE_CLI_VERSION}"
 
             # Checked out after the Renovate run, and into a subdirectory: the run reads the
