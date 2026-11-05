@@ -14,5 +14,14 @@
       separateMajorMinor: false,
       schedule: ['at any time'],
     },
+    {
+      // `renovate lookup` in lint-global.yml runs Renovate, which declares
+      // `engines.node: ^24.11.0` and exits on any newer runtime. Hold node at 24 until a
+      // Renovate release accepts the next major, then raise the bound with the pin.
+      description: 'Keep the node that runs Renovate within its supported range.',
+      matchManagers: ['github-actions'],
+      matchDepNames: ['node'],
+      allowedVersions: '<25',
+    },
   ],
 }
