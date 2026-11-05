@@ -1,38 +1,40 @@
 ---
 # Resources that IT deploys in every account through CloudFormation StackSets
 # (MAP auto-tagging, Expel, Vigie, Wiz, DoiT). cloud-nuke must never delete them.
+# cloud-nuke matches the full name: log groups are /aws/lambda/<name>, EventBridge
+# rules and schedules are <bus|group>|<name>. So the prefix may follow / or |.
 CloudFormationStack:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 LambdaFunction:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 CloudWatchLogGroup:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 EventBridgeRule:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 EventBridgeSchedule:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 IAMRoles:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
 IAMPolicies:
     exclude:
         names_regex:
-            - ^StackSet-
-            - ^stacksets-exec-
+            - '(^|[/|])StackSet-'
+            - '(^|[/|])stacksets-exec-'
