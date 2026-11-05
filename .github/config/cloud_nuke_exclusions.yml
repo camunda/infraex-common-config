@@ -6,35 +6,35 @@
 CloudFormationStack:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 LambdaFunction:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 CloudWatchLogGroup:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 EventBridgeRule:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 EventBridgeSchedule:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 IAMRoles:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
 IAMPolicies:
     exclude:
         names_regex:
-            - '(^|[/|])StackSet-'
-            - '(^|[/|])stacksets-exec-'
+            - (^|[/|])StackSet-
+            - (^|[/|])stacksets-exec-
