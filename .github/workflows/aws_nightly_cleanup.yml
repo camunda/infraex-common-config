@@ -16,6 +16,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/aws_nightly_cleanup.yml
+            - .github/config/cloud_nuke_exclusions.yml
             - .github/workflows/scripts/aws_global_cleanup.sh
             - .github/workflows/scripts/aws_global_db_teardown.sh
             - .github/workflows/scripts/aws_regional_cleanup.sh
@@ -291,6 +292,7 @@ jobs:
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
+                  --config .github/config/cloud_nuke_exclusions.yml \
                   --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type ec2-keypairs \
                   --exclude-resource-type guard-duty \
@@ -310,6 +312,7 @@ jobs:
                   --region ${{ env.AWS_REGION }} \
                   --force \
                   --older-than ${{ env.CLEANUP_OLDER_THAN }} \
+                  --config .github/config/cloud_nuke_exclusions.yml \
                   --exclude-resource-type ec2-dhcp-option \
                   --exclude-resource-type cloudtrail \
                   --exclude-resource-type ec2-keypairs \
