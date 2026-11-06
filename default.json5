@@ -226,6 +226,23 @@
       ],
     },
     {
+      // The MySQL client image (for example the ECS dual-region DB seed task) must match
+      // the Aurora MySQL engine, which runs the 8.4 LTS line (8.4.mysql_aurora.8.4.x).
+      // The image tags also carry newer LTS lines (9.7) and innovation releases (26.x), and
+      // Camunda supports MySQL LTS releases only (8.4 and 9.7, see the Camunda RDBMS support
+      // policy). Moving to the next LTS is a deliberate change to this rule, together with
+      // the Aurora engine.
+      description: 'Keep the MySQL client image on the 8.4 LTS line used by Aurora MySQL.',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'mysql',
+        'public.ecr.aws/docker/library/mysql',
+      ],
+      allowedVersions: '/^8\\.4(\\.\\d+)?$/',
+    },
+    {
       matchDatasources: [
         'go',
       ],
