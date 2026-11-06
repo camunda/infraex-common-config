@@ -47,7 +47,7 @@ def _learn(a) -> int:
             fh.write("## Planner learner\n\n" + w["diff"] + "\n")
     if a.dry_run:
         return 0
-    st = store.GhStore(Gh(), a.repo, a.branch)
+    st = store.GhStore(Gh(getattr(a, "gh_runner", None)), a.repo, a.branch)
     st.put(store.path_for(w), w, "chore(ci-decisions): weights %s" % w["id"])
     # weekly checkpoint: hash over the week's event files, so later edits to history are detectable
     d = parse_iso(now)

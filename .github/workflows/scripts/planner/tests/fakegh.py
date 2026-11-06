@@ -14,6 +14,7 @@ class FakeGh:
         self.calls = []
         self.fail = []  # queue of (status, text) to raise on the next PUT
         self.comments = []
+        self.runs = {}
         self.statuses = []
         self.n = 0
 
@@ -25,6 +26,13 @@ class FakeGh:
         m = re.match(r"repos/[^/]+/[^/]+/(.*)$", path)
         rel = m.group(1) if m else path
         relq = rel.split("?")[0]
+        mr = re.match(r"actions/workflows/([^/]+)/runs", rel)
+        if mr:
+            payload = {"workflow_runs": self.runs.get(mr.group(1), [])}
+            return 0, json.dumps([payload] if "--paginate" in args else payload), ""
+        mr = re.match(r"actions/runs/(\d+)/attempts/(\d+)", rel)
+        if mr:
+            return 0, json.dumps({"conclusion": "failure"}), ""
         if rel.startswith("git/ref/heads/"):
             return (0, json.dumps({"ref": "x"}), "") if self.branch else err(404, "Not Found")
         if rel == "git/blobs":
