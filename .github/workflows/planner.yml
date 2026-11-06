@@ -1,0 +1,203 @@
+---
+name: planner
+
+# Test-selection planner: decides, for one pull request, which CI workflows must run, records the
+# decision in an append-only store (the `ci-decisions` branch) and publishes it for the suites to read.
+#
+# The decision is fully automatic: no approval step, no required label. Labels (`planner:run-all`,
+# `run_<suite>`, the existing `skip_*`) are optional escape hatches only.
+#
+# Two jobs, split along the CI trust boundary described in the README:
+#
+#   planner   reads the pull request as DATA. Read-only token, no secrets, no repository code is run.
+#             The planner source is checked out from this workflow's own commit, never from the PR,
+#             and the suite registry and configuration are read from the PR's base commit.
+#
+#   recorder  holds the only write permission. It runs no repository code either: it validates the
+#             artifact against the closed schema v1, checks it belongs to this pull request, and
+#             appends it to the store through the API.
+#
+# Callers pass `mode` from a repository variable: `gate` (default when empty) lets suites skip
+# themselves, `report` only records and comments. See .github/workflows/scripts/planner/README.md.
+
+on:
+    workflow_call:
+        inputs:
+            mode:
+                description: '`gate` (default when empty) or `report`. Any other value is treated as `report`.'
+                type: string
+                default: gate
+            store-branch:
+                description: Branch of the calling repository that holds the decision store.
+                type: string
+                default: ci-decisions
+            config-path:
+                description: Planner configuration in the calling repository, read from the base commit.
+                type: string
+                default: .github/planner-config.json
+            gate-suites:
+                description: Comma separated override of the suites that may be skipped. `none` disables gating.
+                type: string
+                default: ''
+            gate-base-branches:
+                description: Comma separated base branches for which gating is allowed. Others run in report mode.
+                type: string
+                default: main
+            default-branch:
+                description: Default branch of the calling repository (memory looks at scheduled runs there).
+                type: string
+                default: main
+            weights-pin:
+                description: Id of a `weights` event to use instead of the newest one (rollback switch).
+                type: string
+                default: ''
+        outputs:
+            decision-id:
+                description: Id of the recorded decision.
+                value: ${{ jobs.planner.outputs.decision_id }}
+
+permissions:
+    contents: read
+
+jobs:
+    planner:
+        name: planner
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        # Read-only on purpose: this job reads untrusted pull request content.
+        permissions:
+            contents: read
+            actions: read
+            pull-requests: read
+        outputs:
+            decision_id: ${{ steps.decide.outputs.decision_id }}
+            artifact_name: ${{ steps.name.outputs.artifact_name }}
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            # The pull request head is checked out as data, never executed. Full history so the
+            # merge base and the base-commit registry can be read.
+            - name: Check out the pull request (data only)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  fetch-depth: 0
+                  path: pr
+                  persist-credentials: false
+
+            - name: Read the decision store (memory)
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+              run: |
+                  set -euo pipefail
+                  # No store yet (first run) or unreadable: the planner then falls back to the Actions history.
+                  if ! gh repo clone "${GITHUB_REPOSITORY}" store -- --depth 1 --branch "${STORE_BRANCH}" --single-branch --quiet; then
+                    echo "::notice::no ${STORE_BRANCH} branch yet, starting without stored memory"
+                    mkdir -p store
+                  fi
+
+            - name: Collect recent suite runs (memory fallback)
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+                  DEFAULT_BRANCH: ${{ inputs.default-branch }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner runs --repo "${GITHUB_REPOSITORY}" --git-dir "${GITHUB_WORKSPACE}/pr" \
+                    --base-sha "${BASE_SHA}" --default-branch "${DEFAULT_BRANCH}" --config-path "${CONFIG_PATH}" \
+                    --out "${GITHUB_WORKSPACE}/runs.json" || echo '[]' > "${GITHUB_WORKSPACE}/runs.json"
+
+            - name: Decide
+              id: decide
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  MODE: ${{ inputs.mode }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  BASE_REF: ${{ github.event.pull_request.base.ref }}
+                  ACTOR: ${{ github.event.pull_request.user.login }}
+                  IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+                  LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+                  GATE_SUITES: ${{ inputs.gate-suites }}
+                  GATE_BASE_BRANCHES: ${{ inputs.gate-base-branches }}
+                  DEFAULT_BRANCH: ${{ inputs.default-branch }}
+                  WEIGHTS_PIN: ${{ inputs.weights-pin }}
+                  PLANNER_VERSION: ${{ job.workflow_sha }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner decide --repo "${GITHUB_WORKSPACE}/pr" --slug "${GITHUB_REPOSITORY}" \
+                    --pr "${PR_NUMBER}" --head-sha "${HEAD_SHA}" --base-sha "${BASE_SHA}" \
+                    --event "${GITHUB_EVENT_NAME}" --actor "${ACTOR}" --fork "${IS_FORK}" --labels "${LABELS}" \
+                    --mode "${MODE}" --base-branch "${BASE_REF}" --default-branch "${DEFAULT_BRANCH}" \
+                    --gate-base-branches "${GATE_BASE_BRANCHES}" --gate-suites "${GATE_SUITES}" --weights-pin "${WEIGHTS_PIN}" \
+                    --config-path "${CONFIG_PATH}" --store-dir "${GITHUB_WORKSPACE}/store" --runs-json "${GITHUB_WORKSPACE}/runs.json" \
+                    --planner-version "${PLANNER_VERSION}" --out "${GITHUB_WORKSPACE}/decision.json" \
+                    --summary-file "${GITHUB_STEP_SUMMARY}"
+                  echo "decision_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "${GITHUB_WORKSPACE}/decision.json")" >> "${GITHUB_OUTPUT}"
+
+            # Artifact names are unique per workflow run, not per job, and this workflow is reusable:
+            # a caller can call it twice in one run. A random suffix keeps the two apart.
+            - name: Name the artifact
+              id: name
+              run: echo "artifact_name=planner-decision-$(openssl rand -hex 8)" | tee -a "${GITHUB_OUTPUT}"
+
+            - name: Upload the decision
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: ${{ steps.name.outputs.artifact_name }}
+                  path: decision.json
+                  retention-days: 7
+                  if-no-files-found: error
+
+    recorder:
+        name: recorder
+        needs: planner
+        # Fork pull requests get a read-only token: the planner job's summary is their only output.
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        # The only job with a write permission. It runs no repository code: pinned actions, the
+        # pinned planner source and a schema-validated artifact.
+        permissions:
+            contents: write
+            pull-requests: write
+            statuses: write
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Download the decision
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: ${{ needs.planner.outputs.artifact_name }}
+                  path: decision
+
+            - name: Record the decision
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner record --artifact "${GITHUB_WORKSPACE}/decision/decision.json" \
+                    --repo "${GITHUB_REPOSITORY}" --branch "${STORE_BRANCH}" --pr "${PR_NUMBER}" --head-sha "${HEAD_SHA}" \
+                    --summary-file "${GITHUB_STEP_SUMMARY}"

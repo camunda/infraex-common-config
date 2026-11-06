@@ -1,0 +1,78 @@
+---
+name: planner-collect
+
+# Outcome collector of the test-selection planner. Reads finished runs of the suites from the Actions
+# API and appends `outcome` events to the store; attributes confirmed failures of scheduled full runs
+# to the pull requests whose plan skipped that suite (`escape` events). Idempotent: an outcome is
+# written once, however often the run is seen. Call it on a schedule (hourly) from the repository.
+#
+# Runs no repository code: the planner source is this workflow's own pinned commit, and the
+# repository checkout is only read (git log, workflow files).
+
+on:
+    workflow_call:
+        inputs:
+            store-branch:
+                type: string
+                default: ci-decisions
+            config-path:
+                type: string
+                default: .github/planner-config.json
+            backfill-days:
+                description: How far back the very first run looks.
+                type: string
+                default: '30'
+            max-events:
+                description: Upper bound of events written per run (a backlog is worked off over several runs).
+                type: string
+                default: '400'
+
+permissions:
+    contents: read
+
+jobs:
+    collect:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            contents: write # appends events to the store branch
+            actions: read
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Check out the repository (read only, full history for merge attribution)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0
+                  path: repo
+                  persist-credentials: false
+
+            - name: Read the decision store
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+              run: |
+                  set -euo pipefail
+                  if ! gh repo clone "${GITHUB_REPOSITORY}" store -- --depth 1 --branch "${STORE_BRANCH}" --single-branch --quiet; then
+                    mkdir -p store
+                  fi
+
+            - name: Collect outcomes and attribute escapes
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+                  BACKFILL_DAYS: ${{ inputs.backfill-days }}
+                  MAX_EVENTS: ${{ inputs.max-events }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner collect --repo "${GITHUB_REPOSITORY}" --git-dir "${GITHUB_WORKSPACE}/repo" \
+                    --store-dir "${GITHUB_WORKSPACE}/store" --branch "${STORE_BRANCH}" --config-path "${CONFIG_PATH}" \
+                    --backfill-days "${BACKFILL_DAYS}" --max-events "${MAX_EVENTS}" | tee -a "${GITHUB_STEP_SUMMARY}"

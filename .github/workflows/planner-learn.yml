@@ -1,0 +1,64 @@
+---
+name: planner-learn
+
+# Weekly learner of the test-selection planner. Recomputes the per-(module, suite) weights and the
+# per-suite flake and cost statistics from the event log, bounded to a small step per week, and
+# appends a `weights` event (with a diff) plus a weekly `checkpoint` that hashes the week's events.
+# Every learned number in the event lists the ids of the records it was computed from.
+#
+# Rollback is one repository variable: set PLANNER_WEIGHTS_PIN to an older `weights` event id.
+# Runs no repository code: only the pinned planner source and the store checkout.
+
+on:
+    workflow_call:
+        inputs:
+            store-branch:
+                type: string
+                default: ci-decisions
+            config-path:
+                type: string
+                default: .github/planner-config.json
+
+permissions:
+    contents: read
+
+jobs:
+    learn:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: write # appends the weights and checkpoint events to the store branch
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Check out the repository configuration (read only)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  path: repo
+                  persist-credentials: false
+
+            - name: Read the decision store
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+              run: |
+                  set -euo pipefail
+                  gh repo clone "${GITHUB_REPOSITORY}" store -- --depth 1 --branch "${STORE_BRANCH}" --single-branch --quiet
+
+            - name: Learn
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STORE_BRANCH: ${{ inputs.store-branch }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner learn --repo "${GITHUB_REPOSITORY}" --git-dir "${GITHUB_WORKSPACE}/repo" \
+                    --store-dir "${GITHUB_WORKSPACE}/store" --branch "${STORE_BRANCH}" --config-path "${CONFIG_PATH}" \
+                    --summary-file "${GITHUB_STEP_SUMMARY}"
