@@ -144,7 +144,7 @@ jobs:
 
             # Setup tool cache
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@e2923304b40dfc031b3f595bcc1445e90c981adb # 3.0.0
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
 
             # What used to stand here was `apt-get install libsqlite3-dev libbz2-dev
             # liblzma-dev`, on every run, ahead of the step above. It cost 3m45 on 2026-08-19
@@ -401,7 +401,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # renovate: datasource=npm depName=renovate
-                  RENOVATE_CLI_VERSION="44.222.0"
+                  RENOVATE_CLI_VERSION="44.222.3"
                   npx --yes "renovate@${RENOVATE_CLI_VERSION}"
 
             # Checked out after the Renovate run, and into a subdirectory: the run reads the
@@ -440,7 +440,7 @@ jobs:
         permissions:
             contents: read
             id-token: write # Vault OIDC/JWT auth
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@e2923304b40dfc031b3f595bcc1445e90c981adb # 3.0.0
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch
