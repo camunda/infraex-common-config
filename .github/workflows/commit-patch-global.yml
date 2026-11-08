@@ -259,7 +259,7 @@ jobs:
             # it is not alive while the untrusted patch is downloaded, measured and applied.
             - name: Generate token for GitHub
               id: generate-github-token
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@1a10a8e84ce7e9cbbfed6f1c482f5bff65748238 # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@f49af13e839834ccc2ed45cdcfcbc03166d41712 # main
               with:
                   github-app-id-vault-key: ${{ inputs.vault-github-app-id-key }}
                   github-app-id-vault-path: ${{ inputs.vault-secret-path }}
