@@ -57,7 +57,7 @@ permissions: {}
 jobs:
     guard:
         name: Check the review request
-        if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/crev')
+        if: github.event.issue.pull_request && (github.event.comment.body == '/crev' || startsWith(github.event.comment.body, '/crev '))
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:

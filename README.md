@@ -404,7 +404,7 @@ permissions: {}
 
 jobs:
     crev:
-        if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/crev')
+        if: github.event.issue.pull_request && (github.event.comment.body == '/crev' || startsWith(github.event.comment.body, '/crev '))
         permissions:
             contents: read
             id-token: write
