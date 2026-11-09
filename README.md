@@ -371,3 +371,64 @@ jobs:
   request comes from `github-actions[bot]`, so this applies to every review the workflow
   requests. Nothing changes where the organization already bills Copilot code review to
   itself.
+
+## crev review
+
+[`crev-review-global.yml`](.github/workflows/crev-review-global.yml) runs a
+[crev](https://github.com/camunda/crev) review of a pull request when a person comments `/crev`
+on it. The review is advisory: crev posts a COMMENT review with inline findings, its escalation
+label and the `crev/escalation` status, and it never approves.
+
+- `guard` checks that the commenter has `triage` or a higher role on the repository, and that
+  the pull request head is a branch of the same repository. It runs before any job reads a
+  secret, because `issue_comment` runs with the repository secrets also for pull requests from
+  forks.
+- `review` reads the OpenRouter key from Vault, runs crev in the crev container image without
+  posting, and stores `review.json`. It fails when the pull request head changed after the
+  comment. The job has a read-only token.
+- `publish` has no OpenRouter key. It posts the review from the same run with
+  `crev --from-review`, which refuses the review when the head, the base branch or the
+  repository changed.
+- `report` comments on the pull request when `review` or `publish` fails.
+
+```yaml
+---
+name: crev review
+
+on:
+    issue_comment:
+        types: [created]
+
+permissions: {}
+
+jobs:
+    crev:
+        if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/crev')
+        permissions:
+            contents: read
+            id-token: write
+            issues: write
+            packages: read
+            pull-requests: write
+            statuses: write
+        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@<sha> # <version>
+        with:
+            model: <vendor>/<model>
+        secrets:
+            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
+```
+
+- List the caller under `dangerous-triggers` in the repository's `zizmor.yml`. Anyone can post
+  the comment; `guard` admits only `triage` or a higher role, and no job checks out or runs pull
+  request code.
+- The repository's Vault role must read `vault-secret-path` (default
+  `secret/data/products/distribution/ci`, key `OPENROUTER_API_KEY`).
+- When the crev container package (`ghcr.io/camunda/crev`) is not public, add the repository
+  under the package's Actions access with the read role. Otherwise `docker login` works but the
+  pull fails.
+- `model` is an OpenRouter model ID from the Camunda workspace, without the
+  `openrouter-camunda/` prefix. Set `openrouter-base-url` to the EU host for a model that the
+  workspace serves only there.

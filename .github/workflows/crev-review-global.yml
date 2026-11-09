@@ -1,0 +1,239 @@
+---
+name: crev-review-global
+
+on:
+    workflow_call:
+        inputs:
+            model:
+                description: >-
+                    OpenRouter model ID that every crev agent uses, for example `moonshotai/kimi-k3`.
+                    The Camunda OpenRouter workspace must serve it on `openrouter-base-url`.
+                required: true
+                type: string
+            openrouter-base-url:
+                description: >-
+                    OpenRouter host that serves the model. The Camunda workspace serves each model on
+                    either the US or the EU host.
+                default: https://us.openrouter.ai/api/v1
+                type: string
+            crev-image:
+                description: >-
+                    crev container image. Pin it by `sha-` tag or digest. The image must support
+                    `crev --from-review`.
+                default: ghcr.io/camunda/crev:main
+                type: string
+            vault-secret-path:
+                description: Vault path that holds the OpenRouter key.
+                default: secret/data/products/distribution/ci
+                type: string
+            vault-openrouter-key:
+                description: Key of the OpenRouter API key in the Vault secret.
+                default: OPENROUTER_API_KEY
+                type: string
+        secrets:
+            VAULT_ADDR:
+                description: Vault server URL.
+                required: true
+            VAULT_JWT_PATH:
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_PATH` variable.
+                required: false
+            VAULT_JWT_ROLE:
+                description: Vault role for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_ROLE` variable.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: GitHub OIDC audience for Vault (JWT) authentication. Optional; falls back to the `VAULT_JWT_AUDIENCE` variable.
+                required: false
+
+permissions: {}
+
+jobs:
+    guard:
+        name: Check the review request
+        if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/crev')
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            pull-requests: read
+        outputs:
+            pr-url: ${{ steps.pr.outputs.url }}
+            head-sha: ${{ steps.pr.outputs.head-sha }}
+        steps:
+            - name: Check the commenter's role
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  REPO: ${{ github.repository }}
+                  COMMENTER: ${{ github.event.comment.user.login }}
+              run: |
+                  set -euo pipefail
+                  role=$(gh api "repos/${REPO}/collaborators/${COMMENTER}/permission" --jq .role_name)
+                  case "${role}" in
+                    admin | maintain | write | triage) ;;
+                    *)
+                      echo "::error::${COMMENTER} has the role '${role}' on ${REPO}; /crev needs triage or a higher role."
+                      exit 1
+                      ;;
+                  esac
+
+            - name: Resolve the pull request
+              id: pr
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  REPO: ${{ github.repository }}
+                  NUMBER: ${{ github.event.issue.number }}
+              run: |
+                  set -euo pipefail
+                  pr=$(gh api "repos/${REPO}/pulls/${NUMBER}")
+                  head_repo=$(jq -r '.head.repo.full_name' <<<"${pr}")
+                  if [ "${head_repo}" != "${REPO}" ]; then
+                    echo "::error::The head of #${NUMBER} is in '${head_repo}'; /crev reviews only pull requests from branches of ${REPO}."
+                    exit 1
+                  fi
+                  {
+                    echo "url=$(jq -r '.html_url' <<<"${pr}")"
+                    echo "head-sha=$(jq -r '.head.sha' <<<"${pr}")"
+                  } >> "${GITHUB_OUTPUT}"
+
+    review:
+        name: Review with crev
+        needs: guard
+        concurrency:
+            group: ${{ github.workflow }}-review-${{ github.event.issue.number }}
+            cancel-in-progress: true
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        permissions:
+            contents: read
+            id-token: write
+            packages: read
+            pull-requests: read
+        steps:
+            - name: Read the OpenRouter key from Vault
+              id: vault
+              uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
+                  exportEnv: false
+                  secrets: |
+                      ${{ inputs.vault-secret-path }} ${{ inputs.vault-openrouter-key }} | OPENROUTER_API_KEY ;
+
+            - name: Write the OpenCode provider configuration
+              env:
+                  MODEL: ${{ inputs.model }}
+                  BASE_URL: ${{ inputs.openrouter-base-url }}
+              run: |
+                  set -euo pipefail
+                  dir="${RUNNER_TEMP}/opencode"
+                  mkdir -p "${dir}"
+                  jq -n --arg url "${BASE_URL}" --arg model "${MODEL}" '{
+                    "$schema": "https://opencode.ai/config.json",
+                    "disabled_providers": ["openrouter"],
+                    "provider": {
+                      "openrouter-camunda": {
+                        "name": "OpenRouter Camunda",
+                        "npm": "@ai-sdk/openai-compatible",
+                        "options": {"baseURL": $url, "apiKey": "{env:OPENROUTER_API_KEY}"},
+                        "models": {($model): {"name": $model}}
+                      }
+                    }
+                  }' > "${dir}/opencode.json"
+                  chmod -R a+rwX "${dir}"
+
+            - name: Log in to GHCR
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  ACTOR: ${{ github.actor }}
+              run: docker login ghcr.io --username "${ACTOR}" --password-stdin <<<"${GH_TOKEN}"
+
+            - name: Review the pull request
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  OPENROUTER_API_KEY: ${{ steps.vault.outputs.OPENROUTER_API_KEY }}
+                  CREV_IMAGE: ${{ inputs.crev-image }}
+                  MODEL: ${{ inputs.model }}
+                  PR_URL: ${{ needs.guard.outputs.pr-url }}
+              run: |
+                  set -euo pipefail
+                  mkdir -p "${RUNNER_TEMP}/crev-review"
+                  docker run --rm \
+                    -e GH_TOKEN -e OPENROUTER_API_KEY -e CREV_NO_UPDATE_CHECK=1 \
+                    -v "${RUNNER_TEMP}/opencode:/home/node/.config/opencode" \
+                    "${CREV_IMAGE}" "${PR_URL}" \
+                    --single --dry-run --json --no-cache --backend opencode \
+                    --model "openrouter-camunda/${MODEL}" \
+                    > "${RUNNER_TEMP}/crev-review/review.json"
+
+            - name: Check that the review is for the requested head
+              env:
+                  HEAD_SHA: ${{ needs.guard.outputs.head-sha }}
+              run: |
+                  set -euo pipefail
+                  if ! jq -e --arg head "${HEAD_SHA}" 'any(.changeset[]; .head == $head)' "${RUNNER_TEMP}/crev-review/review.json" > /dev/null; then
+                    echo "::error::The pull request changed after /crev; the review is not for ${HEAD_SHA}."
+                    exit 1
+                  fi
+
+            - name: Store the review
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: crev-review
+                  path: ${{ runner.temp }}/crev-review/review.json
+                  retention-days: 7
+                  if-no-files-found: error
+
+    publish:
+        name: Post the review
+        needs: [guard, review]
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+            issues: write
+            packages: read
+            pull-requests: write
+            statuses: write
+        steps:
+            - name: Download the review
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: crev-review
+                  path: ${{ runner.temp }}/crev-review
+
+            - name: Log in to GHCR
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  ACTOR: ${{ github.actor }}
+              run: docker login ghcr.io --username "${ACTOR}" --password-stdin <<<"${GH_TOKEN}"
+
+            - name: Post the review
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  CREV_IMAGE: ${{ inputs.crev-image }}
+                  PR_URL: ${{ needs.guard.outputs.pr-url }}
+              run: |
+                  set -euo pipefail
+                  docker run --rm \
+                    -e GH_TOKEN -e CREV_NO_UPDATE_CHECK=1 \
+                    -v "${RUNNER_TEMP}/crev-review/review.json:/tmp/review.json:ro" \
+                    "${CREV_IMAGE}" "${PR_URL}" \
+                    --single --from-review /tmp/review.json --post --review-event comment
+
+    report:
+        name: Report a failed review
+        needs: [guard, review, publish]
+        if: failure() && needs.guard.result == 'success'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            pull-requests: write
+        steps:
+            - name: Comment on the pull request
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR_URL: ${{ needs.guard.outputs.pr-url }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              run: |
+                  gh pr comment "${PR_URL}" --body "crev could not finish this review: ${RUN_URL}. If the pull request changed during the review, comment \`/crev\` again."
