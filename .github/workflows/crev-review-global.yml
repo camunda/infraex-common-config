@@ -26,7 +26,7 @@ on:
                 description: >-
                     crev container image. Pin it by `sha-` tag or digest. The image must support
                     `crev --from-review`.
-                default: ghcr.io/camunda/crev:main
+                default: ghcr.io/camunda/crev:sha-b5bd30d@sha256:cee1877a8d1e92e9e877168eb37a248b887c41d74abe1e9a77e2f29786ad5c13
                 type: string
             vault-secret-path:
                 description: Vault path that holds the OpenRouter key.
