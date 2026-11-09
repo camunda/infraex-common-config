@@ -250,8 +250,25 @@ runs:
                     fi
                   done
 
+                  # `plugin update --all` runs `git pull` on every plugin repository on GitHub.
+                  # It is the only network call here without a retry, and a cache restored
+                  # from another week still runs it, so a brief GitHub hiccup can fail a whole
+                  # run. Retry it like `asdf install` below, and bound a stalled pull.
                   echo "Updating all asdf plugins"
-                  asdf plugin update --all
+                  for attempt in 1 2 3; do
+                    if timeout --kill-after=30s 5m asdf plugin update --all; then
+                      break
+                    else
+                      update_status=$?
+                    fi
+                    if [ "$attempt" -eq 3 ]; then
+                      echo "::error::asdf plugin update failed or timed out on three attempts (exit ${update_status})."
+                      exit "$update_status"
+                    fi
+                    retry_delay=$((10 * 3 ** (attempt - 1)))
+                    echo "::warning::asdf plugin update failed or timed out (attempt ${attempt}/3, exit ${update_status}), retrying in ${retry_delay}s."
+                    sleep "$retry_delay"
+                  done
 
                   # Install the tools specified in the current .tool-versions file
                   # A cold install including Python takes about seven minutes. Allow headroom,
