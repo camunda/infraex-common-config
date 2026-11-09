@@ -384,7 +384,8 @@ label and the `crev/escalation` status, and it never approves.
   secret, because `issue_comment` runs with the repository secrets also for pull requests from
   forks.
 - `review` reads the OpenRouter key from Vault, runs crev in the crev container image without
-  posting, and stores `review.json`. It fails when the pull request head changed after `guard`
+  posting, and stores `review.json`. The crev verifier uses `verifier-model`, and the other
+  agents use `model`. It fails when the pull request head changed after `guard`
   read it. The job has a read-only token.
 - `publish` has no OpenRouter key. It posts the review from the same run with
   `crev --from-review`, which refuses the review when the head, the base branch or the
@@ -413,7 +414,8 @@ jobs:
             statuses: write
         uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@<sha> # <version>
         with:
-            model: <vendor>/<model>
+            model: deepseek/deepseek-v4.1-flash
+            verifier-model: z-ai/glm-5.3
         secrets:
             VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
             VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}

@@ -6,9 +6,15 @@ on:
         inputs:
             model:
                 description: >-
-                    OpenRouter model ID that every crev agent uses, for example `moonshotai/kimi-k3`.
+                    OpenRouter model ID that the crev agents use, for example `deepseek/deepseek-v4.1-flash`.
                     The Camunda OpenRouter workspace must serve it on `openrouter-base-url`.
                 required: true
+                type: string
+            verifier-model:
+                description: >-
+                    OpenRouter model ID for the crev verifier, for example `z-ai/glm-5.3`. Empty means `model`.
+                    The Camunda OpenRouter workspace must serve it on `openrouter-base-url`.
+                default: ''
                 type: string
             openrouter-base-url:
                 description: >-
@@ -120,15 +126,15 @@ jobs:
                   secrets: |
                       ${{ inputs.vault-secret-path }} ${{ inputs.vault-openrouter-key }} | OPENROUTER_API_KEY ;
 
-            - name: Write the OpenCode provider configuration
+            - name: Write the OpenCode provider and crev profile configuration
               env:
                   MODEL: ${{ inputs.model }}
+                  VERIFIER_MODEL: ${{ inputs.verifier-model || inputs.model }}
                   BASE_URL: ${{ inputs.openrouter-base-url }}
               run: |
                   set -euo pipefail
-                  dir="${RUNNER_TEMP}/opencode"
-                  mkdir -p "${dir}"
-                  jq -n --arg url "${BASE_URL}" --arg model "${MODEL}" '{
+                  mkdir -p "${RUNNER_TEMP}/opencode" "${RUNNER_TEMP}/crev"
+                  jq -n --arg url "${BASE_URL}" --arg model "${MODEL}" --arg verifier "${VERIFIER_MODEL}" '{
                     "$schema": "https://opencode.ai/config.json",
                     "disabled_providers": ["openrouter"],
                     "provider": {
@@ -136,11 +142,15 @@ jobs:
                         "name": "OpenRouter Camunda",
                         "npm": "@ai-sdk/openai-compatible",
                         "options": {"baseURL": $url, "apiKey": "{env:OPENROUTER_API_KEY}"},
-                        "models": {($model): {"name": $model}}
+                        "models": {($model): {"name": $model}, ($verifier): {"name": $verifier}}
                       }
                     }
-                  }' > "${dir}/opencode.json"
-                  chmod -R a+rwX "${dir}"
+                  }' > "${RUNNER_TEMP}/opencode/opencode.json"
+                  jq -n --arg model "openrouter-camunda/${MODEL}" --arg verifier "openrouter-camunda/${VERIFIER_MODEL}" '{
+                    current: "ci",
+                    profiles: {ci: {backend: "opencode", model: $model, models: {verifier: $verifier}}}
+                  }' > "${RUNNER_TEMP}/crev/profiles.yaml"
+                  chmod -R a+rwX "${RUNNER_TEMP}/opencode" "${RUNNER_TEMP}/crev"
 
             - name: Log in to GHCR
               env:
@@ -153,7 +163,6 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   OPENROUTER_API_KEY: ${{ steps.vault.outputs.OPENROUTER_API_KEY }}
                   CREV_IMAGE: ${{ inputs.crev-image }}
-                  MODEL: ${{ inputs.model }}
                   PR_URL: ${{ needs.guard.outputs.pr-url }}
               run: |
                   set -euo pipefail
@@ -161,9 +170,9 @@ jobs:
                   docker run --rm \
                     -e GH_TOKEN -e OPENROUTER_API_KEY -e CREV_NO_UPDATE_CHECK=1 \
                     -v "${RUNNER_TEMP}/opencode:/home/node/.config/opencode" \
+                    -v "${RUNNER_TEMP}/crev:/home/node/.config/crev" \
                     "${CREV_IMAGE}" "${PR_URL}" \
-                    --single --dry-run --json --no-cache --backend opencode \
-                    --model "openrouter-camunda/${MODEL}" \
+                    --single --dry-run --json --no-cache --profile ci \
                     > "${RUNNER_TEMP}/crev-review/review.json"
 
             - name: Check that the review is for the requested head
