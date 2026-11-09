@@ -71,14 +71,11 @@ jobs:
                   COMMENTER: ${{ github.event.comment.user.login }}
               run: |
                   set -euo pipefail
-                  role=$(gh api "repos/${REPO}/collaborators/${COMMENTER}/permission" --jq .role_name)
-                  case "${role}" in
-                    admin | maintain | write | triage) ;;
-                    *)
-                      echo "::error::${COMMENTER} has the role '${role}' on ${REPO}; /crev needs triage or a higher role."
-                      exit 1
-                      ;;
-                  esac
+                  permission=$(gh api "repos/${REPO}/collaborators/${COMMENTER}/permission")
+                  if ! jq -e '.user.permissions | .triage or .push or .maintain or .admin' <<<"${permission}" > /dev/null; then
+                    echo "::error::${COMMENTER} has the role '$(jq -r .role_name <<<"${permission}")' on ${REPO}; /crev needs triage or a higher role."
+                    exit 1
+                  fi
 
             - name: Resolve the pull request
               id: pr
