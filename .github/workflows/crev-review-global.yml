@@ -106,7 +106,7 @@ jobs:
             group: ${{ github.workflow }}-review-${{ github.event.issue.number }}
             cancel-in-progress: true
         runs-on: ubuntu-latest
-        timeout-minutes: 45
+        timeout-minutes: 120
         permissions:
             contents: read
             id-token: write
