@@ -384,8 +384,8 @@ label and the `crev/escalation` status, and it never approves.
   secret, because `issue_comment` runs with the repository secrets also for pull requests from
   forks.
 - `review` reads the OpenRouter key from Vault, runs crev in the crev container image without
-  posting, and stores `review.json`. It fails when the pull request head changed after the
-  comment. The job has a read-only token.
+  posting, and stores `review.json`. It fails when the pull request head changed after `guard`
+  read it. The job has a read-only token.
 - `publish` has no OpenRouter key. It posts the review from the same run with
   `crev --from-review`, which refuses the review when the head, the base branch or the
   repository changed.
@@ -422,8 +422,10 @@ jobs:
 ```
 
 - List the caller under `dangerous-triggers` in the repository's `zizmor.yml`. Anyone can post
-  the comment; `guard` admits only `triage` or a higher role, and no job checks out or runs pull
-  request code.
+  the comment, but `guard` admits only a commenter with `triage` or a higher role and only a
+  branch of the same repository. The `review` job checks out the pull request head, and the
+  crev agents can run its code with the OpenRouter key and the read-only token in their
+  environment. Only people with write access to the repository can put that code there.
 - The repository's Vault role must read `vault-secret-path` (default
   `secret/data/products/distribution/ci`, key `OPENROUTER_API_KEY`).
 - When the crev container package (`ghcr.io/camunda/crev`) is not public, add the repository
