@@ -19,6 +19,16 @@ awk '
 printf 'golang 1.27.2\n' > "$TEST_DIR/.tool-versions"
 
 asdf() {
+  if [ "$*" = 'plugin update --all' ]; then
+    local update_attempt
+    update_attempt=$(($(wc -l < "$TEST_DIR/update_attempts") + 1))
+    echo "$update_attempt" >> "$TEST_DIR/update_attempts"
+    if [ "$update_attempt" -lt "$UPDATE_SUCCESS_ON" ]; then
+      echo "fatal: unable to access 'https://github.com/asdf-community/asdf-golang.git/': Could not resolve host: github.com" >&2
+      return 128
+    fi
+    return 0
+  fi
   if [ "$1" != install ]; then
     [ "$*" != 'plugin list' ] || echo golang
     return 0
@@ -36,6 +46,11 @@ asdf() {
   fi
 }
 timeout() {
+  if [ "$*" = '--kill-after=30s 5m asdf plugin update --all' ]; then
+    echo "$*" >> "$TEST_DIR/update_timeouts"
+    asdf plugin update --all
+    return
+  fi
   [ "$*" = '--kill-after=30s 15m asdf install' ] || return 99
   echo "$*" >> "$TEST_DIR/timeouts"
   if [ "$TEST_MODE" = hang ]; then
@@ -53,6 +68,8 @@ check() {
   : > "$TEST_DIR/attempts"
   : > "$TEST_DIR/timeouts"
   : > "$TEST_DIR/delays"
+  : > "$TEST_DIR/update_attempts"
+  : > "$TEST_DIR/update_timeouts"
   INPUTS_TOOL_VERSIONS_FILES="$TEST_DIR/.tool-versions" bash "$TEST_DIR/install.sh" > "$TEST_DIR/output" 2>&1 || status=$?
   [ "$status" -eq "$expected_status" ]
   [ "$(wc -l < "$TEST_DIR/attempts" | tr -d ' ')" -eq "$expected_attempts" ]
@@ -71,8 +88,39 @@ check() {
   echo "PASS: $name (exit $status, $expected_attempts attempts)"
 }
 
-export TEST_MODE=normal SUCCESS_ON=1
+export TEST_MODE=normal SUCCESS_ON=1 UPDATE_SUCCESS_ON=1
 check 'first-attempt success' 0 1 ''
+[ "$(wc -l < "$TEST_DIR/update_attempts" | tr -d ' ')" -eq 1 ]
+[ "$(wc -l < "$TEST_DIR/update_timeouts" | tr -d ' ')" -eq 1 ]
+
+# asdf plugin update --all: retried and bounded like asdf install.
+check_update() {
+  local name="$1" expected_status="$2" expected_updates="$3" expected_delays="$4" expected_installs="$5" status=0
+  : > "$TEST_DIR/attempts"
+  : > "$TEST_DIR/timeouts"
+  : > "$TEST_DIR/delays"
+  : > "$TEST_DIR/update_attempts"
+  : > "$TEST_DIR/update_timeouts"
+  INPUTS_TOOL_VERSIONS_FILES="$TEST_DIR/.tool-versions" bash "$TEST_DIR/install.sh" > "$TEST_DIR/output" 2>&1 || status=$?
+  [ "$status" -eq "$expected_status" ]
+  [ "$(wc -l < "$TEST_DIR/update_attempts" | tr -d ' ')" -eq "$expected_updates" ]
+  [ "$(wc -l < "$TEST_DIR/update_timeouts" | tr -d ' ')" -eq "$expected_updates" ]
+  [ "$(wc -l < "$TEST_DIR/attempts" | tr -d ' ')" -eq "$expected_installs" ]
+  [ "$(tr '\n' ' ' < "$TEST_DIR/delays")" = "$expected_delays" ]
+  if [ "$expected_status" -ne 0 ]; then
+    grep -q '::error::asdf plugin update failed or timed out on three attempts' "$TEST_DIR/output"
+  else
+    grep -q '::warning::asdf plugin update failed or timed out (attempt 1/3' "$TEST_DIR/output"
+  fi
+  echo "PASS: $name (exit $status, $expected_updates update attempts)"
+}
+export UPDATE_SUCCESS_ON=2
+check_update 'plugin update: one transient failure' 0 2 '10 ' 1
+export UPDATE_SUCCESS_ON=3
+check_update 'plugin update: two transient failures' 0 3 '10 30 ' 1
+export UPDATE_SUCCESS_ON=4
+check_update 'plugin update: persistent failure stops before install' 128 3 '10 30 ' 0
+export UPDATE_SUCCESS_ON=1
 export SUCCESS_ON=2
 check 'one transient failure' 0 2 '10 '
 export SUCCESS_ON=3
