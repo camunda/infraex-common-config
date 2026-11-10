@@ -396,6 +396,13 @@
       ],
       versioning: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(-(?<compatibility>debian-\\d+)-r(?<build>\\d+))?$',
     },
+    {
+      description: 'infraex-terraform writes the /crev caller workflow to every SMX repository; it references crev-review-global.yml at main on purpose.',
+      matchFileNames: [
+        '.github/workflows/crev-review.yml',
+      ],
+      enabled: false,
+    },
   ],
   'customDatasources': {
     'rosa-camunda': {
