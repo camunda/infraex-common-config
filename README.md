@@ -397,7 +397,7 @@ label and the `crev/escalation` status, and it never approves.
 name: crev review
 
 on:
-    issue_comment:
+    issue_comment: # zizmor: ignore[dangerous-triggers]
         types: [created]
 
 permissions: {}
@@ -407,30 +407,28 @@ jobs:
         if: github.event.issue.pull_request && (github.event.comment.body == '/crev' || startsWith(github.event.comment.body, '/crev '))
         permissions:
             contents: read
-            id-token: write
-            issues: write
-            packages: read
-            pull-requests: write
-            statuses: write
-        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@<sha> # <version>
+            id-token: write # Vault OIDC login for the OpenRouter key
+            issues: write # escalation label
+            packages: read # pull the crev image from GHCR
+            pull-requests: write # post the review
+            statuses: write # crev/escalation status
+        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@main # zizmor: ignore[unpinned-uses]
         with:
             model: deepseek/deepseek-v4.1-flash
             verifier-model: z-ai/glm-5.3
-            vault-secret-path: secret/data/products/distribution/ci
-        secrets:
-            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
-            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
-            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
-- List the caller under `dangerous-triggers` in the repository's `zizmor.yml`. Anyone can post
-  the comment, but `guard` admits only a commenter with `triage` or a higher role and only a
+- The caller ignores two zizmor audits inline. `dangerous-triggers`: anyone can post the
+  comment, but `guard` admits only a commenter with `triage` or a higher role and only a
   branch of the same repository. The `review` job checks out the pull request head, and the
   crev agents can run its code with the OpenRouter key and the read-only token in their
   environment. Only people with write access to the repository can put that code there.
-- `vault-secret-path` has no default. Set a path that the repository's Vault role can read and
-  that holds `OPENROUTER_API_KEY`.
+  `unpinned-uses`: the caller follows `main`, so a change to this workflow reaches every
+  repository at once. Renovate skips the file.
+- infraex-terraform writes this caller to every SMX repository. The `review` job logs in to
+  Vault as `github-actions-smx-ci` and reads `OPENROUTER_API_KEY` from
+  `secret/data/products/smx/ci/openrouter`. The role lists the SMX repositories, so a caller
+  needs no Vault secrets. Passed `VAULT_*` secrets and `vault-secret-path` override the defaults.
 - When the crev container package (`ghcr.io/camunda/crev`) is not public, add the repository
   under the package's Actions access with the read role. Otherwise `docker login` works but the
   pull fails.

@@ -29,10 +29,8 @@ on:
                 default: ghcr.io/camunda/crev:sha-99499dd@sha256:d0b8c19f15cc5869e800954aa6d8720e17478066f10cc4f43a82586c6b3f14ec
                 type: string
             vault-secret-path:
-                description: >-
-                    Vault path that holds the OpenRouter key and that the caller's Vault role can read,
-                    for example `secret/data/products/distribution/ci`.
-                required: true
+                description: Vault path that holds the OpenRouter key and that the Vault role can read.
+                default: secret/data/products/smx/ci/openrouter
                 type: string
             vault-openrouter-key:
                 description: Key of the OpenRouter API key in the Vault secret.
@@ -40,16 +38,16 @@ on:
                 type: string
         secrets:
             VAULT_ADDR:
-                description: Vault server URL.
-                required: true
+                description: Vault server URL. Optional; the default is `https://vault.int.camunda.com`.
+                required: false
             VAULT_JWT_PATH:
-                description: Vault auth backend path for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_PATH` variable.
+                description: Vault auth backend path for GitHub OIDC (JWT) authentication. Optional; the default is `github-actions-camunda`.
                 required: false
             VAULT_JWT_ROLE:
-                description: Vault role for GitHub OIDC (JWT) authentication. Optional; falls back to the `VAULT_JWT_ROLE` variable.
+                description: Vault role for GitHub OIDC (JWT) authentication. Optional; the default is `github-actions-smx-ci`.
                 required: false
             VAULT_JWT_AUDIENCE:
-                description: GitHub OIDC audience for Vault (JWT) authentication. Optional; falls back to the `VAULT_JWT_AUDIENCE` variable.
+                description: GitHub OIDC audience for Vault (JWT) authentication. Optional; the default is `camunda-vault`.
                 required: false
 
 permissions: {}
@@ -116,11 +114,11 @@ jobs:
               id: vault
               uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
               with:
-                  url: ${{ secrets.VAULT_ADDR }}
+                  url: ${{ secrets.VAULT_ADDR || 'https://vault.int.camunda.com' }}
                   method: jwt
-                  path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
-                  role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
-                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
+                  path: ${{ secrets.VAULT_JWT_PATH || 'github-actions-camunda' }}
+                  role: ${{ secrets.VAULT_JWT_ROLE || 'github-actions-smx-ci' }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE || 'camunda-vault' }}
                   exportEnv: false
                   secrets: |
                       ${{ inputs.vault-secret-path }} ${{ inputs.vault-openrouter-key }} | OPENROUTER_API_KEY ;
