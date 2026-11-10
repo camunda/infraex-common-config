@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/dmn" id="ci_test_planner" name="CI test planner" namespace="http://camunda.org/schema/1.0/dmn" exporter="build_dmn.py" exporterVersion="1">
+  <inputData id="in_facts" name="facts"><variable id="in_facts_v" name="facts" typeRef="Any" /></inputData>
+  <inputData id="in_memory" name="memory"><variable id="in_memory_v" name="memory" typeRef="Any" /></inputData>
+  <businessKnowledgeModel id="bkm_signalAction" name="signalAction">
+    <variable id="bkm_signalAction_v" name="signalAction" />
+    <encapsulatedLogic id="bkm_signalAction_f">
+      <formalParameter id="bkm_signalAction_p" name="signal" typeRef="Any" />
+      <decisionTable id="dt_signalAction" hitPolicy="COLLECT">
+        <input id="dt_in_0" label="signal type"><inputExpression id="dt_in_0_e" typeRef="Any"><text>signal.type</text></inputExpression></input>
+        <input id="dt_in_1" label="significant"><inputExpression id="dt_in_1_e" typeRef="Any"><text>get value(signal, &quot;significant&quot;)</text></inputExpression></input>
+        <input id="dt_in_2" label="interface files changed"><inputExpression id="dt_in_2_e" typeRef="Any"><text>get value(signal, &quot;iface_files_changed&quot;)</text></inputExpression></input>
+        <input id="dt_in_3" label="has owner suite"><inputExpression id="dt_in_3_e" typeRef="Any"><text>count(get value(signal, &quot;owner_suites&quot;)) &gt; 0</text></inputExpression></input>
+        <input id="dt_in_4" label="pin only"><inputExpression id="dt_in_4_e" typeRef="Any"><text>get value(signal, &quot;pin_only&quot;)</text></inputExpression></input>
+        <output id="dt_out_0" name="run" typeRef="Any" />
+        <output id="dt_out_1" name="runReason" typeRef="Any" />
+        <output id="dt_out_2" name="rotate" typeRef="Any" />
+        <output id="dt_out_3" name="rotModules" typeRef="Any" />
+        <output id="dt_out_4" name="rotReason" typeRef="Any" />
+        <output id="dt_out_5" name="fireRule" typeRef="Any" />
+        <output id="dt_out_6" name="fireSubject" typeRef="Any" />
+        <output id="dt_out_7" name="fireReason" typeRef="Any" />
+        <output id="dt_out_8" name="fireEvidence" typeRef="Any" />
+        <rule id="dt_rule_0">
+          <description>R2 owner suite</description>
+          <inputEntry id="dt_r0_i0"><text>&quot;module&quot;</text></inputEntry>
+          <inputEntry id="dt_r0_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r0_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r0_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r0_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r0_o0"><text>signal.owner_suites</text></outputEntry>
+          <outputEntry id="dt_r0_o1"><text>&quot;R2 owner suite builds module &quot; + signal.module</text></outputEntry>
+          <outputEntry id="dt_r0_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r0_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r0_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r0_o5"><text>null</text></outputEntry>
+          <outputEntry id="dt_r0_o6"><text>null</text></outputEntry>
+          <outputEntry id="dt_r0_o7"><text>null</text></outputEntry>
+          <outputEntry id="dt_r0_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_1">
+          <description>R2 consumer golden plans</description>
+          <inputEntry id="dt_r1_i0"><text>&quot;module&quot;</text></inputEntry>
+          <inputEntry id="dt_r1_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r1_i2"><text>true</text></inputEntry>
+          <inputEntry id="dt_r1_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r1_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r1_o0"><text>signal.golden_suites</text></outputEntry>
+          <outputEntry id="dt_r1_o1"><text>&quot;R2 interface files of &quot; + signal.module + &quot; changed: consumer golden plan (offline)&quot;</text></outputEntry>
+          <outputEntry id="dt_r1_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r1_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r1_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r1_o5"><text>null</text></outputEntry>
+          <outputEntry id="dt_r1_o6"><text>null</text></outputEntry>
+          <outputEntry id="dt_r1_o7"><text>null</text></outputEntry>
+          <outputEntry id="dt_r1_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_2">
+          <description>R9 significant interface change</description>
+          <inputEntry id="dt_r2_i0"><text>&quot;module&quot;</text></inputEntry>
+          <inputEntry id="dt_r2_i1"><text>true</text></inputEntry>
+          <inputEntry id="dt_r2_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r2_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r2_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r2_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r2_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r2_o2"><text>signal.consumer_suites</text></outputEntry>
+          <outputEntry id="dt_r2_o3"><text>[signal.module]</text></outputEntry>
+          <outputEntry id="dt_r2_o4"><text>&quot;R9 significant interface change in &quot; + signal.module</text></outputEntry>
+          <outputEntry id="dt_r2_o5"><text>&quot;R9&quot;</text></outputEntry>
+          <outputEntry id="dt_r2_o6"><text>signal.module</text></outputEntry>
+          <outputEntry id="dt_r2_o7"><text>&quot;removed or renamed output, removed variable, new required variable or changed type&quot;</text></outputEntry>
+          <outputEntry id="dt_r2_o8"><text>signal.iface_evidence</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_3">
+          <description>R3 module without an owner suite</description>
+          <inputEntry id="dt_r3_i0"><text>&quot;module&quot;</text></inputEntry>
+          <inputEntry id="dt_r3_i1"><text>false</text></inputEntry>
+          <inputEntry id="dt_r3_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r3_i3"><text>false</text></inputEntry>
+          <inputEntry id="dt_r3_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r3_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r3_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r3_o2"><text>signal.consumer_suites</text></outputEntry>
+          <outputEntry id="dt_r3_o3"><text>[signal.module]</text></outputEntry>
+          <outputEntry id="dt_r3_o4"><text>&quot;R3 &quot; + signal.module + &quot; has no module-level suite&quot;</text></outputEntry>
+          <outputEntry id="dt_r3_o5"><text>&quot;R3&quot;</text></outputEntry>
+          <outputEntry id="dt_r3_o6"><text>signal.module</text></outputEntry>
+          <outputEntry id="dt_r3_o7"><text>&quot;no module-level suite: one consumer is rotated in&quot;</text></outputEntry>
+          <outputEntry id="dt_r3_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_4">
+          <description>R2 module change, owner suite exists</description>
+          <inputEntry id="dt_r4_i0"><text>&quot;module&quot;</text></inputEntry>
+          <inputEntry id="dt_r4_i1"><text>false</text></inputEntry>
+          <inputEntry id="dt_r4_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r4_i3"><text>true</text></inputEntry>
+          <inputEntry id="dt_r4_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r4_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r4_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r4_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r4_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r4_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r4_o5"><text>&quot;R2&quot;</text></outputEntry>
+          <outputEntry id="dt_r4_o6"><text>signal.module</text></outputEntry>
+          <outputEntry id="dt_r4_o7"><text>&quot;module change, interface not significant; owner suite &quot; + string join(signal.owner_suites, &quot;, &quot;)</text></outputEntry>
+          <outputEntry id="dt_r4_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_5">
+          <description>R8 engine major</description>
+          <inputEntry id="dt_r5_i0"><text>&quot;engine_major&quot;</text></inputEntry>
+          <inputEntry id="dt_r5_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r5_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r5_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r5_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r5_o0"><text>signal.owner_suites</text></outputEntry>
+          <outputEntry id="dt_r5_o1"><text>&quot;R8 engine major &quot; + signal.dep + &quot; &quot; + get value(signal, &quot;from&quot;) + &quot;-&gt;&quot; + get value(signal, &quot;to&quot;) + &quot;: module owner suite&quot;</text></outputEntry>
+          <outputEntry id="dt_r5_o2"><text>signal.candidate_suites</text></outputEntry>
+          <outputEntry id="dt_r5_o3"><text>signal.modules</text></outputEntry>
+          <outputEntry id="dt_r5_o4"><text>&quot;R8 engine major &quot; + signal.dep + &quot; &quot; + get value(signal, &quot;from&quot;) + &quot;-&gt;&quot; + get value(signal, &quot;to&quot;)</text></outputEntry>
+          <outputEntry id="dt_r5_o5"><text>&quot;R8&quot;</text></outputEntry>
+          <outputEntry id="dt_r5_o6"><text>signal.dep + &quot; &quot; + get value(signal, &quot;from&quot;) + &quot; -&gt; &quot; + get value(signal, &quot;to&quot;)</text></outputEntry>
+          <outputEntry id="dt_r5_o7"><text>&quot;annotated version pin changed its major in &quot; + string(signal.files_n) + &quot; file(s)&quot;</text></outputEntry>
+          <outputEntry id="dt_r5_o8"><text>signal.files</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_6">
+          <description>R10 pin-only change in an RA root</description>
+          <inputEntry id="dt_r6_i0"><text>&quot;ra_root&quot;</text></inputEntry>
+          <inputEntry id="dt_r6_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r6_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r6_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r6_i4"><text>true</text></inputEntry>
+          <outputEntry id="dt_r6_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r6_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r6_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r6_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r6_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r6_o5"><text>&quot;R10&quot;</text></outputEntry>
+          <outputEntry id="dt_r6_o6"><text>signal.ra</text></outputEntry>
+          <outputEntry id="dt_r6_o7"><text>&quot;only version pins, goldens or docs changed (&quot; + string(signal.files_n) + &quot; files): no own from-scratch run&quot;</text></outputEntry>
+          <outputEntry id="dt_r6_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_7">
+          <description>R4 RA root changed</description>
+          <inputEntry id="dt_r7_i0"><text>&quot;ra_root&quot;</text></inputEntry>
+          <inputEntry id="dt_r7_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r7_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r7_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r7_i4"><text>false</text></inputEntry>
+          <outputEntry id="dt_r7_o0"><text>signal.suites</text></outputEntry>
+          <outputEntry id="dt_r7_o1"><text>&quot;R4 RA root &quot; + signal.ra + &quot; changed beyond version pins&quot;</text></outputEntry>
+          <outputEntry id="dt_r7_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r7_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r7_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r7_o5"><text>&quot;R4&quot;</text></outputEntry>
+          <outputEntry id="dt_r7_o6"><text>signal.ra</text></outputEntry>
+          <outputEntry id="dt_r7_o7"><text>&quot;RA root changed: its suites run&quot;</text></outputEntry>
+          <outputEntry id="dt_r7_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_8">
+          <description>R5 shared action</description>
+          <inputEntry id="dt_r8_i0"><text>&quot;shared_action&quot;</text></inputEntry>
+          <inputEntry id="dt_r8_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r8_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r8_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r8_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r8_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r8_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r8_o2"><text>signal.suites</text></outputEntry>
+          <outputEntry id="dt_r8_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r8_o4"><text>&quot;R5 shared action &quot; + signal.name</text></outputEntry>
+          <outputEntry id="dt_r8_o5"><text>&quot;R5&quot;</text></outputEntry>
+          <outputEntry id="dt_r8_o6"><text>signal.name</text></outputEntry>
+          <outputEntry id="dt_r8_o7"><text>&quot;shared action change: one suite that uses it is rotated in (&quot; + string(count(signal.suites)) + &quot; use it)&quot;</text></outputEntry>
+          <outputEntry id="dt_r8_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_9">
+          <description>R5 tool versions</description>
+          <inputEntry id="dt_r9_i0"><text>&quot;tool_versions&quot;</text></inputEntry>
+          <inputEntry id="dt_r9_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r9_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r9_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r9_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r9_o0"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r9_o1"><text>null</text></outputEntry>
+          <outputEntry id="dt_r9_o2"><text>signal.suites</text></outputEntry>
+          <outputEntry id="dt_r9_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r9_o4"><text>&quot;R5 .tool-versions&quot;</text></outputEntry>
+          <outputEntry id="dt_r9_o5"><text>&quot;R5&quot;</text></outputEntry>
+          <outputEntry id="dt_r9_o6"><text>&quot;.tool-versions&quot;</text></outputEntry>
+          <outputEntry id="dt_r9_o7"><text>&quot;toolchain pin change: one suite is rotated in&quot;</text></outputEntry>
+          <outputEntry id="dt_r9_o8"><text>[]</text></outputEntry>
+        </rule>
+        <rule id="dt_rule_10">
+          <description>R5 the changed workflow itself</description>
+          <inputEntry id="dt_r10_i0"><text>&quot;workflow_changed&quot;</text></inputEntry>
+          <inputEntry id="dt_r10_i1"><text></text></inputEntry>
+          <inputEntry id="dt_r10_i2"><text></text></inputEntry>
+          <inputEntry id="dt_r10_i3"><text></text></inputEntry>
+          <inputEntry id="dt_r10_i4"><text></text></inputEntry>
+          <outputEntry id="dt_r10_o0"><text>[signal.suite]</text></outputEntry>
+          <outputEntry id="dt_r10_o1"><text>&quot;R5 the changed workflow itself&quot;</text></outputEntry>
+          <outputEntry id="dt_r10_o2"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r10_o3"><text>[]</text></outputEntry>
+          <outputEntry id="dt_r10_o4"><text>null</text></outputEntry>
+          <outputEntry id="dt_r10_o5"><text>null</text></outputEntry>
+          <outputEntry id="dt_r10_o6"><text>null</text></outputEntry>
+          <outputEntry id="dt_r10_o7"><text>null</text></outputEntry>
+          <outputEntry id="dt_r10_o8"><text>[]</text></outputEntry>
+        </rule>
+      </decisionTable>
+    </encapsulatedLogic>
+  </businessKnowledgeModel>
+  <businessKnowledgeModel id="bkm_suiteAge" name="suiteAge">
+    <variable id="bkm_suiteAge_v" name="suiteAge" />
+    <encapsulatedLogic id="bkm_suiteAge_f">
+      <formalParameter id="bkm_suiteAge_p_memory" name="memory" typeRef="Any" />
+      <formalParameter id="bkm_suiteAge_p_suite" name="suite" typeRef="Any" />
+      <formalParameter id="bkm_suiteAge_p_module" name="module" typeRef="Any" />
+      <literalExpression id="bkm_suiteAge_e"><text>{s: get value(memory.suites, suite),
+ a: if s = null then null else get value(s, &quot;age_all&quot;),
+ b: if s = null or module = null then null else get value(get value(s, &quot;age_modules&quot;), module),
+ r: if a = null then b else if b = null then a else min([a, b])}.r</text></literalExpression>
+    </encapsulatedLogic>
+  </businessKnowledgeModel>
+  <businessKnowledgeModel id="bkm_pairWeight" name="pairWeight">
+    <variable id="bkm_pairWeight_v" name="pairWeight" />
+    <encapsulatedLogic id="bkm_pairWeight_f">
+      <formalParameter id="bkm_pairWeight_p_memory" name="memory" typeRef="Any" />
+      <formalParameter id="bkm_pairWeight_p_module" name="module" typeRef="Any" />
+      <formalParameter id="bkm_pairWeight_p_suite" name="suite" typeRef="Any" />
+      <literalExpression id="bkm_pairWeight_e"><text>if module = null then 1 else {w: get value(memory.weights, module + &quot;|&quot; + suite),
+ r: if w = null then 1 else w}.r</text></literalExpression>
+    </encapsulatedLogic>
+  </businessKnowledgeModel>
+  <businessKnowledgeModel id="bkm_scoreEntries" name="scoreEntries">
+    <variable id="bkm_scoreEntries_v" name="scoreEntries" />
+    <knowledgeRequirement id="bkm_scoreEntries_k_suiteAge"><requiredKnowledge href="#bkm_suiteAge" /></knowledgeRequirement>
+    <knowledgeRequirement id="bkm_scoreEntries_k_pairWeight"><requiredKnowledge href="#bkm_pairWeight" /></knowledgeRequirement>
+    <encapsulatedLogic id="bkm_scoreEntries_f">
+      <formalParameter id="bkm_scoreEntries_p_memory" name="memory" typeRef="Any" />
+      <formalParameter id="bkm_scoreEntries_p_mods" name="mods" typeRef="Any" />
+      <formalParameter id="bkm_scoreEntries_p_c" name="c" typeRef="Any" />
+      <literalExpression id="bkm_scoreEntries_e"><text>for m in mods return {a: suiteAge(memory, c, m),
+ eff: if a = null then 100000 else a,
+ w: pairWeight(memory, m, c),
+ score: eff * w}</text></literalExpression>
+    </encapsulatedLogic>
+  </businessKnowledgeModel>
+  <decision id="rows" name="rows">
+    <variable id="rows_v" name="rows" typeRef="Any" />
+    <informationRequirement id="rows_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <knowledgeRequirement id="rows_k_signalAction"><requiredKnowledge href="#bkm_signalAction" /></knowledgeRequirement>
+    <literalExpression id="rows_e" typeRef="Any"><text>flatten(for s in facts.signals return signalAction(s))</text></literalExpression>
+  </decision>
+  <decision id="runAdds" name="runAdds">
+    <variable id="runAdds_v" name="runAdds" typeRef="Any" />
+    <informationRequirement id="runAdds_r_rows"><requiredDecision href="#rows" /></informationRequirement>
+    <literalExpression id="runAdds_e" typeRef="Any"><text>flatten(for r in rows return for n in r.run return {suite: n, reason: r.runReason})</text></literalExpression>
+  </decision>
+  <decision id="rotCandidates" name="rotCandidates">
+    <variable id="rotCandidates_v" name="rotCandidates" typeRef="Any" />
+    <informationRequirement id="rotCandidates_r_rows"><requiredDecision href="#rows" /></informationRequirement>
+    <literalExpression id="rotCandidates_e" typeRef="Any"><text>distinct values(flatten(for r in rows return r.rotate))</text></literalExpression>
+  </decision>
+  <decision id="rotModules" name="rotModules">
+    <variable id="rotModules_v" name="rotModules" typeRef="Any" />
+    <informationRequirement id="rotModules_r_rows"><requiredDecision href="#rows" /></informationRequirement>
+    <literalExpression id="rotModules_e" typeRef="Any"><text>sort(distinct values(flatten(for r in rows return r.rotModules)), function(a, b) a &lt; b)</text></literalExpression>
+  </decision>
+  <decision id="rotReasons" name="rotReasons">
+    <variable id="rotReasons_v" name="rotReasons" typeRef="Any" />
+    <informationRequirement id="rotReasons_r_rows"><requiredDecision href="#rows" /></informationRequirement>
+    <literalExpression id="rotReasons_e" typeRef="Any"><text>distinct values(for r in rows[item.rotReason != null] return r.rotReason)</text></literalExpression>
+  </decision>
+  <decision id="rotCands" name="rotCands">
+    <variable id="rotCands_v" name="rotCands" typeRef="Any" />
+    <informationRequirement id="rotCands_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="rotCands_r_rotCandidates"><requiredDecision href="#rotCandidates" /></informationRequirement>
+    <literalExpression id="rotCands_e" typeRef="Any"><text>{names: rotCandidates[get value(facts.suites, item) != null],
+ prim: names[get value(facts.suites, item).primary = true],
+ r: if count(prim) &gt; 0 then prim else names}.r</text></literalExpression>
+  </decision>
+  <decision id="rotationRows" name="rotationRows">
+    <variable id="rotationRows_v" name="rotationRows" typeRef="Any" />
+    <informationRequirement id="rotationRows_r_memory"><requiredInput href="#in_memory" /></informationRequirement>
+    <informationRequirement id="rotationRows_r_rotCands"><requiredDecision href="#rotCands" /></informationRequirement>
+    <informationRequirement id="rotationRows_r_rotModules"><requiredDecision href="#rotModules" /></informationRequirement>
+    <knowledgeRequirement id="rotationRows_k_pairWeight"><requiredKnowledge href="#bkm_pairWeight" /></knowledgeRequirement>
+    <knowledgeRequirement id="rotationRows_k_scoreEntries"><requiredKnowledge href="#bkm_scoreEntries" /></knowledgeRequirement>
+    <knowledgeRequirement id="rotationRows_k_suiteAge"><requiredKnowledge href="#bkm_suiteAge" /></knowledgeRequirement>
+    <literalExpression id="rotationRows_e" typeRef="Any"><text>for c in rotCands return {suite: c,
+ scored: scoreEntries(memory, if count(rotModules) = 0 then [null] else rotModules, c),
+ best: max(for e in scored return e.score),
+ score: best,
+ chosen: scored[item.score = best][-1],
+ cost: {s: get value(memory.suites, c), r: if s = null then null else get value(s, &quot;cost_min&quot;)}.r,
+ costKey: if cost = null then 1000000000 else cost}</text></literalExpression>
+  </decision>
+  <decision id="rotSorted" name="rotSorted">
+    <variable id="rotSorted_v" name="rotSorted" typeRef="Any" />
+    <informationRequirement id="rotSorted_r_rotationRows"><requiredDecision href="#rotationRows" /></informationRequirement>
+    <literalExpression id="rotSorted_e" typeRef="Any"><text>sort(rotationRows, function(a, b) a.score &gt; b.score or (a.score = b.score and (a.costKey &lt; b.costKey or (a.costKey = b.costKey and a.suite &lt; b.suite))))</text></literalExpression>
+  </decision>
+  <decision id="rotPick" name="rotPick">
+    <variable id="rotPick_v" name="rotPick" typeRef="Any" />
+    <informationRequirement id="rotPick_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="rotPick_r_rotSorted"><requiredDecision href="#rotSorted" /></informationRequirement>
+    <literalExpression id="rotPick_e" typeRef="Any"><text>if count(rotSorted) = 0 then null else {top: rotSorted[1],
+ near: rotSorted[item.score &gt;= top.score * (1 - facts.tie_percent / 100)],
+ ordered: sort(near, function(a, b) a.costKey &lt; b.costKey or (a.costKey = b.costKey and (a.score &gt; b.score or (a.score = b.score and a.suite &lt; b.suite)))),
+ r: if top.score &gt; 0 then ordered[1] else top}.r</text></literalExpression>
+  </decision>
+  <decision id="rotation" name="rotation">
+    <variable id="rotation_v" name="rotation" typeRef="Any" />
+    <informationRequirement id="rotation_r_rotPick"><requiredDecision href="#rotPick" /></informationRequirement>
+    <informationRequirement id="rotation_r_rotSorted"><requiredDecision href="#rotSorted" /></informationRequirement>
+    <informationRequirement id="rotation_r_rotReasons"><requiredDecision href="#rotReasons" /></informationRequirement>
+    <literalExpression id="rotation_e" typeRef="Any"><text>if rotPick = null then null else {reasons: rotReasons,
+ candidates: for r in rotSorted return {suite: r.suite, age_days: r.chosen.a, weight: r.chosen.w, score: r.score, cost_min: r.cost},
+ picked: rotPick.suite}</text></literalExpression>
+  </decision>
+  <decision id="mandatory" name="mandatory">
+    <variable id="mandatory_v" name="mandatory" typeRef="Any" />
+    <informationRequirement id="mandatory_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="mandatory_r_memory"><requiredInput href="#in_memory" /></informationRequirement>
+    <literalExpression id="mandatory_e" typeRef="Any"><text>flatten(for sig in facts.signals[item.type = &quot;module&quot;] return for n in sig.consumer_suites return
+ if get value(memory.breaker, sig.module + &quot;|&quot; + n) = null then [] else [{suite: n, reason: &quot;R7b circuit breaker on &quot; + sig.module,
+ pair: sig.module + &quot;|&quot; + n, evidence: get value(get value(memory.breaker, sig.module + &quot;|&quot; + n), &quot;evidence&quot;)}])</text></literalExpression>
+  </decision>
+  <decision id="triggered" name="triggered">
+    <variable id="triggered_v" name="triggered" typeRef="Any" />
+    <informationRequirement id="triggered_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <literalExpression id="triggered_e" typeRef="Any"><text>sort(for e in get entries(facts.suites)[item.value.path_triggered = true] return e.key, function(a, b) a &lt; b)</text></literalExpression>
+  </decision>
+  <decision id="triggeredExpensive" name="triggeredExpensive">
+    <variable id="triggeredExpensive_v" name="triggeredExpensive" typeRef="Any" />
+    <informationRequirement id="triggeredExpensive_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="triggeredExpensive_r_triggered"><requiredDecision href="#triggered" /></informationRequirement>
+    <literalExpression id="triggeredExpensive_e" typeRef="Any"><text>triggered[list contains(facts.expensive_layers, get value(facts.suites, item).layer) = true]</text></literalExpression>
+  </decision>
+  <decision id="cheap" name="cheap">
+    <variable id="cheap_v" name="cheap" typeRef="Any" />
+    <informationRequirement id="cheap_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="cheap_r_triggered"><requiredDecision href="#triggered" /></informationRequirement>
+    <literalExpression id="cheap_e" typeRef="Any"><text>for s in triggered[get value(facts.suites, item).layer = &quot;L0&quot; or get value(facts.suites, item).layer = &quot;L1&quot; or get value(facts.suites, item).layer = &quot;L2&quot;]
+ return {suite: s, reason: &quot;R1 cheap layer&quot;}</text></literalExpression>
+  </decision>
+  <decision id="judgeEntries" name="judgeEntries">
+    <variable id="judgeEntries_v" name="judgeEntries" typeRef="Any" />
+    <informationRequirement id="judgeEntries_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="judgeEntries_r_triggeredExpensive"><requiredDecision href="#triggeredExpensive" /></informationRequirement>
+    <literalExpression id="judgeEntries_e" typeRef="Any"><text>if facts.judge_changed then for s in triggeredExpensive return {suite: s, reason: &quot;R11 the planner configuration or caller changed: nothing is narrowed&quot;} else []</text></literalExpression>
+  </decision>
+  <decision id="runAllEntries" name="runAllEntries">
+    <variable id="runAllEntries_v" name="runAllEntries" typeRef="Any" />
+    <informationRequirement id="runAllEntries_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="runAllEntries_r_triggeredExpensive"><requiredDecision href="#triggeredExpensive" /></informationRequirement>
+    <literalExpression id="runAllEntries_e" typeRef="Any"><text>if facts.labels.run_all then for s in triggeredExpensive return {suite: s, reason: &quot;R11 label planner:run-all: path-triggered set restored&quot;} else []</text></literalExpression>
+  </decision>
+  <decision id="runLabelEntries" name="runLabelEntries">
+    <variable id="runLabelEntries_v" name="runLabelEntries" typeRef="Any" />
+    <informationRequirement id="runLabelEntries_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <literalExpression id="runLabelEntries_e" typeRef="Any"><text>for n in facts.labels.run return {suite: n, reason: &quot;R11 label run_&quot; + substring(n, 1, string length(n) - 4)}</text></literalExpression>
+  </decision>
+  <decision id="runEntries" name="runEntries">
+    <variable id="runEntries_v" name="runEntries" typeRef="Any" />
+    <informationRequirement id="runEntries_r_cheap"><requiredDecision href="#cheap" /></informationRequirement>
+    <informationRequirement id="runEntries_r_runAdds"><requiredDecision href="#runAdds" /></informationRequirement>
+    <informationRequirement id="runEntries_r_rotation"><requiredDecision href="#rotation" /></informationRequirement>
+    <informationRequirement id="runEntries_r_rotPick"><requiredDecision href="#rotPick" /></informationRequirement>
+    <informationRequirement id="runEntries_r_rotReasons"><requiredDecision href="#rotReasons" /></informationRequirement>
+    <informationRequirement id="runEntries_r_mandatory"><requiredDecision href="#mandatory" /></informationRequirement>
+    <informationRequirement id="runEntries_r_judgeEntries"><requiredDecision href="#judgeEntries" /></informationRequirement>
+    <informationRequirement id="runEntries_r_runAllEntries"><requiredDecision href="#runAllEntries" /></informationRequirement>
+    <informationRequirement id="runEntries_r_runLabelEntries"><requiredDecision href="#runLabelEntries" /></informationRequirement>
+    <literalExpression id="runEntries_e" typeRef="Any"><text>concatenate(cheap, concatenate(runAdds, concatenate(
+ if rotPick = null then [] else [{suite: rotPick.suite, reason: &quot;R7 rotation (&quot; + string join(rotReasons, &quot;; &quot;) + &quot;): highest staleness x weight&quot;}],
+ concatenate(for m in mandatory return {suite: m.suite, reason: m.reason},
+ concatenate(judgeEntries, concatenate(runAllEntries, runLabelEntries))))))</text></literalExpression>
+  </decision>
+  <decision id="runSet" name="runSet">
+    <variable id="runSet_v" name="runSet" typeRef="Any" />
+    <informationRequirement id="runSet_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="runSet_r_runEntries"><requiredDecision href="#runEntries" /></informationRequirement>
+    <literalExpression id="runSet_e" typeRef="Any"><text>{names: distinct values(for e in runEntries return e.suite),
+ r: names[list contains(facts.labels.skip, item) = false and (facts.labels.skip_all = false or get value(facts.suites, item).layer = &quot;L0&quot;)]}.r</text></literalExpression>
+  </decision>
+  <decision id="modeInfo" name="modeInfo">
+    <variable id="modeInfo_v" name="modeInfo" typeRef="Any" />
+    <informationRequirement id="modeInfo_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <literalExpression id="modeInfo_e" typeRef="Any"><text>if facts.head_repo_is_fork then {mode: &quot;report&quot;, reason: &quot;fork pull request&quot;}
+ else if not(list contains(facts.gate_base_branches, facts.base_branch)) then {mode: &quot;report&quot;, reason: &quot;base branch &quot; + facts.base_branch + &quot; is not gated&quot;}
+ else {mode: if facts.requested_mode = &quot;gate&quot; then &quot;gate&quot; else &quot;report&quot;, reason: null}</text></literalExpression>
+  </decision>
+  <decision id="decisionList" name="decisionList">
+    <variable id="decisionList_v" name="decisionList" typeRef="Any" />
+    <informationRequirement id="decisionList_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="decisionList_r_triggered"><requiredDecision href="#triggered" /></informationRequirement>
+    <informationRequirement id="decisionList_r_runEntries"><requiredDecision href="#runEntries" /></informationRequirement>
+    <informationRequirement id="decisionList_r_runSet"><requiredDecision href="#runSet" /></informationRequirement>
+    <informationRequirement id="decisionList_r_modeInfo"><requiredDecision href="#modeInfo" /></informationRequirement>
+    <literalExpression id="decisionList_e" typeRef="Any"><text>concatenate(
+ for s in triggered[get value(facts.suites, item).layer != &quot;ops&quot;] return {suite: s,
+   action: if list contains(runSet, s) then &quot;run&quot; else &quot;skip&quot;,
+   enforced: modeInfo.mode = &quot;gate&quot; and list contains(facts.gate_suites, s) and list contains(facts.expensive_layers, get value(facts.suites, s).layer),
+   layer: get value(facts.suites, s).layer,
+   reasons: if list contains(runSet, s) then distinct values(for e in runEntries[item.suite = s] return e.reason) else [&quot;path filter matched, no rule needs this suite&quot;]},
+ concatenate(
+ for s in runSet[get value(facts.suites, item).path_triggered = false] return {suite: s, action: &quot;run&quot;, enforced: false,
+   layer: get value(facts.suites, s).layer,
+   reasons: concatenate(distinct values(for e in runEntries[item.suite = s] return e.reason), [&quot;not path-triggered: this suite will only start if its paths: filter is widened&quot;])},
+ for n in facts.new_workflows return {suite: n, action: &quot;run&quot;, enforced: false, layer: &quot;unknown&quot;, reasons: [&quot;new workflow, not in the base registry&quot;]}))</text></literalExpression>
+  </decision>
+  <decision id="rulesFired" name="rulesFired">
+    <variable id="rulesFired_v" name="rulesFired" typeRef="Any" />
+    <informationRequirement id="rulesFired_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="rulesFired_r_rows"><requiredDecision href="#rows" /></informationRequirement>
+    <informationRequirement id="rulesFired_r_mandatory"><requiredDecision href="#mandatory" /></informationRequirement>
+    <informationRequirement id="rulesFired_r_modeInfo"><requiredDecision href="#modeInfo" /></informationRequirement>
+    <literalExpression id="rulesFired_e" typeRef="Any"><text>concatenate(
+ if facts.docs_only then [{rule: &quot;R6&quot;, subject: &quot;docs only&quot;, reason: &quot;only documentation files changed: cheap layers only&quot;, evidence: []}] else [],
+ concatenate(for r in rows[item.fireRule != null] return {rule: r.fireRule, subject: r.fireSubject, reason: r.fireReason, evidence: r.fireEvidence},
+ concatenate(for n in facts.new_workflows return {rule: &quot;R5&quot;, subject: n, reason: &quot;workflow not in the base registry: not narrowed&quot;, evidence: []},
+ concatenate(for m in mandatory return {rule: &quot;R7b&quot;, subject: m.pair, reason: &quot;confirmed escapes within the window: suite is mandatory for this module&quot;, evidence: m.evidence},
+ concatenate(if facts.judge_changed then [{rule: &quot;R11&quot;, subject: &quot;judge&quot;, reason: &quot;the planner config or its caller changed in this PR: the path-triggered set runs&quot;, evidence: []}] else [],
+ if modeInfo.reason = null then [] else [{rule: &quot;R12&quot;, subject: &quot;mode&quot;, reason: &quot;gating is off for this PR: &quot; + modeInfo.reason + &quot; (decision recorded as report)&quot;, evidence: []}])))))</text></literalExpression>
+  </decision>
+  <decision id="overrides" name="overrides">
+    <variable id="overrides_v" name="overrides" typeRef="Any" />
+    <informationRequirement id="overrides_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <literalExpression id="overrides_e" typeRef="Any"><text>{labels: facts.labels.seen,
+ applied: concatenate(if facts.labels.run_all then [&quot;planner:run-all&quot;] else [],
+   concatenate(for n in facts.labels.run return &quot;run_&quot; + substring(n, 1, string length(n) - 4),
+   concatenate(for n in facts.labels.skip return &quot;skip_&quot; + substring(n, 1, string length(n) - 4),
+   if facts.labels.skip_all then [&quot;skip_all&quot;] else []))),
+ conflicts: for n in facts.labels.skip[list contains(facts.labels.run, item) = true] return &quot;skip_&quot; + substring(n, 1, string length(n) - 4) + &quot; with run_&quot; + substring(n, 1, string length(n) - 4) + &quot;: skip wins&quot;}</text></literalExpression>
+  </decision>
+  <decision id="safetyNet" name="safetyNet">
+    <variable id="safetyNet_v" name="safetyNet" typeRef="Any" />
+    <informationRequirement id="safetyNet_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="safetyNet_r_memory"><requiredInput href="#in_memory" /></informationRequirement>
+    <informationRequirement id="safetyNet_r_decisionList"><requiredDecision href="#decisionList" /></informationRequirement>
+    <literalExpression id="safetyNet_e" typeRef="Any"><text>for d in decisionList[item.action = &quot;skip&quot; and list contains(facts.expensive_layers, item.layer) = true] return {suite: d.suite,
+   next_scheduled: get value(facts.suites, d.suite).next_scheduled,
+   last_full_success_at: {s: get value(memory.suites, d.suite), r: if s = null then null else get value(s, &quot;last_full_success_at&quot;)}.r}</text></literalExpression>
+  </decision>
+  <decision id="plan" name="plan">
+    <variable id="plan_v" name="plan" typeRef="Any" />
+    <informationRequirement id="plan_r_facts"><requiredInput href="#in_facts" /></informationRequirement>
+    <informationRequirement id="plan_r_memory"><requiredInput href="#in_memory" /></informationRequirement>
+    <informationRequirement id="plan_r_modeInfo"><requiredDecision href="#modeInfo" /></informationRequirement>
+    <informationRequirement id="plan_r_decisionList"><requiredDecision href="#decisionList" /></informationRequirement>
+    <informationRequirement id="plan_r_rotation"><requiredDecision href="#rotation" /></informationRequirement>
+    <informationRequirement id="plan_r_rulesFired"><requiredDecision href="#rulesFired" /></informationRequirement>
+    <informationRequirement id="plan_r_overrides"><requiredDecision href="#overrides" /></informationRequirement>
+    <informationRequirement id="plan_r_safetyNet"><requiredDecision href="#safetyNet" /></informationRequirement>
+    <literalExpression id="plan_e" typeRef="Any"><text>{mode: modeInfo.mode, decision: decisionList, rotation: rotation, rulesFired: rulesFired, overrides: overrides, safetyNet: safetyNet,
+ weightsVersion: memory.weights_version, rulesVersion: &quot;1.0.0&quot;}</text></literalExpression>
+  </decision>
+</definitions>

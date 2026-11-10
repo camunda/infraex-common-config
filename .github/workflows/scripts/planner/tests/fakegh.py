@@ -15,6 +15,9 @@ class FakeGh:
         self.fail = []  # queue of (status, text) to raise on the next PUT
         self.comments = []
         self.runs = {}
+        self.check_runs = []
+        self.pulls = {}
+        self.jobs = {}
         self.statuses = []
         self.n = 0
 
@@ -26,6 +29,24 @@ class FakeGh:
         m = re.match(r"repos/[^/]+/[^/]+/(.*)$", path)
         rel = m.group(1) if m else path
         relq = rel.split("?")[0]
+        if relq == "check-runs" and method == "POST":
+            cr = dict(body)
+            cr["id"] = len(self.check_runs) + 1
+            cr["app"] = {"slug": body.get("_app", "github-actions")}
+            cr["completed_at"] = "2026-11-10T10:%02d:00Z" % (len(self.check_runs) % 60)
+            cr.pop("_app", None)
+            self.check_runs.append(cr)
+            return 0, json.dumps({"id": cr["id"]}), ""
+        mc = re.match(r"commits/([0-9a-f]{40})/check-runs", relq)
+        if mc:
+            runs = [c for c in self.check_runs if c["head_sha"] == mc.group(1)]
+            return 0, json.dumps({"check_runs": runs}), ""
+        mp = re.match(r"pulls/(\d+)$", relq)
+        if mp:
+            return (0, json.dumps({"head": {"sha": self.pulls[int(mp.group(1))]}}), "") if int(mp.group(1)) in self.pulls else err(404, "Not Found")
+        mj = re.match(r"actions/runs/(\d+)/jobs", relq)
+        if mj:
+            return 0, json.dumps({"jobs": self.jobs.get(int(mj.group(1)), [])}), ""
         mr = re.match(r"actions/workflows/([^/]+)/runs", rel)
         if mr:
             payload = {"workflow_runs": self.runs.get(mr.group(1), [])}

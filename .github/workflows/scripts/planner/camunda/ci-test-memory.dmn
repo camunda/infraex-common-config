@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/dmn" id="ci_test_memory" name="CI test planner memory" namespace="http://camunda.org/schema/1.0/dmn" exporter="build_dmn.py" exporterVersion="1">
+  <inputData id="in_outcomesResponse" name="outcomesResponse"><variable id="in_outcomesResponse_v" name="outcomesResponse" typeRef="Any" /></inputData>
+  <inputData id="in_escapesResponse" name="escapesResponse"><variable id="in_escapesResponse_v" name="escapesResponse" typeRef="Any" /></inputData>
+  <inputData id="in_weightsResponse" name="weightsResponse"><variable id="in_weightsResponse_v" name="weightsResponse" typeRef="Any" /></inputData>
+  <inputData id="in_nowIso" name="nowIso"><variable id="in_nowIso_v" name="nowIso" typeRef="Any" /></inputData>
+  <inputData id="in_params" name="params"><variable id="in_params_v" name="params" typeRef="Any" /></inputData>
+  <businessKnowledgeModel id="bkm_ageDays" name="ageDays">
+    <variable id="bkm_ageDays_v" name="ageDays" />
+    <encapsulatedLogic id="bkm_ageDays_f">
+      <formalParameter id="bkm_ageDays_p_nowIso" name="nowIso" typeRef="Any" />
+      <formalParameter id="bkm_ageDays_p_ts" name="ts" typeRef="Any" />
+      <literalExpression id="bkm_ageDays_e"><text>{d: date and time(nowIso) - date and time(ts),
+ r: d.days + d.hours / 24 + d.minutes / 1440 + d.seconds / 86400}.r</text></literalExpression>
+    </encapsulatedLogic>
+  </businessKnowledgeModel>
+  <decision id="suiteBuckets" name="suiteBuckets">
+    <variable id="suiteBuckets_v" name="suiteBuckets" typeRef="Any" />
+    <informationRequirement id="suiteBuckets_r_outcomesResponse"><requiredInput href="#in_outcomesResponse" /></informationRequirement>
+    <literalExpression id="suiteBuckets_e" typeRef="Any"><text>if outcomesResponse = null or get value(outcomesResponse, &quot;aggregations&quot;) = null then [] else outcomesResponse.aggregations.by_suite.buckets</text></literalExpression>
+  </decision>
+  <decision id="suites" name="suites">
+    <variable id="suites_v" name="suites" typeRef="Any" />
+    <informationRequirement id="suites_r_suiteBuckets"><requiredDecision href="#suiteBuckets" /></informationRequirement>
+    <informationRequirement id="suites_r_nowIso"><requiredInput href="#in_nowIso" /></informationRequirement>
+    <knowledgeRequirement id="suites_k_ageDays"><requiredKnowledge href="#bkm_ageDays" /></knowledgeRequirement>
+    <literalExpression id="suites_e" typeRef="Any"><text>context merge(for b in suiteBuckets return context put({}, b.key, {
+ age_all: if get value(b.last_full.at, &quot;value_as_string&quot;) = null then null else ageDays(nowIso, b.last_full.at.value_as_string),
+ age_modules: {},
+ cost_min: if b.cost.doc_count = 0 then null else get value(b.cost.median.values, &quot;50.0&quot;),
+ last_full_success_at: get value(b.last_full.at, &quot;value_as_string&quot;),
+ source: &quot;elasticsearch&quot;}))</text></literalExpression>
+  </decision>
+  <decision id="weightsHit" name="weightsHit">
+    <variable id="weightsHit_v" name="weightsHit" typeRef="Any" />
+    <informationRequirement id="weightsHit_r_weightsResponse"><requiredInput href="#in_weightsResponse" /></informationRequirement>
+    <literalExpression id="weightsHit_e" typeRef="Any"><text>if weightsResponse = null or get value(weightsResponse, &quot;hits&quot;) = null or count(weightsResponse.hits.hits) = 0 then null else weightsResponse.hits.hits[1]._source</text></literalExpression>
+  </decision>
+  <decision id="weights" name="weights">
+    <variable id="weights_v" name="weights" typeRef="Any" />
+    <informationRequirement id="weights_r_weightsHit"><requiredDecision href="#weightsHit" /></informationRequirement>
+    <literalExpression id="weights_e" typeRef="Any"><text>if weightsHit = null then {} else context merge(for p in weightsHit.pairs return context put({}, p.pair, p.weight))</text></literalExpression>
+  </decision>
+  <decision id="breaker" name="breaker">
+    <variable id="breaker_v" name="breaker" typeRef="Any" />
+    <informationRequirement id="breaker_r_escapesResponse"><requiredInput href="#in_escapesResponse" /></informationRequirement>
+    <informationRequirement id="breaker_r_nowIso"><requiredInput href="#in_nowIso" /></informationRequirement>
+    <informationRequirement id="breaker_r_params"><requiredInput href="#in_params" /></informationRequirement>
+    <knowledgeRequirement id="breaker_k_ageDays"><requiredKnowledge href="#bkm_ageDays" /></knowledgeRequirement>
+    <literalExpression id="breaker_e" typeRef="Any"><text>if escapesResponse = null or get value(escapesResponse, &quot;aggregations&quot;) = null then {} else
+ context merge(for b in escapesResponse.aggregations.pairs.buckets[item.mass.value &gt;= params.breaker_escapes and ageDays(nowIso, item.last.value_as_string) &lt;= params.breaker_clean_days] return
+ context put({}, b.key, {mass: b.mass.value, evidence: for i in b.ids.buckets return i.key}))</text></literalExpression>
+  </decision>
+  <decision id="memory" name="memory">
+    <variable id="memory_v" name="memory" typeRef="Any" />
+    <informationRequirement id="memory_r_suites"><requiredDecision href="#suites" /></informationRequirement>
+    <informationRequirement id="memory_r_weights"><requiredDecision href="#weights" /></informationRequirement>
+    <informationRequirement id="memory_r_weightsHit"><requiredDecision href="#weightsHit" /></informationRequirement>
+    <informationRequirement id="memory_r_breaker"><requiredDecision href="#breaker" /></informationRequirement>
+    <informationRequirement id="memory_r_nowIso"><requiredInput href="#in_nowIso" /></informationRequirement>
+    <literalExpression id="memory_e" typeRef="Any"><text>{now: nowIso, weights_version: if weightsHit = null then &quot;none&quot; else weightsHit.weights_id, suites: suites, weights: weights, breaker: breaker}</text></literalExpression>
+  </decision>
+</definitions>

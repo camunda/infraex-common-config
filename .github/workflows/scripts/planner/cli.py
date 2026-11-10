@@ -23,50 +23,27 @@ def _decide(a) -> int:
     return 0
 
 
-def _learn(a) -> int:
-    import hashlib
-    from datetime import datetime
-    from . import gitutil, learn, schema, store
-    from .gh import Gh
-    from .util import event_id, now_iso, parse_iso
-    cfg_text = ""
-    if a.git_dir:
-        cfg_text = gitutil.show(a.git_dir, "HEAD", a.config_path)
-    from . import config
-    cfg = config.load(cfg_text)
-    ds = store.DirStore(a.store_dir)
-    events = ds.events()
-    now = a.now or now_iso()
-    weights = [e for e in events if e["type"] == "weights"]
-    prev = max(weights, key=lambda e: (e["ts"], e["id"])) if weights else None
-    w = learn.compute(events, cfg, now, prev, a.repo)
-    schema.require_valid(w)
-    print(w["diff"])
+def _facts(a) -> int:
+    from . import decide
+    f = decide.facts_run(a)
+    with open(a.out, "w") as fh:
+        json.dump(f, fh, indent=1, sort_keys=True)
+    note = "facts: %d changed files, %d signals, %d suites" % (f["changed_files"]["count"], len(f["signals"]), len(f["suites"]))
+    print(note)
     if a.summary_file:
         with open(a.summary_file, "a") as fh:
-            fh.write("## Planner learner\n\n" + w["diff"] + "\n")
-    if a.dry_run:
-        return 0
-    st = store.GhStore(Gh(getattr(a, "gh_runner", None)), a.repo, a.branch)
-    st.put(store.path_for(w), w, "chore(ci-decisions): weights %s" % w["id"])
-    # weekly checkpoint: hash over the week's event files, so later edits to history are detectable
-    d = parse_iso(now)
-    year, week, _ = d.isocalendar()
-    label = "%04d-W%02d" % (year, week)
-    h, n = hashlib.sha256(), 0
-    for rel in ds.walk():
-        if rel.startswith("events/"):
-            y, m, dd = (int(x) for x in rel.split("/")[1:4])
-            if datetime(y, m, dd).isocalendar()[:2] == (year, week):
-                with open(os.path.join(a.store_dir, rel), "rb") as fh:
-                    h.update(rel.encode() + b"\0" + hashlib.sha256(fh.read()).digest())
-                n += 1
-    head = gitutil.run(a.store_dir, "rev-parse", "HEAD", check=False).strip() if os.path.isdir(os.path.join(a.store_dir, ".git")) else ""
-    cp = {"schema": SCHEMA, "type": "checkpoint", "ts": now, "repo": a.repo, "week": label, "files": n,
-          "sha256": h.hexdigest(), "head_commit": head if len(head) == 40 else "0" * 40}
-    cp["id"] = event_id("chk", {"week": label, "sha": cp["sha256"], "files": n})
-    schema.require_valid(cp)
-    st.put(store.path_for(cp), cp, "chore(ci-decisions): checkpoint %s" % label)
+            fh.write("## Planner facts\n\n%s\n" % note)
+    return 0
+
+
+def _camunda_plan(a) -> int:
+    from . import camunda, checkrun
+    with open(a.facts) as fh:
+        facts = json.load(fh)
+    plan = camunda.decide(facts, None, str(a.advisor).lower() == "true", a.run_ref, float(a.await_seconds))
+    with open(a.out, "w") as fh:
+        json.dump(plan, fh, indent=1, sort_keys=True)
+    print("plan: source=%s reason=%s decision=%s" % (plan["source"], plan["reason"], plan["decision_id"]))
     return 0
 
 
@@ -99,20 +76,37 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--summary-file", default="")
     d.set_defaults(fn=_decide)
 
-    r = sub.add_parser("record", help="validate and store a decision (privileged job)")
-    r.add_argument("--artifact", required=True)
-    r.add_argument("--repo", required=True)
-    r.add_argument("--branch", default="ci-decisions")
-    r.add_argument("--pr", required=True)
-    r.add_argument("--head-sha", required=True)
-    r.add_argument("--summary-file", default="")
-    r.add_argument("--no-comment", action="store_true")
-    r.add_argument("--no-status", action="store_true")
-    r.set_defaults(fn=lambda a: __import__("planner.record", fromlist=["run"]).run(a))
+    f = sub.add_parser("facts", help="facts about a pull request for the Camunda process (read-only)")
+    for arg, kw in (("--repo", dict(required=True)), ("--slug", dict(required=True)), ("--pr", dict(required=True)),
+                    ("--head-sha", dict(required=True)), ("--base-sha", dict(required=True)), ("--event", dict(default="pull_request")),
+                    ("--actor", dict(default="")), ("--fork", dict(default="false")), ("--labels", dict(default="[]")), ("--mode", dict(default="")),
+                    ("--base-branch", dict(default="main")), ("--default-branch", dict(default="main")),
+                    ("--gate-base-branches", dict(default="main")), ("--gate-suites", dict(default="")),
+                    ("--config-path", dict(default=".github/planner-config.json")), ("--planner-version", dict(default="")),
+                    ("--out", dict(default="facts.json")), ("--summary-file", dict(default=""))):
+        f.add_argument(arg, **kw)
+    f.set_defaults(fn=_facts)
+
+    cp = sub.add_parser("camunda-plan", help="ask the Camunda process for the plan; fails open (job with the Camunda secret)")
+    cp.add_argument("--facts", required=True)
+    cp.add_argument("--out", default="plan.json")
+    cp.add_argument("--advisor", default="false", help="true enables the AI advisor step")
+    cp.add_argument("--run-ref", default="local")
+    cp.add_argument("--await-seconds", default="30")
+    cp.set_defaults(fn=_camunda_plan)
+
+    pu = sub.add_parser("publish", help="publish the plan: check run, status, sticky comment (write job, no Camunda secret)")
+    pu.add_argument("--plan", required=True)
+    pu.add_argument("--repo", required=True)
+    pu.add_argument("--pr", required=True)
+    pu.add_argument("--head-sha", required=True)
+    pu.add_argument("--summary-file", default="")
+    pu.add_argument("--no-comment", action="store_true")
+    pu.add_argument("--no-status", action="store_true")
+    pu.set_defaults(fn=lambda a: __import__("planner.publish", fromlist=["run"]).run(a))
 
     g = sub.add_parser("gate", help="a suite's triage step: output should_skip")
     g.add_argument("--repo", required=True)
-    g.add_argument("--branch", default="ci-decisions")
     g.add_argument("--event", default="")
     g.add_argument("--fork", default="false")
     g.add_argument("--pr", default="")
@@ -122,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--interval", default="10")
     g.set_defaults(fn=lambda a: __import__("planner.gate", fromlist=["run"]).run(a))
 
-    ru = sub.add_parser("runs", help="recent successful suite runs from the Actions API (memory fallback)")
+    ru = sub.add_parser("runs", help="recent successful suite runs from the Actions API (offline decide only)")
     ru.add_argument("--repo", required=True)
     ru.add_argument("--git-dir", required=True)
     ru.add_argument("--base-sha", required=True)
@@ -132,27 +126,17 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--out", default="runs.json")
     ru.set_defaults(fn=lambda a: __import__("planner.runs", fromlist=["run"]).run(a))
 
-    c = sub.add_parser("collect", help="outcomes of finished suite runs, escape attribution")
+    c = sub.add_parser("collect", help="outcomes of finished suite runs and escapes, sent to the Camunda process")
     c.add_argument("--repo", required=True)
     c.add_argument("--git-dir", default=".")
-    c.add_argument("--store-dir", required=True)
-    c.add_argument("--branch", default="ci-decisions")
     c.add_argument("--config-path", default=".github/planner-config.json")
-    c.add_argument("--backfill-days", default="30")
-    c.add_argument("--max-events", default="400")
+    c.add_argument("--known-failures", default=".github/planner-known-failures.yaml")
+    c.add_argument("--since-hours", default="6")
+    c.add_argument("--max-docs", default="400")
+    c.add_argument("--default-branch", default="main")
+    c.add_argument("--dry-run", action="store_true", help="print the documents instead of sending them")
     c.add_argument("--now", default="")
     c.set_defaults(fn=lambda a: __import__("planner.collect", fromlist=["run"]).run(a))
-
-    l = sub.add_parser("learn", help="weekly weights and checkpoint")
-    l.add_argument("--repo", required=True)
-    l.add_argument("--git-dir", default="")
-    l.add_argument("--store-dir", required=True)
-    l.add_argument("--branch", default="ci-decisions")
-    l.add_argument("--config-path", default=".github/planner-config.json")
-    l.add_argument("--summary-file", default="")
-    l.add_argument("--dry-run", action="store_true")
-    l.add_argument("--now", default="")
-    l.set_defaults(fn=_learn)
 
     a = sub.add_parser("audit", help="query or verify the store")
     a.add_argument("what", nargs="?", default="query", choices=["query", "verify"])

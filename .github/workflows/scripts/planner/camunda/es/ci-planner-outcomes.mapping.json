@@ -1,0 +1,81 @@
+{
+  "settings": {
+    "index.lifecycle.name": "ci-planner-retention",
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index.lifecycle.rollover_alias": "ci-planner-outcomes"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "outcome_id": {
+        "type": "keyword"
+      },
+      "ts": {
+        "type": "date"
+      },
+      "repo": {
+        "type": "keyword"
+      },
+      "suite": {
+        "type": "keyword"
+      },
+      "run_id": {
+        "type": "keyword"
+      },
+      "attempt": {
+        "type": "integer"
+      },
+      "pr": {
+        "type": "integer"
+      },
+      "head_sha": {
+        "type": "keyword"
+      },
+      "event": {
+        "type": "keyword"
+      },
+      "branch": {
+        "type": "keyword"
+      },
+      "conclusion": {
+        "type": "keyword"
+      },
+      "outcome": {
+        "type": "keyword"
+      },
+      "reason": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "known_failure_id": {
+        "type": "keyword"
+      },
+      "minutes": {
+        "type": "float"
+      },
+      "completed": {
+        "type": "date"
+      },
+      "started": {
+        "type": "date"
+      },
+      "url": {
+        "type": "keyword",
+        "ignore_above": 512
+      },
+      "flake_hint": {
+        "type": "boolean"
+      },
+      "decision_id": {
+        "type": "keyword"
+      },
+      "modules": {
+        "type": "keyword"
+      },
+      "full": {
+        "type": "boolean"
+      }
+    }
+  }
+}

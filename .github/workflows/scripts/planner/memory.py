@@ -38,14 +38,15 @@ def build(events: list, cfg: dict, now: str, runs: list | None = None, pin: str 
             s["flakes"] += 1
         rec = {"at": e["completed"], "run_id": e["run_id"], "sha": e["head_sha"], "event": e["event"],
                "minutes": e["minutes"], "evidence": e["id"], "source": "events"}
-        if e["conclusion"] == "failure":
+        klass = e.get("outcome") or ("pass" if e["conclusion"] == "success" else "fail")
+        if e["conclusion"] == "failure" and klass == "fail":
             s["last_failure"] = _newer(s["last_failure"], rec)
-        if _full(e, min_full):
+        if _full(e, min_full) and klass in ("pass",):
             s["minutes"].append(e["minutes"])
             if e["event"] != "pull_request" and e.get("branch") == default_branch:
                 s["all"] = _newer(s["all"], rec)
-            elif e["event"] == "pull_request" and e.get("decision_id") in decisions:
-                for m in decisions[e["decision_id"]].get("impacted", {}).get("modules", []):
+            elif e["event"] == "pull_request" and (e.get("modules") or e.get("decision_id") in decisions):
+                for m in (e.get("modules") or decisions[e["decision_id"]].get("impacted", {}).get("modules", [])):
                     s["modules"][m] = _newer(s["modules"].get(m), rec)
     for r in runs or []:
         # Actions API fallback. Cost uses every successful full run; "covers the whole tree"
@@ -142,3 +143,46 @@ def cost(mem: dict, suite: str):
 
 def breaker_for(mem: dict, module: str, suite: str):
     return mem.get("breaker", {}).get("%s|%s" % (module, suite))
+
+
+def compact(mem: dict, facts: dict) -> dict:
+    """The memory the policy reads, reduced to the suites and modules of one set of facts.
+
+    Same shape the Camunda process builds from Elasticsearch, so the Python policy and the DMN
+    decision tables consume identical input.
+    """
+    mods = sorted({m for s in facts["signals"] for m in ([s["module"]] if s["type"] == "module" else s.get("modules", []))})
+    names = set(facts["suites"])
+    out_suites, weights, breaker = {}, {}, {}
+    for n in sorted(names):
+        s = mem["suites"].get(n) or {}
+        ls = last_success(mem, n, None)
+        out_suites[n] = {
+            "age_all": (None if not s.get("all") else round(max(0.0, days_between(mem["now"], s["all"]["at"])), 4)),
+            "age_modules": {m: round(max(0.0, days_between(mem["now"], s["modules"][m]["at"])), 4) for m in mods if m in (s.get("modules") or {})},
+            "cost_min": cost(mem, n), "last_full_success_at": ls["at"] if ls else None, "source": (ls or {}).get("source", "none")}
+        for m in mods:
+            w = weight(mem, m, n)
+            if w != 1.0:
+                weights["%s|%s" % (m, n)] = w
+            b = breaker_for(mem, m, n)
+            if b:
+                breaker["%s|%s" % (m, n)] = {"mass": b["mass"], "evidence": b["evidence"]}
+    w = mem.get("weights")
+    return {"now": mem["now"], "weights_version": w["id"] if w else "none", "suites": out_suites, "weights": weights, "breaker": breaker}
+
+
+def c_age(cm: dict, suite: str, module):
+    s = cm["suites"].get(suite)
+    if not s:
+        return None
+    vals = [v for v in [s.get("age_all"), (s.get("age_modules") or {}).get(module) if module else None] if v is not None]
+    return min(vals) if vals else None
+
+
+def c_weight(cm: dict, module, suite: str) -> float:
+    return float(cm["weights"].get("%s|%s" % (module, suite), 1.0)) if module else 1.0
+
+
+def c_cost(cm: dict, suite: str):
+    return (cm["suites"].get(suite) or {}).get("cost_min")

@@ -1,0 +1,11 @@
+---
+# Catalogue of known failures for the test-selection planner collector. Copy to the file named by the
+# collector input `known-failures-path` (default `.github/planner-known-failures.yaml`) in the calling repository.
+# A failed run whose failed job or step names match is reported as `blocked` or `known_failure` and
+# does not feed the risk of a module/suite pair. Entries expire so they cannot hide a failure forever.
+entries:
+    - id: kf-example-capacity
+      class: blocked # blocked | known_failure
+      pattern: '(?i)insufficient capacity|quota exceeded'
+      suites: ['aws_*_tests.yml']
+      expires: 2027-03-01

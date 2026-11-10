@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_ci-test-record" targetNamespace="http://bpmn.io/schema/bpmn" exporter="build_bpmn.py" exporterVersion="1" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.10.0">
+  <bpmn:process id="ci-test-record" name="CI test planner: record outcomes" isExecutable="true">
+    <bpmn:documentation>Writes a batch of documents (outcomes, escapes) to Elasticsearch. Input: `docs` = list of {index, id, body}. Ids are stable, so a document sent twice is written once.</bpmn:documentation>
+    <bpmn:startEvent id="start" name="Documents received"><bpmn:outgoing>f_start_write</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:serviceTask id="write" name="Write document (Elasticsearch)" zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"><bpmn:extensionElements><zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" /><zeebe:ioMapping><zeebe:input source="noAuth" target="authentication.type" /><zeebe:input source="PUT" target="method" /><zeebe:input source="= &quot;{{secrets.PLANNER_ES_URL}}/&quot; + doc.index + &quot;/_doc/&quot; + doc.id" target="url" /><zeebe:input source="= {&quot;Authorization&quot;: &quot;ApiKey {{secrets.PLANNER_ES_APIKEY}}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}" target="headers" /><zeebe:input source="= doc.body" target="body" /><zeebe:input source="15" target="connectionTimeoutInSeconds" /><zeebe:input source="15" target="readTimeoutInSeconds" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="resultVariable" value="written" /><zeebe:header key="resultExpression" value="= {id: response.body._id, result: response.body.result}" /><zeebe:header key="errorExpression" value="= if response.status &gt;= 400 then bpmnError(&quot;ES_&quot; + string(response.status), &quot;Elasticsearch answered &quot; + string(response.status)) else null" /><zeebe:header key="retryBackoff" value="PT2S" /></zeebe:taskHeaders></bpmn:extensionElements><bpmn:multiInstanceLoopCharacteristics><bpmn:extensionElements><zeebe:loopCharacteristics inputCollection="= docs" inputElement="doc" outputCollection="results" outputElement="= written" /></bpmn:extensionElements></bpmn:multiInstanceLoopCharacteristics><bpmn:incoming>f_start_write</bpmn:incoming><bpmn:outgoing>f_write_end</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:endEvent id="end" name="Recorded"><bpmn:incoming>f_write_end</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="f_start_write" sourceRef="start" targetRef="write"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_write_end" sourceRef="write" targetRef="end"></bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_ci-test-record">
+    <bpmndi:BPMNPlane id="Plane_ci-test-record" bpmnElement="ci-test-record">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start"><dc:Bounds x="150" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="123" y="140" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write_di" bpmnElement="write"><dc:Bounds x="260" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end"><dc:Bounds x="450" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="423" y="140" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="f_start_write_di" bpmnElement="f_start_write">
+        <di:waypoint x="186" y="118" />
+        <di:waypoint x="260" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_write_end_di" bpmnElement="f_write_end">
+        <di:waypoint x="390" y="118" />
+        <di:waypoint x="450" y="118" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

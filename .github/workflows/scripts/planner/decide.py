@@ -44,3 +44,30 @@ def run(a) -> dict:
     ev = rules.finalize(body, now)
     schema.require_valid(ev)
     return ev
+
+
+def facts_run(a) -> dict:
+    """planner.facts/1 for the Camunda process: everything about the PR, no memory, no decision."""
+    from . import facts as facts_mod
+    from .util import canonical, sha256_hex
+    repo = a.repo
+    cfg = config.load(gitutil.show(repo, a.base_sha, a.config_path))
+    reg = registry.load_registry(repo, a.base_sha, cfg)
+    mb = gitutil.merge_base(repo, a.base_sha, a.head_sha)
+    changed = gitutil.changed_files(repo, a.base_sha, a.head_sha)
+    labels = json.loads(a.labels) if a.labels else []
+    labels = [str(x) for x in labels][:100] if isinstance(labels, list) else []
+    mode = "gate" if not a.mode else (a.mode if a.mode in ("report", "gate") else "report")
+    gate_suites = None
+    if a.gate_suites == "none":
+        gate_suites = []
+    elif a.gate_suites:
+        gate_suites = [x for x in a.gate_suites.split(",") if x]
+    f = facts_mod.build(repo, a.slug, int(a.pr), a.head_sha, a.base_sha, mb, a.event, a.actor or "", str(a.fork).lower() == "true", labels,
+                        mode, cfg, reg, imp.Tree(repo, a.head_sha), imp.Tree(repo, a.base_sha), changed, a.base_branch, a.default_branch,
+                        gate_suites, [x for x in a.gate_base_branches.split(",") if x], a.planner_version or rules.__version__)
+    f["labels_hash"] = sha256_hex(canonical(sorted(labels)))[:16]
+    errs = schema.validate_facts(f)
+    if errs:
+        raise schema.Invalid("facts invalid: %s" % "; ".join(errs[:5]))
+    return f

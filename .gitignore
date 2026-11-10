@@ -186,3 +186,4 @@ Temporary Items
 # Python bytecode (planner tests)
 __pycache__/
 *.pyc
+node_modules/

@@ -39,12 +39,14 @@ def compute(events: list, cfg: dict, now: str, prev: dict | None, repo: str) -> 
                 s["flakes"] += d
             if e["conclusion"] == "success" and e["minutes"] >= cfg["memory"]["min_full_minutes"]:
                 s["minutes"].append(e["minutes"])
+            klass = e.get("outcome") or ("pass" if e["conclusion"] == "success" else "fail" if e["conclusion"] == "failure" else "cancelled")
             dec = decisions.get(e.get("decision_id"))
-            if dec:
-                for m in dec["impacted"]["modules"]:
+            mods = e.get("modules") or (dec["impacted"]["modules"] if dec else [])
+            if mods and klass in ("pass", "fail"):  # blocked and known failures say nothing about the change
+                for m in mods:
                     p = pair(m, e["suite"])
                     p["n_run"] += d
-                    if e["conclusion"] == "failure" and not e.get("flake_hint"):
+                    if klass == "fail" and not e.get("flake_hint"):
                         p["fail"] += d
                     p["evidence"].append(e["id"])
         elif e["type"] == "escape":

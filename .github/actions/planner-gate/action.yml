@@ -1,24 +1,23 @@
 ---
 name: Planner gate
 description: |
-    Reads the test-selection planner's decision for this pull request and outputs `should_skip`
+    Reads the plan the test-selection planner published for this pull request (a check run named
+    "planner plan" on the head commit) and outputs `should_skip`
     for the calling workflow. Put it in a suite's `triage` job next to `internal-triage-skip` and
     combine the two outputs with OR.
 
     Fully automatic: the planner decides, nobody approves. The step never fails a run and fails
-    open: if there is no decision within the timeout (planner not installed, store unreachable,
-    planner crashed), `should_skip` is `false` and the suite runs exactly as it does today. Only
-    same-repository `pull_request` runs are gated; every other event outputs `false` at once.
+    open: if there is no decision within the timeout (planner not installed, plan not published,
+    Camunda down, planner crashed), `should_skip` is `false` and the suite runs exactly as it does today. Only
+    same-repository `pull_request` runs are gated; every other event outputs `false` at once. The calling job
+    needs `checks: read`.
 
 inputs:
     timeout-seconds:
         description: How long to wait for the decision before running as before.
         default: '240'
-    store-branch:
-        description: Branch holding the decision store in this repository.
-        default: ci-decisions
     github-token:
-        description: 'Token used to read the store (contents: read is enough).'
+        description: 'Token used to read the check run (checks: read is enough).'
         default: ${{ github.token }}
 
 outputs:
@@ -35,7 +34,6 @@ runs:
           env:
               GH_TOKEN: ${{ inputs.github-token }}
               TIMEOUT: ${{ inputs.timeout-seconds }}
-              STORE_BRANCH: ${{ inputs.store-branch }}
               EVENT_NAME: ${{ github.event_name }}
               PR_NUMBER: ${{ github.event.pull_request.number }}
               HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -47,7 +45,7 @@ runs:
               suite="${WORKFLOW_REF#*/.github/workflows/}"
               suite="${suite%%@*}"
               if ! PYTHONPATH="${ACTION_PATH}/../../workflows/scripts" python3 -m planner gate \
-                  --repo "${GITHUB_REPOSITORY}" --branch "${STORE_BRANCH}" --event "${EVENT_NAME}" --fork "${IS_FORK:-false}" \
+                  --repo "${GITHUB_REPOSITORY}" --event "${EVENT_NAME}" --fork "${IS_FORK:-false}" \
                   --pr "${PR_NUMBER:-}" --head-sha "${HEAD_SHA:-}" --suite "${suite}" --timeout "${TIMEOUT}"; then
                 echo "::warning::planner-gate failed, running the suite as before"
                 echo "should_skip=false" >> "${GITHUB_OUTPUT}"
