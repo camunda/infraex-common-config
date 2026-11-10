@@ -412,16 +412,10 @@ jobs:
             packages: read
             pull-requests: write
             statuses: write
-        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@<sha> # <version>
+        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@main
         with:
             model: deepseek/deepseek-v4.1-flash
             verifier-model: z-ai/glm-5.3
-            vault-secret-path: secret/data/products/distribution/ci
-        secrets:
-            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
-            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
-            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
 - List the caller under `dangerous-triggers` in the repository's `zizmor.yml`. Anyone can post
@@ -429,8 +423,10 @@ jobs:
   branch of the same repository. The `review` job checks out the pull request head, and the
   crev agents can run its code with the OpenRouter key and the read-only token in their
   environment. Only people with write access to the repository can put that code there.
-- `vault-secret-path` has no default. Set a path that the repository's Vault role can read and
-  that holds `OPENROUTER_API_KEY`.
+- infraex-terraform writes this caller to every SMX repository. The `review` job logs in to
+  Vault as `github-actions-smx-ci` and reads `OPENROUTER_API_KEY` from
+  `secret/data/products/smx/ci/openrouter`. The role lists the SMX repositories, so a caller
+  needs no Vault secrets. Passed `VAULT_*` secrets and `vault-secret-path` override the defaults.
 - When the crev container package (`ghcr.io/camunda/crev`) is not public, add the repository
   under the package's Actions access with the read role. Otherwise `docker login` works but the
   pull fails.
