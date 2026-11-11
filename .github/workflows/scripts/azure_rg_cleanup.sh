@@ -41,7 +41,7 @@ for RG in $(az group list --query "[?location=='$AZURE_REGION'].name" -o tsv); d
   [[ -z "$RG" ]] && continue
 
   # Protected RG name check (skip if in protected list)
-  if [[ " $PROTECTED_RG_LIST " =~ " $RG " ]]; then
+  if [[ " $PROTECTED_RG_LIST " == *" $RG "* ]]; then
     echo "Skipping $RG: protected"
     continue
   fi

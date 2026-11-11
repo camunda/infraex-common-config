@@ -14,13 +14,14 @@ fi
 IFS=',' read -r -a files <<< "${INPUTS_TOOL_VERSIONS_FILES}"
 for file in "${files[@]}"; do
   [ -f "$file" ] || { echo "${file} (file not found)"; missing+=("$file"); continue; }
+  dir="$(dirname "$file")"
   while read -r tool versions; do
     # Strip comments; `system` and `path:` pins are not managed by asdf install.
     versions="${versions%%#*}"
     [ -n "$tool" ] && [ "${tool:0:1}" != '#' ] || continue
     for version in $versions; do
       case "$version" in system | path:*) continue ;; esac
-      if ! (cd "$(dirname "$file")" && asdf where "$tool" "$version" > /dev/null 2>&1); then
+      if ! (cd "$dir" && asdf where "$tool" "$version" > /dev/null 2>&1); then
         echo "${tool} ${version}"
         missing+=("${tool} ${version}")
       fi

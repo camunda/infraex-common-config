@@ -18,6 +18,7 @@ awk '
 ' "$HERE/action.yml" > "$TEST_DIR/install.sh"
 printf 'golang 1.27.2\n' > "$TEST_DIR/.tool-versions"
 
+# shellcheck disable=SC2329 # install.sh calls it through export -f
 asdf() {
   if [ "$*" = 'plugin update --all' ]; then
     local update_attempt
@@ -45,6 +46,7 @@ asdf() {
     return 56
   fi
 }
+# shellcheck disable=SC2329 # install.sh calls it through export -f
 timeout() {
   if [ "$*" = '--kill-after=30s 5m asdf plugin update --all' ]; then
     echo "$*" >> "$TEST_DIR/update_timeouts"
@@ -60,6 +62,7 @@ timeout() {
     asdf install
   fi
 }
+# shellcheck disable=SC2329 # install.sh calls it through export -f
 sleep() { echo "$1" >> "$TEST_DIR/delays"; }
 export -f asdf timeout sleep
 

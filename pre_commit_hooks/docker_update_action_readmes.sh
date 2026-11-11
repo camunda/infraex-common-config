@@ -10,7 +10,7 @@ GROUP_ID=$(id -g)
 # define doc variables based on the git repository as this does not work correctly using
 # the built-in method
 REPO_URL=$(git config --get remote.origin.url)
-REPO_URL_CLEAN=$(echo "$REPO_URL" | sed 's/.git$//')
+REPO_URL_CLEAN="${REPO_URL%.git}"
 OWNER_PROJECT=$(echo "$REPO_URL_CLEAN" | awk -F'[:/]' '{print $(NF-1)"/"$NF}')
 DOC_ACTION_VERSION=${DOC_ACTION_VERSION:-main}
 # directory where your actions are located, use "." if it's top directory
