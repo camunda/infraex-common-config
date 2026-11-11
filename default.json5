@@ -410,8 +410,16 @@
       'format': 'plain',
     },
     'openshift-acm': {
-      'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/openshift_acm_versions.txt',
-      'format': 'plain',
+      // Red Hat ACM is installed through an OLM Subscription `channel: release-X.Y`.
+      // The Red Hat operator catalog lists the bundles that exist for each channel, with
+      // no authentication, so it replaces scraping docs.redhat.com, which blocks
+      // GitHub-hosted runners. Newest bundles first: a page holds at most 500 of them.
+      // Each `release-X.Y` channel becomes version `X.Y`, dated by its first bundle.
+      'defaultRegistryUrlTemplate': 'https://catalog.redhat.com/api/containers/v1/operators/bundles?filter=package==advanced-cluster-management&page_size=500&sort_by=creation_date%5Bdesc%5D&include=data.channel_name,data.creation_date',
+      'format': 'json',
+      'transformTemplates': [
+        '{"releases": $map($distinct(data[$match(channel_name, /^release-\\d+\\.\\d+$/)].channel_name), function($c) { {"version": $substringAfter($c, "release-"), "releaseTimestamp": $fromMillis($min(data[channel_name = $c].$toMillis(creation_date)))} })}',
+      ],
     },
     'opensearch-camunda': {
       'defaultRegistryUrlTemplate': 'https://camunda.github.io/camunda-deployment-references/opensearch_versions.txt',
