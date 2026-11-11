@@ -445,7 +445,7 @@ jobs:
             - name: Install pre-commit
               run: |
                   set -euo pipefail
-                  python3 -m venv /tmp/baseline-venv
+                  python3 -I -m venv /tmp/baseline-venv
                   # renovate: datasource=pypi depName=pre-commit
                   PRE_COMMIT_VERSION="4.7.0"
                   /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
