@@ -1,0 +1,6 @@
+{
+  "name": "fixture",
+  "renovate": {
+    "extends": ["github>camunda/infraex-common-config"]
+  }
+}
