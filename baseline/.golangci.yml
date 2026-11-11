@@ -1,0 +1,30 @@
+---
+version: '2'
+linters:
+    default: standard
+    enable:
+        - funlen
+        - gocognit
+        - gocyclo
+        - nolintlint
+    settings:
+        funlen:
+            lines: 250
+            statements: -1
+        gocognit:
+            min-complexity: 30
+        gocyclo:
+            min-complexity: 30
+        nolintlint:
+            require-explanation: true
+            require-specific: true
+    exclusions:
+        rules:
+            - path: _test\.go$
+              linters: [funlen, gocognit, gocyclo]
+formatters:
+    enable:
+        - gofmt
+issues:
+    max-issues-per-linter: 0
+    max-same-issues: 0

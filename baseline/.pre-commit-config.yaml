@@ -1,0 +1,72 @@
+---
+default_language_version:
+    # renovate: datasource=golang-version depName=go
+    golang: 1.27.3
+repos:
+    - repo: https://github.com/camunda/infraex-common-config
+      rev: 3.0.5
+      hooks:
+          - id: action-pin-spacing
+
+    - repo: https://github.com/rhysd/actionlint
+      rev: v1.7.12
+      hooks:
+          - id: actionlint
+            language: golang
+            additional_dependencies: [github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.11.1]
+            args: [-ignore=property "workflow_(sha|repository|ref|file_path)" is not defined]
+
+    - repo: https://github.com/zizmorcore/zizmor-pre-commit
+      rev: v1.32.0
+      hooks:
+          - id: zizmor
+            args: [--no-progress, --no-config, --min-severity=high]
+
+    - repo: https://github.com/koalaman/shellcheck-precommit
+      rev: v0.11.0
+      hooks:
+          - id: shellcheck
+            args: [--norc]
+
+    - repo: https://github.com/golangci/golangci-lint
+      rev: v2.15.0
+      hooks:
+          - id: golangci-lint-full
+            entry: >-
+                bash -c 'config="$PWD/.infraex-common-config/baseline/.golangci.yml" status=0;
+                for module in $(git ls-files -- go.mod "*/go.mod" | grep -Ev "(^|/)(testdata|fixtures|vendor)/");
+                do dir="$(dirname "$module")"; (cd "$dir" && golangci-lint run --config="$config" --path-prefix="$dir" ./...) || status=1; done;
+                exit "$status"'
+
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.17.4
+      hooks:
+          - id: ruff-check
+            args: [--isolated]
+
+    - repo: local
+      hooks:
+          - id: hadolint
+            name: hadolint
+            language: docker_image
+            # renovate: datasource=docker depName=ghcr.io/hadolint/hadolint
+            entry: ghcr.io/hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+            args: [hadolint, --config=.infraex-common-config/baseline/.hadolint.yaml]
+            types: [dockerfile]
+
+          - id: terraform-fmt
+            name: terraform fmt
+            language: docker_image
+            # renovate: datasource=docker depName=hashicorp/terraform
+            entry: hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a
+            args: [fmt, -check, -diff]
+            types: [terraform]
+
+          - id: tflint
+            name: tflint
+            language: docker_image
+            # renovate: datasource=docker depName=ghcr.io/terraform-linters/tflint
+            entry: ghcr.io/terraform-linters/tflint:v0.66.0@sha256:65b9944a9274c4989492c1d79998c2801664bf8a55fddb4bd3a9e6d73a006ddc
+            args: [--recursive, --config=/src/.infraex-common-config/baseline/.tflint.hcl]
+            types: [terraform]
+            pass_filenames: false
