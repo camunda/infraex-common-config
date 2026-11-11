@@ -99,6 +99,7 @@ jobs:
 
             - name: Show that the review started
               continue-on-error: true
+              timeout-minutes: 1
               env:
                   GH_TOKEN: ${{ github.token }}
                   REPO: ${{ github.repository }}
