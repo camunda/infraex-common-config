@@ -394,7 +394,7 @@ label and the `crev/escalation` status, and it never approves.
 - `publish` has no OpenRouter key. It posts the review from the same run with
   `crev --from-review`, which refuses the review when the head, the base branch or the
   repository changed.
-- `report` comments on the pull request when `review` or `publish` fails.
+- `report` comments on the pull request when `secrets`, `review` or `publish` fails.
 
 ```yaml
 ---
