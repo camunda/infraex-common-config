@@ -175,7 +175,7 @@ repository can add hooks and jobs of its own.
 | `action-pin-spacing` | one space before the version comment of a pinned action | [`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml) |
 | actionlint | workflows, and their `run:` blocks with shellcheck | defaults |
 | zizmor | workflows, actions and pre-commit files, severity `high` | defaults, `--no-config` |
-| shellcheck | shell scripts | defaults, `--norc` |
+| shellcheck | shell scripts, not `.bats` test files | defaults, `--norc` |
 | golangci-lint | each Go module: each tracked `go.mod` outside `testdata`, `fixtures` and `vendor` | [`baseline/.golangci.yml`](baseline/.golangci.yml) |
 | ruff | Python, lint only | default rule set, `--isolated` |
 | hadolint | Dockerfiles | [`baseline/.hadolint.yaml`](baseline/.hadolint.yaml) |
