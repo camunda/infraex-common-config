@@ -382,7 +382,8 @@ label and the `crev/escalation` status, and it never approves.
 - `guard` checks that the commenter has `triage` or a higher role on the repository, and that
   the pull request head is a branch of the same repository. It runs before any job reads a
   secret, because `issue_comment` runs with the repository secrets also for pull requests from
-  forks.
+  forks. When both checks pass, it reacts with :eyes: to the `/crev` comment, so the requester
+  sees that the review started.
 - `secrets` logs in to Vault and wraps the OpenRouter key into a single-use token with
   `vault-wrapped-secrets`. It runs no crev and no pull request code.
 - `review` unwraps the key, runs crev in the crev container image without posting, and stores

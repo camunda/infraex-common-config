@@ -59,6 +59,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
+            issues: write
             pull-requests: read
         outputs:
             pr-url: ${{ steps.pr.outputs.url }}
@@ -95,6 +96,15 @@ jobs:
                     echo "url=$(jq -r '.html_url' <<<"${pr}")"
                     echo "head-sha=$(jq -r '.head.sha' <<<"${pr}")"
                   } >> "${GITHUB_OUTPUT}"
+
+            - name: Show that the review started
+              continue-on-error: true
+              timeout-minutes: 1
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  REPO: ${{ github.repository }}
+                  COMMENT_ID: ${{ github.event.comment.id }}
+              run: gh api -X POST "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" -f content=eyes --silent
 
     secrets:
         name: Wrap the OpenRouter key
