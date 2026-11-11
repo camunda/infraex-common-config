@@ -269,4 +269,4 @@ jobs:
                   PR_URL: ${{ needs.guard.outputs.pr-url }}
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
               run: |
-                  gh pr comment "${PR_URL}" --body "crev could not finish this review: ${RUN_URL}. If the pull request changed during the review, comment \`/crev\` again."
+                  gh pr comment "${PR_URL}" --body "crev could not finish this review: ${RUN_URL}. Comment \`/crev\` again to start a new review. Re-running the failed jobs does not work: the OpenRouter key handover can be used only once."
