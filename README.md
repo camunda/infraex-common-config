@@ -186,6 +186,9 @@ The hooks do not read the linter configuration of the caller: `.golangci.yml`, `
 `ruff.toml`, `pyproject.toml`, `.hadolint.yaml`, `.tflint.hcl` and `zizmor.yml`. The one exception
 is `.github/actionlint.yaml`, which actionlint reads for the labels of self-hosted runners.
 
+The hook list does not check files below a folder with the name `testdata`, `fixtures` or
+`vendor`, except tflint, which with `--recursive` lints every folder that is not hidden.
+
 golangci-lint runs the `standard` linters, `gocognit` and `gocyclo` with the limit 30, `funlen`
 with 250 lines, `nolintlint` and `gofmt`, with the exclusion preset `std-error-handling`. The
 three limits and the deprecation check `SA1019` do not apply to `_test.go` files.
