@@ -187,7 +187,8 @@ The hooks do not read the linter configuration of the caller: `.golangci.yml`, `
 is `.github/actionlint.yaml`, which actionlint reads for the labels of self-hosted runners.
 
 golangci-lint runs the `standard` linters, `gocognit` and `gocyclo` with the limit 30, `funlen`
-with 250 lines, `nolintlint` and `gofmt`. The three limits do not apply to `_test.go` files.
+with 250 lines, `nolintlint` and `gofmt`, with the exclusion preset `std-error-handling`. The
+three limits and the deprecation check `SA1019` do not apply to `_test.go` files.
 
 To keep an old finding, suppress it inline and give the reason:
 
