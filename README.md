@@ -384,14 +384,20 @@ label and the `crev/escalation` status, and it never approves.
   secret, because `issue_comment` runs with the repository secrets also for pull requests from
   forks. When both checks pass, it reacts with :eyes: to the `/crev` comment, so the requester
   sees that the review started.
-- `review` reads the OpenRouter key from Vault, runs crev in the crev container image without
-  posting, and stores `review.json`. The crev verifier uses `verifier-model`, and the other
+- `secrets` logs in to Vault and wraps the OpenRouter key into a single-use token with
+  `vault-wrapped-secrets`. It runs no crev and no pull request code.
+- `review` unwraps the key, runs crev in the crev container image without posting, and stores
+  `review.json`. It has no Vault login and no `id-token: write`, as
+  [Vault Secrets in Agentic Workflows](https://github.com/camunda/infra-core/blob/stage/docs/vault/vault-secrets-in-agentic-workflows.md)
+  requires for a job that runs an agent. The crev verifier uses `verifier-model`, and the other
   agents use `model`. It fails when the pull request head changed after `guard`
   read it. The job has a read-only token.
 - `publish` has no OpenRouter key. It posts the review from the same run with
   `crev --from-review`, which refuses the review when the head, the base branch or the
   repository changed.
-- `report` comments on the pull request when `review` or `publish` fails.
+- `report` comments on the pull request when `secrets`, `review` or `publish` fails, and asks for
+  a new `/crev` comment. "Re-run failed jobs" does not rerun `secrets`, so `review` fails at the
+  unwrap: the wrap token is single-use and expires after 5 minutes.
 
 ```yaml
 ---
@@ -426,7 +432,7 @@ jobs:
   environment. Only people with write access to the repository can put that code there.
   `unpinned-uses`: the caller follows `main`, so a change to this workflow reaches every
   repository at once. Renovate skips the file.
-- infraex-terraform writes this caller to every SMX repository. The `review` job logs in to
+- infraex-terraform writes this caller to every SMX repository. The `secrets` job logs in to
   Vault as `github-actions-smx-ci` and reads `OPENROUTER_API_KEY` from
   `secret/data/products/smx/ci/openrouter`. The role lists the SMX repositories, so a caller
   needs no Vault secrets. Passed `VAULT_*` secrets and `vault-secret-path` override the defaults.

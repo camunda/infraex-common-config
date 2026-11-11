@@ -106,9 +106,30 @@ jobs:
                   COMMENT_ID: ${{ github.event.comment.id }}
               run: gh api -X POST "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" -f content=eyes --silent
 
+    secrets:
+        name: Wrap the OpenRouter key
+        needs: guard
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            id-token: write
+        outputs:
+            wrap-token: ${{ steps.wrap.outputs.wrap-token }}
+        steps:
+            - name: Wrap the OpenRouter key from Vault
+              id: wrap
+              uses: camunda/infra-global-github-actions/vault-wrapped-secrets/wrap@6644ac7ceab8e1b32359cc25a5161c46156fc319 # vault-wrapped-secrets-1.0.1
+              with:
+                  vault-url: ${{ secrets.VAULT_ADDR || 'https://vault.int.camunda.com' }}
+                  vault-auth-jwt-path: ${{ secrets.VAULT_JWT_PATH || 'github-actions-camunda' }}
+                  vault-auth-jwt-role: ${{ secrets.VAULT_JWT_ROLE || 'github-actions-smx-ci' }}
+                  vault-auth-jwt-audience: ${{ secrets.VAULT_JWT_AUDIENCE || 'camunda-vault' }}
+                  secrets: |
+                      ${{ inputs.vault-secret-path }} ${{ inputs.vault-openrouter-key }} | OPENROUTER_API_KEY;
+
     review:
         name: Review with crev
-        needs: guard
+        needs: [guard, secrets]
         concurrency:
             group: ${{ github.workflow }}-review-${{ github.event.issue.number }}
             cancel-in-progress: true
@@ -116,22 +137,15 @@ jobs:
         timeout-minutes: 120
         permissions:
             contents: read
-            id-token: write
             packages: read
             pull-requests: read
         steps:
-            - name: Read the OpenRouter key from Vault
+            - name: Unwrap the OpenRouter key
               id: vault
-              uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+              uses: camunda/infra-global-github-actions/vault-wrapped-secrets/unwrap@6644ac7ceab8e1b32359cc25a5161c46156fc319 # vault-wrapped-secrets-1.0.1
               with:
-                  url: ${{ secrets.VAULT_ADDR || 'https://vault.int.camunda.com' }}
-                  method: jwt
-                  path: ${{ secrets.VAULT_JWT_PATH || 'github-actions-camunda' }}
-                  role: ${{ secrets.VAULT_JWT_ROLE || 'github-actions-smx-ci' }}
-                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE || 'camunda-vault' }}
-                  exportEnv: false
-                  secrets: |
-                      ${{ inputs.vault-secret-path }} ${{ inputs.vault-openrouter-key }} | OPENROUTER_API_KEY ;
+                  vault-url: ${{ secrets.VAULT_ADDR || 'https://vault.int.camunda.com' }}
+                  wrap-token: ${{ needs.secrets.outputs.wrap-token }}
 
             - name: Write the OpenCode provider and crev profile configuration
               env:
@@ -168,7 +182,7 @@ jobs:
             - name: Review the pull request
               env:
                   GH_TOKEN: ${{ github.token }}
-                  OPENROUTER_API_KEY: ${{ steps.vault.outputs.OPENROUTER_API_KEY }}
+                  OPENROUTER_API_KEY: ${{ fromJSON(steps.vault.outputs.secrets).OPENROUTER_API_KEY }}
                   CREV_IMAGE: ${{ inputs.crev-image }}
                   PR_URL: ${{ needs.guard.outputs.pr-url }}
               run: |
@@ -255,4 +269,4 @@ jobs:
                   PR_URL: ${{ needs.guard.outputs.pr-url }}
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
               run: |
-                  gh pr comment "${PR_URL}" --body "crev could not finish this review: ${RUN_URL}. If the pull request changed during the review, comment \`/crev\` again."
+                  gh pr comment "${PR_URL}" --body "crev could not finish this review: ${RUN_URL}. Comment \`/crev\` again to start a new review. Re-running the failed jobs does not work: the OpenRouter key handover can be used only once."
