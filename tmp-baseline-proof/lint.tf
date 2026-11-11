@@ -1,0 +1,3 @@
+variable "BadName" {
+  type = string
+}
