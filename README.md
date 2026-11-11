@@ -207,6 +207,12 @@ To keep an old finding, suppress it inline and give the reason:
 actionlint has no inline suppression for its own rules: `paths` in `.github/actionlint.yaml`
 ignores an error in one file. `terraform fmt` has no suppression: format the file.
 
+The hook list ignores two actionlint 1.7.12 errors for all callers: `property "workflow_sha" is
+not defined` (and `workflow_repository`, `workflow_ref`, `workflow_file_path`), because actionlint
+does not know these documented `job` properties, and `label "ubuntu-26.04" is unknown`, because
+actionlint does not know this GitHub-hosted runner label
+([rhysd/actionlint#682](https://github.com/rhysd/actionlint/issues/682)).
+
 To change a rule, open a pull request in this repository that changes `baseline/`. The job
 `baseline` of that pull request runs the changed hook list on this repository. Renovate updates
 each `rev`, image and Go version in `baseline/.pre-commit-config.yaml`.

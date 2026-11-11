@@ -13,7 +13,7 @@ repos:
       rev: v1.7.12
       hooks:
           - id: actionlint-docker
-            args: [-ignore=property "workflow_(sha|repository|ref|file_path)" is not defined]
+            args: [-ignore=property "workflow_(sha|repository|ref|file_path)" is not defined, -ignore=label "ubuntu-26\.04" is unknown]
 
     - repo: https://github.com/zizmorcore/zizmor-pre-commit
       rev: v1.32.0
