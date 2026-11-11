@@ -237,7 +237,7 @@ run
 expect_rc "13" 0
 expect_out "13" "1 sound, 0 broken, 0 extracting"
 
-echo "14. preset extended from the renovate section of package.json"
+echo "14. preset extended as one string in the renovate section of package.json"
 setup
 rm "$REPO/.github/renovate.json5"
 file package-extends-preset.json package.json

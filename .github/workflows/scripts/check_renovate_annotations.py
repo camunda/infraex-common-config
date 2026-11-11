@@ -142,7 +142,9 @@ def extends_preset(root: Path) -> bool:
             config = json5.loads((root / name).read_text(encoding="utf-8"))
             if name == "package.json":
                 config = config.get("renovate", {})
-            return any(PRESET_REPOSITORY in entry for entry in config.get("extends", []))
+            extends = config.get("extends", [])
+            entries = [extends] if isinstance(extends, str) else extends
+            return any(PRESET_REPOSITORY in entry for entry in entries)
     return False
 
 
