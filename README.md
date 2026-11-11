@@ -175,7 +175,7 @@ repository can add hooks and jobs of its own.
 | `action-pin-spacing` | one space before the version comment of a pinned action | [`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml) |
 | actionlint | workflows, and their `run:` blocks with shellcheck | defaults |
 | zizmor | workflows, actions and pre-commit files, severity `high` | defaults, `--no-config` |
-| shellcheck | shell scripts, not `.bats` test files | defaults, `--norc` |
+| shellcheck | shell scripts, not `.bats` test files | defaults without `SC1091`, `--norc` |
 | golangci-lint | each Go module: each tracked `go.mod` outside `testdata`, `fixtures` and `vendor` | [`baseline/.golangci.yml`](baseline/.golangci.yml) |
 | ruff | Python, lint only | default rule set, `--isolated` |
 | hadolint | Dockerfiles | [`baseline/.hadolint.yaml`](baseline/.hadolint.yaml) |
@@ -188,6 +188,10 @@ is `.github/actionlint.yaml`, which actionlint reads for the labels of self-host
 
 The hook list does not check files below a folder with the name `testdata`, `fixtures` or
 `vendor`, except tflint, which with `--recursive` lints every folder that is not hidden.
+
+shellcheck runs with `SC1091` ("Not following") off, because that finding depends on which files
+pre-commit passes to the same shellcheck call, and pre-commit splits the files by the CPU count of
+the machine.
 
 golangci-lint runs the `standard` linters, `gocognit` and `gocyclo` with the limit 30, `funlen`
 with 250 lines, `nolintlint` and `gofmt`, with the exclusion preset `std-error-handling`. The
