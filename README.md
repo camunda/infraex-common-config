@@ -198,6 +198,10 @@ golangci-lint runs the `standard` linters, `gocognit` and `gocyclo` with the lim
 with 250 lines, `nolintlint` and `gofmt`, with the exclusion preset `std-error-handling`. The
 three limits and the deprecation check `SA1019` do not apply to `_test.go` files.
 
+hadolint runs without `DL3008` and `DL3018`: the baseline does not require a version pin for an
+operating system package in `apt-get install` or `apk add`. A repository that wants these pins
+adds its own hadolint hook.
+
 To keep an old finding, suppress it inline and give the reason:
 
 | Tool | Suppression |
@@ -205,7 +209,7 @@ To keep an old finding, suppress it inline and give the reason:
 | shellcheck, also in a `run:` block | `# shellcheck disable=SC2053 # <reason>` |
 | golangci-lint | `//nolint:gocognit // <reason>` |
 | ruff | `# noqa: F401  # <reason>` |
-| hadolint | `# hadolint ignore=DL3008 # <reason>` |
+| hadolint | `# hadolint ignore=DL3003 # <reason>` |
 | tflint | `# tflint-ignore: terraform_naming_convention # <reason>` |
 | zizmor | `# zizmor: ignore[dangerous-triggers]`, with the reason on the line above |
 
