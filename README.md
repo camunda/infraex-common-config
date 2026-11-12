@@ -169,7 +169,9 @@ out this repository at `job.workflow_sha` into `.infraex-common-config` and runs
 the root of the caller. The job `baseline` fails when the repository of the caller has the path
 `.infraex-common-config`. The hook list and the linter configurations come from this repository,
 so no file of the caller changes them. The workflow has no input to skip or select a hook. A
-repository can add hooks and jobs of its own.
+repository can add hooks and jobs of its own. A caller needs no `.pre-commit-config.yaml` of its
+own: without one in its root, the job `lint` installs no tool, runs no hook and passes with a
+notice. With one, `lint` runs it with the `pre-commit` version that `.tool-versions` pins.
 
 | Hook | Checks | Rules |
 |---|---|---|

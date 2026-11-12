@@ -142,8 +142,18 @@ jobs:
               with:
                   persist-credentials: false
 
+            - name: Find the caller's hook list
+              id: hooks
+              run: |
+                  if [ -f .pre-commit-config.yaml ]; then
+                    echo "found=true" | tee -a "$GITHUB_OUTPUT"
+                  else
+                    echo "::notice::This repository has no hook list of its own (.pre-commit-config.yaml). The job baseline runs the central hook list."
+                  fi
+
             # Setup tool cache
             - name: Install asdf tools
+              if: steps.hooks.outputs.found == 'true'
               uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
 
             # What used to stand here was `apt-get install libsqlite3-dev libbz2-dev
@@ -158,6 +168,7 @@ jobs:
             # cost of a subprocess: the three modules whose absence is what a missing build
             # dependency looks like are imported before any hook can blame something else.
             - name: Check the interpreter is complete
+              if: steps.hooks.outputs.found == 'true'
               run: |
                   set -euo pipefail
                   if ! python3 -c 'import bz2, lzma, sqlite3'; then
@@ -177,6 +188,7 @@ jobs:
             # .tool-versions.
             - name: Check pre-commit matches the caller's .tool-versions
               id: toolchain
+              if: steps.hooks.outputs.found == 'true'
               run: |
                   set -euo pipefail
 
@@ -212,6 +224,7 @@ jobs:
 
             - name: Restore pre-commit hook environments
               id: precommit_cache
+              if: steps.hooks.outputs.found == 'true'
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/pre-commit
@@ -235,11 +248,13 @@ jobs:
 
             - name: Run pre-commit
               id: pre_commit_check_first_run
+              if: steps.hooks.outputs.found == 'true'
               run: pre-commit run --show-diff-on-failure --color=always --all-files --verbose
 
             - name: Rerun pre-commit to autofix files if pre-commit failed
               id: pre_commit_check_second_run
-              if: ${{ !cancelled() && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome != 'success' }}
+              if: ${{ !cancelled() && steps.hooks.outputs.found == 'true' && steps.mode.outputs.autofix_pr == 'true' && steps.pre_commit_check_first_run.outcome
+                  != 'success' }}
               run: pre-commit run --show-diff-on-failure --color=always --all-files --verbose
 
             # Saving from every pull request run was self-defeating: an entry written on
@@ -254,8 +269,8 @@ jobs:
             # first pre-commit run has failed by definition, and the environments it just built
             # are exactly what the next run should not have to rebuild.
             - name: Save pre-commit hook environments
-              if: ${{ !cancelled() && steps.precommit_cache.outputs.cache-hit != 'true' && (steps.precommit_cache.outputs.cache-matched-key == '' || (github.event_name
-                  == 'push' && github.ref_name == github.event.repository.default_branch)) }}
+              if: ${{ !cancelled() && steps.hooks.outputs.found == 'true' && steps.precommit_cache.outputs.cache-hit != 'true' && (steps.precommit_cache.outputs.cache-matched-key
+                  == '' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)) }}
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/pre-commit
