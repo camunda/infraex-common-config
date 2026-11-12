@@ -166,8 +166,9 @@ The job `baseline` of [`lint-global.yml`](.github/workflows/lint-global.yml) run
 [`baseline/.pre-commit-config.yaml`](baseline/.pre-commit-config.yaml) on every caller. It checks
 out this repository at `job.workflow_sha` into `.infraex-common-config` and runs
 `pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files` in
-the root of the caller. The hook list and the linter configurations come from this repository, so
-no file of the caller changes them. The workflow has no input to skip or select a hook. A
+the root of the caller. The job `baseline` fails when the repository of the caller has the path
+`.infraex-common-config`. The hook list and the linter configurations come from this repository,
+so no file of the caller changes them. The workflow has no input to skip or select a hook. A
 repository can add hooks and jobs of its own.
 
 | Hook | Checks | Rules |

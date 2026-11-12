@@ -435,6 +435,14 @@ jobs:
               with:
                   persist-credentials: false
 
+            - name: Check the caller does not have the baseline folder
+              run: |
+                  set -euo pipefail
+                  if [ -e .infraex-common-config ] || [ -L .infraex-common-config ]; then
+                    echo "::error::The repository has the path .infraex-common-config. The lint baseline uses that path for its own checkout. Remove .infraex-common-config from the repository."
+                    exit 1
+                  fi
+
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   repository: ${{ job.workflow_repository }}
