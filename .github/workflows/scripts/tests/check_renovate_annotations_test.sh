@@ -264,6 +264,24 @@ expect_rc "16" 0
 expect_out "16" "so the preset does not apply"
 expect_noout "16" "detached.yml"
 
+echo "17. preset of a repository whose name starts with the preset repository"
+setup
+file extends-prefix-preset.json5 .github/renovate.json5
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "17" 0
+expect_out "17" "so the preset does not apply"
+expect_noout "17" "detached.yml"
+
+echo "18. preset in extends and in ignorePresets"
+setup
+file extends-ignored-preset.json5 .github/renovate.json5
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "18" 0
+expect_out "18" "so the preset does not apply"
+expect_noout "18" "detached.yml"
+
 echo
 echo "passed=$PASS failed=$FAIL"
 [[ "$FAIL" == "0" ]]

@@ -69,6 +69,7 @@ ANNOTATION = re.compile(r"datasource=\S+.*depName=|depName=\S+.*datasource=")
 EXEMPTION = "renovate-inert-ok"
 
 PRESET_REPOSITORY = "camunda/infraex-common-config"
+PRESET_REFERENCE = re.compile(rf"^(?:[a-z]+>)?{re.escape(PRESET_REPOSITORY)}(?:$|[:/#(])")
 RENOVATE_CONFIG_FILES = [
     f"{folder}renovate.json{suffix}"
     for folder in ("", ".github/", ".gitlab/")
@@ -144,7 +145,8 @@ def extends_preset(root: Path) -> bool:
                 config = config.get("renovate", {})
             extends = config.get("extends", [])
             entries = [extends] if isinstance(extends, str) else extends
-            return any(PRESET_REPOSITORY in entry for entry in entries)
+            ignored = config.get("ignorePresets", [])
+            return any(PRESET_REFERENCE.match(entry) and entry not in ignored for entry in entries)
     return False
 
 

@@ -50,7 +50,8 @@ preset's own `customManagers` to the calling repository and fails on any annotat
 does not extract exactly one dependency. It checks nothing and passes when the first Renovate
 configuration file that exists, in the order of the
 [Renovate documentation](https://docs.renovatebot.com/configuration-options/), does not name
-`camunda/infraex-common-config` in its own `extends`, or when there is none.
+the repository `camunda/infraex-common-config` in its own `extends`, names it only in entries
+that `ignorePresets` also lists, or when there is none.
 
 It also warns, without failing, when the version an annotation extracts cannot match its own
 `versioning=regex:` -- `15-dev-latest` against `^15(\.(?<minor>\d+))?(\.(?<patch>\d+))?$`,
