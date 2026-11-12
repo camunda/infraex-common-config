@@ -31,7 +31,8 @@ on:
                     Run Renovate over the repository and fail on annotations it reads and then
                     drops as unusable. Off by default: a repository adopting it usually has a
                     few dependencies parked on a development version, which have to be marked
-                    `renovate-inert-ok` before the check can pass.
+                    `renovate-inert-ok` before the check can pass. It also runs when the calling
+                    repository has the variable `LINT_CHECK_RENOVATE_LOOKUP` set to `true`.
                 default: false
                 type: boolean
             vault-secret-path:
@@ -359,7 +360,7 @@ jobs:
 
     renovate-lookup:
         name: renovate lookup
-        if: ${{ inputs.check-renovate-lookup }}
+        if: ${{ inputs.check-renovate-lookup || vars.LINT_CHECK_RENOVATE_LOOKUP == 'true' }}
         runs-on: ubuntu-latest
         # `renovate-annotations` proves an annotation is read. This proves what is read can
         # be updated, which needs Renovate's own versioning implementations and therefore
