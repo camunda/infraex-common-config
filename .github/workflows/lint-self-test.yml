@@ -1,5 +1,5 @@
 ---
-name: pre-commit
+name: lint self-test
 
 on:
     pull_request:
@@ -7,7 +7,7 @@ on:
         branches: [main]
 
 jobs:
-    lint:
+    lint-self-test:
         permissions:
             contents: read
             id-token: write # Vault OIDC/JWT auth of the auto-fix job
