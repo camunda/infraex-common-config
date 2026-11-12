@@ -187,7 +187,8 @@ The hooks do not read the linter configuration of the caller: `.golangci.yml`, `
 is `.github/actionlint.yaml`, which actionlint reads for the labels of self-hosted runners.
 
 The hook list does not check files below a folder with the name `testdata`, `fixtures` or
-`vendor`, except tflint, which with `--recursive` lints every folder that is not hidden.
+`vendor`. tflint is the exception: it starts when the repository has a `.tf` or `.tf.json` file
+outside these folders, and with `--recursive` it then lints every folder that is not hidden.
 
 shellcheck runs with `SC1091` ("Not following") off, because that finding depends on which files
 pre-commit passes to the same shellcheck call, and pre-commit splits the files by the CPU count of
