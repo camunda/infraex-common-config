@@ -1,0 +1,37 @@
+---
+name: test
+
+on:
+    pull_request:
+
+jobs:
+    self-tests:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            - name: Install the JSON5 parser of the Renovate annotation checker
+              run: |
+                  set -euo pipefail
+                  python3 -m venv /tmp/self-tests-venv
+                  # renovate: datasource=pypi depName=json5
+                  JSON5_VERSION="0.17.3"
+                  /tmp/self-tests-venv/bin/pip install --quiet "json5==${JSON5_VERSION}"
+
+            - name: Run the Renovate annotation checker tests
+              env:
+                  PYTHON: /tmp/self-tests-venv/bin/python
+              run: ./.github/workflows/scripts/tests/check_renovate_annotations_test.sh
+
+            - name: Run the Renovate lookup checker tests
+              if: ${{ !cancelled() }}
+              run: ./.github/workflows/scripts/tests/check_renovate_lookup_test.sh
+
+            - name: Run the asdf-install-tooling tests
+              if: ${{ !cancelled() }}
+              run: bash .github/actions/asdf-install-tooling/test.sh
