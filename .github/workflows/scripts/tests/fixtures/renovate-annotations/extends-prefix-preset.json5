@@ -1,0 +1,3 @@
+{
+  extends: ['github>camunda/infraex-common-config-fork:default.json5'],
+}

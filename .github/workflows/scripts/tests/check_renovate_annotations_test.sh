@@ -36,6 +36,7 @@ fi
 setup() {
   REPO="$(mktemp -d)"
   USE_PRESET="$PRESET"
+  file extends-preset.json5 .github/renovate.json5
 }
 
 file() { # file <fixture> <path in the repository under test>
@@ -235,6 +236,51 @@ file shell-default-expansion.sh.fixture chart-env.sh
 run
 expect_rc "13" 0
 expect_out "13" "1 sound, 0 broken, 0 extracting"
+
+echo "14. preset extended as one string in the renovate section of package.json"
+setup
+rm "$REPO/.github/renovate.json5"
+file package-extends-preset.json package.json
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "14" 1
+expect_out "14" "0 sound, 1 broken, 0 extracting"
+
+echo "15. Renovate configuration that does not extend the preset"
+setup
+file extends-other-preset.json5 .github/renovate.json5
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "15" 0
+expect_out "15" "so the preset does not apply"
+expect_noout "15" "detached.yml"
+
+echo "16. no Renovate configuration"
+setup
+rm "$REPO/.github/renovate.json5"
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "16" 0
+expect_out "16" "so the preset does not apply"
+expect_noout "16" "detached.yml"
+
+echo "17. preset of a repository whose name starts with the preset repository"
+setup
+file extends-prefix-preset.json5 .github/renovate.json5
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "17" 0
+expect_out "17" "so the preset does not apply"
+expect_noout "17" "detached.yml"
+
+echo "18. preset in extends and in ignorePresets"
+setup
+file extends-ignored-preset.json5 .github/renovate.json5
+file detached-by-comment.yml.fixture detached.yml
+run
+expect_rc "18" 0
+expect_out "18" "so the preset does not apply"
+expect_noout "18" "detached.yml"
 
 echo
 echo "passed=$PASS failed=$FAIL"

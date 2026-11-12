@@ -68,6 +68,14 @@ ANNOTATION = re.compile(r"datasource=\S+.*depName=|depName=\S+.*datasource=")
 # agree on how it is declared.
 EXEMPTION = "renovate-inert-ok"
 
+PRESET_REPOSITORY = "camunda/infraex-common-config"
+PRESET_REFERENCE = re.compile(rf"^(?:[a-z]+>)?{re.escape(PRESET_REPOSITORY)}(?:$|[:/#(])")
+RENOVATE_CONFIG_FILES = [
+    f"{folder}renovate.json{suffix}"
+    for folder in ("", ".github/", ".gitlab/")
+    for suffix in ("", "c", "5")
+] + [".renovaterc", ".renovaterc.json", ".renovaterc.jsonc", ".renovaterc.json5", "package.json"]
+
 
 @dataclass
 class Manager:
@@ -127,6 +135,19 @@ def load_managers(preset_path: Path) -> list[Manager]:
     if not managers:
         sys.exit(f"error: {preset_path} declares no regex customManagers")
     return managers
+
+
+def extends_preset(root: Path) -> bool:
+    for name in RENOVATE_CONFIG_FILES:
+        if (root / name).is_file():
+            config = json5.loads((root / name).read_text(encoding="utf-8"))
+            if name == "package.json":
+                config = config.get("renovate", {})
+            extends = config.get("extends", [])
+            entries = [extends] if isinstance(extends, str) else extends
+            ignored = config.get("ignorePresets", [])
+            return any(PRESET_REFERENCE.match(entry) and entry not in ignored for entry in entries)
+    return False
 
 
 def tracked_files(root: Path) -> list[str]:
@@ -294,6 +315,12 @@ def main() -> int:
 
     managers = load_managers(args.preset)
     root = args.root.resolve()
+    if not extends_preset(root):
+        print(
+            f"no Renovate configuration of {root} extends {PRESET_REPOSITORY}, "
+            "so the preset does not apply: no annotation checked"
+        )
+        return 0
 
     findings: list[Finding] = []
     annotations = 0

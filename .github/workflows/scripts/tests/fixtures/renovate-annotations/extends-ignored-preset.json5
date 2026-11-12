@@ -1,0 +1,4 @@
+{
+  extends: ['github>camunda/infraex-common-config:default.json5'],
+  ignorePresets: ['github>camunda/infraex-common-config:default.json5'],
+}
