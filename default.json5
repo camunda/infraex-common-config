@@ -24,7 +24,7 @@
   commitBodyTable: true,
   separateMajorMinor: true,
   recreateWhen: 'always', // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
-  postUpdateOptions: ['gomodTidyAll'],
+  postUpdateOptions: ['gomodTidyAll'], // tidy updated go modules and local replace dependents so post-upgrade tidy steps don't fight Renovate https://docs.renovatebot.com/configuration-options/#postupdateoptions
   prBodyNotes: [
     '{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}',
     'Before merging, *always* check with the release notes if any other changes need to be done.',
