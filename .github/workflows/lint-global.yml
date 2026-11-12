@@ -32,7 +32,9 @@ on:
                     drops as unusable. Off by default: a repository adopting it usually has a
                     few dependencies parked on a development version, which have to be marked
                     `renovate-inert-ok` before the check can pass. It also runs when the calling
-                    repository has the variable `LINT_CHECK_RENOVATE_LOOKUP` set to `true`.
+                    repository has the variable `LINT_CHECK_RENOVATE_LOOKUP` set to `true`. The
+                    variable only turns the check on. A caller that passes `true` runs the check
+                    also when the variable is `false`.
                 default: false
                 type: boolean
             vault-secret-path:
