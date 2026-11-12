@@ -59,8 +59,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
-            issues: write
-            pull-requests: read
+            pull-requests: write
         outputs:
             pr-url: ${{ steps.pr.outputs.url }}
             head-sha: ${{ steps.pr.outputs.head-sha }}
