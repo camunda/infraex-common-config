@@ -426,6 +426,41 @@ jobs:
                     --report "${REPORT}" \
                     --root .
 
+    baseline:
+        name: baseline
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            - name: Check the caller does not have the baseline folder
+              run: |
+                  set -euo pipefail
+                  if [ -e .infraex-common-config ] || [ -L .infraex-common-config ]; then
+                    echo "::error::The repository has the path .infraex-common-config. The lint baseline uses that path for its own checkout. Remove .infraex-common-config from the repository."
+                    exit 1
+                  fi
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: .infraex-common-config
+                  persist-credentials: false
+
+            - name: Install pre-commit
+              run: |
+                  set -euo pipefail
+                  python3 -I -m venv /tmp/baseline-venv
+                  # renovate: datasource=pypi depName=pre-commit
+                  PRE_COMMIT_VERSION="4.7.0"
+                  /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
+
+            - name: Run the baseline hook list
+              run: /tmp/baseline-venv/bin/pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose
+
     autofix-apply:
         name: Commit pre-commit fixes
         needs: lint

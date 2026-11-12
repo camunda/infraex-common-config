@@ -33,7 +33,7 @@ jobs:
             - name: Compute todos cache key
               id: cache-key
               run: |
-                  export os_key=$(uname | tr '[:upper:]' '[:lower:]')
+                  os_key=$(uname | tr '[:upper:]' '[:lower:]')
                   echo "cache_key=todos-$os_key-${{ env.TODOS_VERSION }}" | tee -a "$GITHUB_OUTPUT"
                   echo "cache_path=$(go env GOPATH)/bin/todos" >> "$GITHUB_OUTPUT"
                   echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"

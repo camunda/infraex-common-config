@@ -160,6 +160,74 @@ cloud-nuke does not report ELBv2 target groups. Target groups created for Kubern
 
 The audit therefore counts, per permanent region, the total and orphaned (unattached) target groups and compares them against the regional quota. It posts a Slack warning when utilization reaches `ELBV2_TG_USAGE_WARN_PERCENT` (default 80%) of the quota, or when the number of orphaned target groups reaches `ELBV2_TG_ORPHAN_WARN` (default 50). In the CI regions, these orphaned target groups are deleted automatically by the [nightly cleanup](.github/workflows/aws_nightly_cleanup.yml).
 
+## Baseline
+
+The job `baseline` of [`lint-global.yml`](.github/workflows/lint-global.yml) runs the hook list
+[`baseline/.pre-commit-config.yaml`](baseline/.pre-commit-config.yaml) on every caller. It checks
+out this repository at `job.workflow_sha` into `.infraex-common-config` and runs
+`pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files` in
+the root of the caller. The job `baseline` fails when the repository of the caller has the path
+`.infraex-common-config`. The hook list and the linter configurations come from this repository,
+so no file of the caller changes them. The workflow has no input to skip or select a hook. A
+repository can add hooks and jobs of its own.
+
+| Hook | Checks | Rules |
+|---|---|---|
+| `action-pin-spacing` | one space before the version comment of a pinned action | [`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml) |
+| actionlint | workflows, and their `run:` blocks with shellcheck | defaults |
+| zizmor | workflows, actions and pre-commit files, severity `high` | defaults, `--no-config` |
+| shellcheck | shell scripts, not `.bats` test files | defaults without `SC1091`, `--norc`, `--external-sources` |
+| golangci-lint | each Go module: each tracked `go.mod` outside `testdata`, `fixtures` and `vendor` | [`baseline/.golangci.yml`](baseline/.golangci.yml) |
+| ruff | Python, lint only | default rule set, `--isolated` |
+| hadolint | Dockerfiles | [`baseline/.hadolint.yaml`](baseline/.hadolint.yaml) |
+| `terraform fmt` | Terraform formatting | - |
+| tflint | Terraform modules | [`baseline/.tflint.hcl`](baseline/.tflint.hcl) |
+
+The hooks do not read the linter configuration of the caller: `.golangci.yml`, `.shellcheckrc`,
+`ruff.toml`, `pyproject.toml`, `.hadolint.yaml`, `.tflint.hcl` and `zizmor.yml`. The one exception
+is `.github/actionlint.yaml`, which actionlint reads for the labels of self-hosted runners.
+
+The hook list does not check files below a folder with the name `testdata`, `fixtures` or
+`vendor`. tflint is the exception: it starts when the repository has a `.tf` or `.tf.json` file
+outside these folders, and with `--recursive` it then lints every folder that is not hidden.
+
+shellcheck runs with `SC1091` ("Not following") off, because that finding depends on which files
+pre-commit passes to the same shellcheck call, and pre-commit splits the files by the CPU count of
+the machine. It runs with `--external-sources`, so that it follows each `source` file that it can
+resolve in every call, and a finding such as `SC2154` does not depend on the batch either.
+
+golangci-lint runs the `standard` linters, `gocognit` and `gocyclo` with the limit 30, `funlen`
+with 250 lines, `nolintlint` and `gofmt`, with the exclusion preset `std-error-handling`. The
+three limits and the deprecation check `SA1019` do not apply to `_test.go` files.
+
+hadolint runs without `DL3008` and `DL3018`: the baseline does not require a version pin for an
+operating system package in `apt-get install` or `apk add`. A repository that wants these pins
+adds its own hadolint hook.
+
+To keep an old finding, suppress it inline and give the reason:
+
+| Tool | Suppression |
+|---|---|
+| shellcheck, also in a `run:` block | `# shellcheck disable=SC2053 # <reason>` |
+| golangci-lint | `//nolint:gocognit // <reason>` |
+| ruff | `# noqa: F401  # <reason>` |
+| hadolint | `# hadolint ignore=DL3003 # <reason>` |
+| tflint | `# tflint-ignore: terraform_naming_convention # <reason>` |
+| zizmor | `# zizmor: ignore[dangerous-triggers]`, with the reason on the line above |
+
+actionlint has no inline suppression for its own rules: `paths` in `.github/actionlint.yaml`
+ignores an error in one file. `terraform fmt` has no suppression: format the file.
+
+The hook list ignores two actionlint 1.7.12 errors for all callers: `property "workflow_sha" is
+not defined` (and `workflow_repository`, `workflow_ref`, `workflow_file_path`), because actionlint
+does not know these documented `job` properties, and `label "ubuntu-26.04" is unknown`, because
+actionlint does not know this GitHub-hosted runner label
+([rhysd/actionlint#682](https://github.com/rhysd/actionlint/issues/682)).
+
+To change a rule, open a pull request in this repository that changes `baseline/`. The job
+`baseline` of that pull request runs the changed hook list on this repository. Renovate updates
+each `rev`, image and Go version in `baseline/.pre-commit-config.yaml`.
+
 ## CI trust boundary
 
 A job that runs repository-supplied code must not hold a GitHub write credential.
@@ -332,7 +400,7 @@ a pending request.
 name: Copilot review
 
 on:
-    pull_request_target:
+    pull_request_target: # zizmor: ignore[dangerous-triggers]
         types: [opened, ready_for_review, labeled]
 
 permissions: {}
@@ -359,8 +427,8 @@ jobs:
   differs) to their own team's Slack bot token secret. The default is the InfraEx one.
 - `pull_request_target` keeps fork pull requests covered, because a `pull_request` run from a
   fork gets a read-only token. The workflow checks out nothing, so no pull request code runs
-  next to the write token. List the caller under `dangerous-triggers` in the repository's
-  `zizmor.yml`.
+  next to the write token. The caller ignores the zizmor audit `dangerous-triggers` inline, because
+  the baseline does not read the repository's `zizmor.yml`.
 - `pull_request_target` runs the caller from the pull request's base branch. A branch without
   the caller gets no automatic review: backport the caller to every branch that needs one.
 - Remove the `copilot_code_review` rule from the repository's rulesets once the caller is on

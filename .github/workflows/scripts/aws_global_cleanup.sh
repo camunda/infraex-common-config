@@ -220,6 +220,7 @@ if [ -n "$role_names" ]; then
         skip=false
         # Skip roles prefixed that we want to keep
         for pattern in "${SKIP_ROLES[@]}"; do
+            # shellcheck disable=SC2053 # SKIP_ROLES holds glob patterns
             if [[ "$role_name" == $pattern ]]; then
                 echo "Skipping role: $role_name"
                 skip=true
@@ -285,6 +286,7 @@ if [ -n "$iam_policies" ]; then
         skip=false
         # Skip policies prefixed that we want to keep
         for pattern in "${SKIP_POLICIES[@]}"; do
+            # shellcheck disable=SC2053 # SKIP_POLICIES holds glob patterns
             if [[ "$iam_policy" == $pattern ]]; then
                 echo "Skipping policy: $iam_policy"
                 skip=true
@@ -366,7 +368,7 @@ hosted_zones=$(paginate "aws route53 list-hosted-zones" "HostedZones[].{Id:Id,Na
 if [ -n "$hosted_zones" ]; then
     echo "$hosted_zones" | while read -r zone_id zone_name; do
         # Remove /hostedzone/ prefix from zone_id
-        zone_id=$(echo "$zone_id" | sed 's|/hostedzone/||')
+        zone_id="${zone_id/\/hostedzone\//}"
 
         # Skip zones that don't match orphan patterns
         if [[ ! "$zone_name" =~ \.hypershift\.local\.$ ]] && [[ ! "$zone_name" =~ ^rosa\..+\.openshiftapps\.com\.$ ]]; then

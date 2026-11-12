@@ -1,0 +1,39 @@
+---
+version: '2'
+run:
+    relative-path-mode: gomod
+linters:
+    default: standard
+    enable:
+        - funlen
+        - gocognit
+        - gocyclo
+        - nolintlint
+    settings:
+        funlen:
+            lines: 250
+            statements: -1
+        gocognit:
+            min-complexity: 30
+        gocyclo:
+            min-complexity: 30
+        nolintlint:
+            require-explanation: true
+            require-specific: true
+    exclusions:
+        presets: [std-error-handling]
+        paths: [(^|/)(testdata|fixtures|vendor)/]
+        rules:
+            - path: _test\.go$
+              linters: [funlen, gocognit, gocyclo]
+            - path: _test\.go$
+              linters: [staticcheck]
+              text: SA1019
+formatters:
+    enable:
+        - gofmt
+    exclusions:
+        paths: [(^|/)(testdata|fixtures|vendor)/]
+issues:
+    max-issues-per-linter: 0
+    max-same-issues: 0
