@@ -476,6 +476,15 @@ jobs:
                   PRE_COMMIT_VERSION="4.7.0"
                   /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
 
+            # The Go of the runner image lags behind the go.mod bumps of Renovate, and
+            # pre-commit runs golangci-lint with GOTOOLCHAIN=local, so it cannot fetch a newer one.
+            - name: Install Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+              with:
+                  go-version: stable
+                  check-latest: true
+                  cache: false
+
             - name: Run the baseline hook list
               run: /tmp/baseline-venv/bin/pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose
 
