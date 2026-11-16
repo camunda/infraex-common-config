@@ -406,6 +406,7 @@ a pending request.
 name: Copilot review
 
 on:
+    # no checkout in this file; it calls the pinned shared review workflow
     pull_request_target: # zizmor: ignore[dangerous-triggers]
         types: [opened, ready_for_review, labeled]
 
