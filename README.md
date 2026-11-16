@@ -406,6 +406,7 @@ a pending request.
 name: Copilot review
 
 on:
+    # no checkout in this file; it calls the pinned shared review workflow
     pull_request_target: # zizmor: ignore[dangerous-triggers]
         types: [opened, ready_for_review, labeled]
 
@@ -478,6 +479,7 @@ label and the `crev/escalation` status, and it never approves.
 name: crev review
 
 on:
+    # The guard job of crev-review-global.yml rejects commenters below triage
     issue_comment: # zizmor: ignore[dangerous-triggers]
         types: [created]
 
