@@ -397,14 +397,6 @@
       ],
       versioning: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(-(?<compatibility>debian-\\d+)-r(?<build>\\d+))?$',
     },
-    {
-      description: 'camunda/infraex-terraform writes these caller workflows and updates their pins.',
-      matchFileNames: [
-        '.github/workflows/crev-review.yml',
-        '.github/workflows/lint.yml',
-      ],
-      enabled: false,
-    },
   ],
   'customDatasources': {
     'rosa-camunda': {
