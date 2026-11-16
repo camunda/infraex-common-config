@@ -479,6 +479,7 @@ label and the `crev/escalation` status, and it never approves.
 name: crev review
 
 on:
+    # The guard job of crev-review-global.yml rejects commenters below triage
     issue_comment: # zizmor: ignore[dangerous-triggers]
         types: [created]
 
