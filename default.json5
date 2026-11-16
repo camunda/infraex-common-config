@@ -398,7 +398,7 @@
       versioning: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(-(?<compatibility>debian-\\d+)-r(?<build>\\d+))?$',
     },
     {
-      description: 'infraex-terraform writes the /crev and lint caller workflows to every SMX repository; they reference crev-review-global.yml and lint-global.yml at main on purpose.',
+      description: 'camunda/infraex-terraform writes these caller workflows and updates their pins.',
       matchFileNames: [
         '.github/workflows/crev-review.yml',
         '.github/workflows/lint.yml',
