@@ -521,6 +521,7 @@ jobs:
                   if awk '$1 == "golang" { found = 1 } END { exit !found }' .tool-versions 2>/dev/null; then
                     echo ".tool-versions pins golang"
                   else
+                    # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
                       | xargs -0 -r awk '$1 == "go" || $1 == "toolchain" { sub(/^go/, "", $2); print $2 }' \
                       | sort -V | tail -n 1)"
