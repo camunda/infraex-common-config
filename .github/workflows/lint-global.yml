@@ -511,8 +511,32 @@ jobs:
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
 
-            - name: Show the Go on PATH
-              run: if command -v go >/dev/null 2>&1; then go version; else echo "No Go on PATH"; fi
+            # Without a golang pin, the runner image Go can be older than the caller's go.mod,
+            # and golangci-lint built with it refuses to lint the newer modules. The newest
+            # go/toolchain directive of the caller's go.mod files then selects the toolchain,
+            # which Go downloads itself.
+            - name: Select the Go for the caller's go.mod
+              run: |
+                  set -euo pipefail
+                  if awk '$1 == "golang" { found = 1 } END { exit !found }' .tool-versions 2>/dev/null; then
+                    echo ".tool-versions pins golang"
+                  else
+                    version="$(git ls-files -z -- go.mod '*/go.mod' \
+                      | xargs -0 -r awk '$1 == "go" || $1 == "toolchain" { sub(/^go/, "", $2); print $2 }' \
+                      | sort -V | tail -n 1)"
+                    if [ -n "$version" ]; then
+                      case "$version" in
+                        *.*.*) ;;
+                        *) version="${version}.0" ;;
+                      esac
+                      if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                        echo "::error::Unexpected Go version '${version}' in go.mod."
+                        exit 1
+                      fi
+                      echo "GOTOOLCHAIN=go${version}" | tee -a "$GITHUB_ENV"
+                    fi
+                  fi
+                  if command -v go >/dev/null 2>&1; then go version; else echo "No Go on PATH"; fi
 
             - name: Run the baseline hook list
               run: pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose
