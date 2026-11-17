@@ -13,5 +13,5 @@ jobs:
             id-token: write # Vault OIDC/JWT auth of the auto-fix job
         uses: ./.github/workflows/lint-global.yml
         with:
+            autofix-actor: ''
             check-renovate-lookup: true
-        secrets: inherit
