@@ -522,8 +522,16 @@ jobs:
                   ASDF_RAN: ${{ steps.tools.outputs.pre_commit != '' }}
               run: |
                   set -euo pipefail
-                  if [ "$ASDF_RAN" = "true" ] && awk '$1 == "golang" { found = 1 } END { exit !found }' .tool-versions 2>/dev/null; then
-                    echo ".tool-versions pins golang and asdf installed it"
+                  pinned="$(awk '$1 == "golang" { print $2; exit }' .tool-versions 2>/dev/null || true)"
+                  if [ "$ASDF_RAN" = "true" ] && [ -n "$pinned" ]; then
+                    if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+                      echo "::error::Unexpected golang version '${pinned}' in .tool-versions."
+                      exit 1
+                    fi
+                    # pre-commit builds golangci-lint in its clone of the hook repository, where
+                    # no .tool-versions exists. The asdf shim then needs the version from the
+                    # environment.
+                    echo "ASDF_GOLANG_VERSION=${pinned}" | tee -a "$GITHUB_ENV"
                   else
                     # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
