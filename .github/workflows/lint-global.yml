@@ -511,15 +511,19 @@ jobs:
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
 
-            # Without a golang pin, the runner image Go can be older than the caller's go.mod,
+            # Without a golang pin that asdf installed, the runner image Go can be older than the caller's go.mod,
             # and golangci-lint built with it refuses to lint the newer modules. The newest
             # go/toolchain directive of the caller's go.mod files then selects the toolchain,
             # which Go downloads itself.
+            # The golang pin counts only when asdf ran, that is, when the caller also pins
+            # pre-commit. Otherwise asdf installed no Go and the pin has no effect.
             - name: Select the Go for the caller's go.mod
+              env:
+                  ASDF_RAN: ${{ steps.tools.outputs.pre_commit != '' }}
               run: |
                   set -euo pipefail
-                  if awk '$1 == "golang" { found = 1 } END { exit !found }' .tool-versions 2>/dev/null; then
-                    echo ".tool-versions pins golang"
+                  if [ "$ASDF_RAN" = "true" ] && awk '$1 == "golang" { found = 1 } END { exit !found }' .tool-versions 2>/dev/null; then
+                    echo ".tool-versions pins golang and asdf installed it"
                   else
                     # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
