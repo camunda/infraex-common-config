@@ -8,7 +8,7 @@ No path needs a review from a specific team: the repository has no `CODEOWNERS` 
 
 - `default.json5`: the shared Renovate preset. Callers extend `github>camunda/infraex-common-config:default.json5`.
 - `.github/workflows/`: the `*-global.yml` files are reusable workflows for callers. The other files run in this repository. See "Architecture".
-  - `.github/workflows/crev-review.yml`: written by camunda/infraex-terraform. Source: [crev review](README.md#crev-review). Renovate skips it (`default.json5`).
+  - `.github/workflows/crev-review.yml`: created by camunda/infraex-terraform. Source: [crev review](README.md#crev-review). Renovate updates its release pin.
   - `.github/workflows/scripts/`: the scripts of the cleanup workflows and the two Renovate checkers of `lint-global.yml`.
   - `.github/workflows/scripts/tests/`: test scripts, stubs and fixtures of those scripts.
 - `.github/actions/`: the composite actions `asdf-install-tooling`, `report-failure-on-slack` and `report-warning-on-slack`. Each `README.md` there is written by the pre-commit hook `update-action-readmes-docker`.
@@ -29,7 +29,7 @@ No path needs a review from a specific team: the repository has no `CODEOWNERS` 
 - The jobs of `lint-global.yml`: `lint` runs the pre-commit hooks of the caller, `renovate-annotations` and `renovate-lookup` check the Renovate annotations, `baseline` runs `baseline/.pre-commit-config.yaml`, and `autofix-apply` commits the fixes of `lint` for the actors in `autofix-actor`.
 - A job that runs repository code holds no write credential. `commit-patch-global.yml` applies the patch of such a job and commits it with an App token. See [CI trust boundary](README.md#ci-trust-boundary).
 - `aws_nightly_cleanup.yml` and `azure_nightly_cleanup.yml` run each day and delete old resources in the CI regions and, on Saturday, in the weekly regions. On a PR that changes their files, they log in to the cloud and run with `DRY_RUN=true`. `permanent_resources_audit.yml` lists the resources of the permanent regions each Sunday and posts a summary to Slack. The regions: [README](README.md#region-usage-for-cloud-providers).
-- `crev-review.yml` calls `crev-review-global.yml` of `main` when a PR comment is `/crev` or starts with `/crev `.
+- `crev-review.yml` calls `crev-review-global.yml` of a release when a PR comment is `/crev` or starts with `/crev `.
 
 ## Commit rules
 
