@@ -528,10 +528,16 @@ jobs:
                       echo "::error::Unexpected golang version '${pinned}' in .tool-versions."
                       exit 1
                     fi
-                    # pre-commit builds golangci-lint in its clone of the hook repository, where
-                    # no .tool-versions exists. The asdf shim then needs the version from the
-                    # environment.
-                    echo "ASDF_GOLANG_VERSION=${pinned}" | tee -a "$GITHUB_ENV"
+                    # The real Go binary, not the asdf shim. pre-commit builds golangci-lint in
+                    # its clone of the hook repository, where the shim finds no .tool-versions,
+                    # and the shim sets its own GOBIN, so the built binary would not reach the
+                    # hook environment.
+                    goroot="$(ASDF_GOLANG_VERSION="$pinned" asdf where golang)/go"
+                    if [ ! -x "${goroot}/bin/go" ]; then
+                      echo "::error::asdf did not install golang ${pinned} at ${goroot}."
+                      exit 1
+                    fi
+                    echo "${goroot}/bin" | tee -a "$GITHUB_PATH"
                   else
                     # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
