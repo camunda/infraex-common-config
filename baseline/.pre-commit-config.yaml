@@ -1,7 +1,7 @@
 ---
 default_language_version:
-    # renovate: datasource=golang-version depName=go
-    golang: 1.27.3
+    # The Go on PATH: the caller's .tool-versions pin, installed by asdf in the job baseline.
+    golang: system
 exclude: (^|/)(testdata|fixtures|vendor)/
 repos:
     - repo: https://github.com/camunda/infraex-common-config

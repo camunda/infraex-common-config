@@ -468,23 +468,30 @@ jobs:
                   path: .infraex-common-config
                   persist-credentials: false
 
-            - name: Install pre-commit
+            # Tools come from the caller's .tool-versions, as in the job lint, so both jobs run
+            # the same pre-commit and Go. The hook list runs golangci-lint-full with the Go on
+            # PATH (`golang: system`), which is the Go the caller pins next to its go.mod.
+            - name: Install asdf tools
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+
+            - name: Check pre-commit matches the caller's .tool-versions
               run: |
                   set -euo pipefail
-                  python3 -I -m venv /tmp/baseline-venv
-                  # renovate: datasource=pypi depName=pre-commit
-                  PRE_COMMIT_VERSION="4.7.0"
-                  /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
-
-            - name: Install Go
-              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-              with:
-                  go-version: stable
-                  check-latest: true
-                  cache: false
+                  expected="$(awk '$1 == "pre-commit" { print $2; exit }' .tool-versions 2>/dev/null || true)"
+                  if [ -z "$expected" ]; then
+                    echo "::error::.tool-versions does not pin pre-commit. Add a 'pre-commit <version>' line to this repository's .tool-versions; the asdf step above installs it from there."
+                    exit 1
+                  fi
+                  actual="$(pre-commit --version 2>/dev/null | awk '{ print $2 }' || true)"
+                  if [ "$actual" != "$expected" ]; then
+                    echo "::error::pre-commit '${actual}' is on PATH but .tool-versions pins ${expected}. The asdf install did not take effect."
+                    exit 1
+                  fi
+                  echo "pre-commit ${actual} matches .tool-versions"
+                  if command -v go >/dev/null 2>&1; then go version; fi
 
             - name: Run the baseline hook list
-              run: /tmp/baseline-venv/bin/pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose
+              run: pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose
 
     autofix-apply:
         name: Commit pre-commit fixes
