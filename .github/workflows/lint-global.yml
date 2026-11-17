@@ -469,26 +469,50 @@ jobs:
                   persist-credentials: false
 
             # Tools come from the caller's .tool-versions, as in the job lint, so both jobs run
-            # the same pre-commit and Go. The hook list runs golangci-lint-full with the Go on
-            # PATH (`golang: system`), which is the Go the caller pins next to its go.mod.
-            - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
-
-            - name: Check pre-commit matches the caller's .tool-versions
+            # the same pre-commit and Go. A caller without a pre-commit pin gets the version
+            # below. The hook list runs golangci-lint-full with the Go on PATH
+            # (`golang: system`), which leaves GOTOOLCHAIN alone: when go.mod requires a newer
+            # Go than the one on PATH, Go downloads that toolchain itself.
+            - name: Find the caller's tool versions
+              id: tools
               run: |
                   set -euo pipefail
-                  expected="$(awk '$1 == "pre-commit" { print $2; exit }' .tool-versions 2>/dev/null || true)"
-                  if [ -z "$expected" ]; then
-                    echo "::error::.tool-versions does not pin pre-commit. Add a 'pre-commit <version>' line to this repository's .tool-versions; the asdf step above installs it from there."
-                    exit 1
+                  pinned="$(awk '$1 == "pre-commit" { print $2; exit }' .tool-versions 2>/dev/null || true)"
+                  if [ -n "$pinned" ]; then
+                    echo "pre_commit=${pinned}" | tee -a "$GITHUB_OUTPUT"
+                  else
+                    echo "::notice::.tool-versions does not pin pre-commit. The job baseline installs the version of the central hook list."
                   fi
+
+            - name: Install asdf tools
+              if: steps.tools.outputs.pre_commit != ''
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+
+            - name: Install pre-commit
+              if: steps.tools.outputs.pre_commit == ''
+              run: |
+                  set -euo pipefail
+                  python3 -I -m venv /tmp/baseline-venv
+                  # renovate: datasource=pypi depName=pre-commit
+                  PRE_COMMIT_VERSION="4.7.0"
+                  /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
+                  echo "/tmp/baseline-venv/bin" >> "$GITHUB_PATH"
+
+            - name: Check pre-commit matches the caller's .tool-versions
+              if: steps.tools.outputs.pre_commit != ''
+              env:
+                  EXPECTED: ${{ steps.tools.outputs.pre_commit }}
+              run: |
+                  set -euo pipefail
                   actual="$(pre-commit --version 2>/dev/null | awk '{ print $2 }' || true)"
-                  if [ "$actual" != "$expected" ]; then
-                    echo "::error::pre-commit '${actual}' is on PATH but .tool-versions pins ${expected}. The asdf install did not take effect."
+                  if [ "$actual" != "$EXPECTED" ]; then
+                    echo "::error::pre-commit '${actual}' is on PATH but .tool-versions pins ${EXPECTED}. The asdf install did not take effect."
                     exit 1
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
-                  if command -v go >/dev/null 2>&1; then go version; fi
+
+            - name: Show the Go on PATH
+              run: if command -v go >/dev/null 2>&1; then go version; else echo "No Go on PATH"; fi
 
             - name: Run the baseline hook list
               run: pre-commit run --config .infraex-common-config/baseline/.pre-commit-config.yaml --all-files --color=always --verbose

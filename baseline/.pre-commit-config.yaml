@@ -1,6 +1,6 @@
 ---
 default_language_version:
-    # The Go on PATH: the caller's .tool-versions pin, installed by asdf in the job baseline.
+    # The Go on PATH (the caller's .tool-versions pin, or the runner image Go); GOTOOLCHAIN stays unset.
     golang: system
 exclude: (^|/)(testdata|fixtures|vendor)/
 repos:

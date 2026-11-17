@@ -233,7 +233,8 @@ actionlint does not know this GitHub-hosted runner label
 To change a rule, open a pull request in this repository that changes `baseline/`. The job
 `baseline` of that pull request runs the changed hook list on this repository. Renovate updates
 each `rev` and image in `baseline/.pre-commit-config.yaml`. The job `baseline` installs pre-commit
-and Go from the caller's `.tool-versions`.
+and Go from the caller's `.tool-versions`, and falls back to its own pre-commit version and the
+runner image Go.
 
 ## CI trust boundary
 
