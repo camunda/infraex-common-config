@@ -469,37 +469,25 @@ jobs:
                   persist-credentials: false
 
             # Tools come from the caller's .tool-versions, as in the job lint, so both jobs run
-            # the same pre-commit and Go. A caller without a pre-commit pin gets the version
-            # below. The hook list runs golangci-lint-full with the Go on PATH
-            # (`golang: system`), which leaves GOTOOLCHAIN alone: when go.mod requires a newer
-            # Go than the one on PATH, Go downloads that toolchain itself.
-            - name: Find the caller's tool versions
-              id: tools
+            # the same pre-commit and Go. The caller must pin pre-commit. The hook list runs
+            # golangci-lint-full with the Go on PATH (`golang: system`), which leaves GOTOOLCHAIN
+            # alone: when go.mod requires a newer Go than the one on PATH, Go downloads that
+            # toolchain itself.
+            - name: Require a pre-commit pin in .tool-versions
               run: |
                   set -euo pipefail
                   pinned="$(awk '$1 == "pre-commit" { print $2; exit }' .tool-versions 2>/dev/null || true)"
-                  if [ -n "$pinned" ]; then
-                    echo "pre_commit=${pinned}" | tee -a "$GITHUB_OUTPUT"
-                  else
-                    echo "::notice::.tool-versions does not pin pre-commit. The job baseline installs the version of the central hook list."
+                  if [ -z "$pinned" ]; then
+                    echo "::error::.tool-versions does not pin pre-commit. Add a line 'pre-commit <version>' to .tool-versions in the caller repository."
+                    exit 1
                   fi
+                  echo "pre_commit=${pinned}" | tee -a "$GITHUB_OUTPUT"
+              id: tools
 
             - name: Install asdf tools
-              if: steps.tools.outputs.pre_commit != ''
               uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
 
-            - name: Install pre-commit
-              if: steps.tools.outputs.pre_commit == ''
-              run: |
-                  set -euo pipefail
-                  python3 -I -m venv /tmp/baseline-venv
-                  # renovate: datasource=pypi depName=pre-commit
-                  PRE_COMMIT_VERSION="4.7.0"
-                  /tmp/baseline-venv/bin/pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
-                  echo "/tmp/baseline-venv/bin" >> "$GITHUB_PATH"
-
             - name: Check pre-commit matches the caller's .tool-versions
-              if: steps.tools.outputs.pre_commit != ''
               env:
                   EXPECTED: ${{ steps.tools.outputs.pre_commit }}
               run: |
@@ -511,19 +499,15 @@ jobs:
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
 
-            # Without a golang pin that asdf installed, the runner image Go can be older than the caller's go.mod,
-            # and golangci-lint built with it refuses to lint the newer modules. The newest
-            # go/toolchain directive of the caller's go.mod files then selects the toolchain,
-            # which Go downloads itself.
-            # The golang pin counts only when asdf ran, that is, when the caller also pins
-            # pre-commit. Otherwise asdf installed no Go and the pin has no effect.
+            # A caller that pins golang gets that Go. Without a golang pin, the runner image Go can
+            # be older than the caller's go.mod, and golangci-lint built with it refuses the newer
+            # modules. The newest go/toolchain directive of the caller's go.mod files then selects
+            # the toolchain, which Go downloads itself.
             - name: Select the Go for the caller's go.mod
-              env:
-                  ASDF_RAN: ${{ steps.tools.outputs.pre_commit != '' }}
               run: |
                   set -euo pipefail
                   pinned="$(awk '$1 == "golang" { print $2; exit }' .tool-versions 2>/dev/null || true)"
-                  if [ "$ASDF_RAN" = "true" ] && [ -n "$pinned" ]; then
+                  if [ -n "$pinned" ]; then
                     if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
                       echo "::error::Unexpected golang version '${pinned}' in .tool-versions."
                       exit 1
