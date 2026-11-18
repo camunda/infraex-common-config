@@ -148,6 +148,7 @@ runs:
           env:
               ACTION_PATH: ${{ github.action_path }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+              PURGE_BROKEN: '1'
 
         # Some ASDF packages require Python to be compiled with lzma support
         # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
