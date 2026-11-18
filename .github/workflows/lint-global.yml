@@ -502,7 +502,7 @@ jobs:
             # A caller that pins golang gets that Go. Without a golang pin, the runner image Go can
             # be older than the caller's go.mod, and golangci-lint built with it refuses the newer
             # modules. The newest go/toolchain directive of the caller's go.mod files then selects
-            # the toolchain, which Go downloads itself.
+            # the toolchain, which Go downloads itself, but only when it is newer than the runner Go.
             - name: Select the Go for the caller's go.mod
               run: |
                   set -euo pipefail
@@ -536,7 +536,13 @@ jobs:
                         echo "::error::Unexpected Go version '${version}' in go.mod."
                         exit 1
                       fi
-                      echo "GOTOOLCHAIN=go${version}" | tee -a "$GITHUB_ENV"
+                      # A fixed older toolchain would break golangci-lint, which needs the runner Go or newer.
+                      runner="$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null | sed 's/^go//' || true)"
+                      if [ -z "$runner" ] || [ "$(printf '%s\n%s\n' "$runner" "$version" | sort -V | tail -n 1)" != "$runner" ]; then
+                        echo "GOTOOLCHAIN=go${version}" | tee -a "$GITHUB_ENV"
+                      else
+                        echo "go.mod needs Go ${version}. The runner Go ${runner} is not older, so GOTOOLCHAIN stays unset."
+                      fi
                     fi
                   fi
                   if command -v go >/dev/null 2>&1; then go version; else echo "No Go on PATH"; fi
