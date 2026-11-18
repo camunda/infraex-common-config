@@ -138,13 +138,25 @@ unset -f asdf timeout sleep
 mkdir -p "$TEST_DIR/bin" "$TEST_DIR/data/installs/python/3.14.8"
 cat > "$TEST_DIR/bin/asdf" <<'FAKE'
 #!/usr/bin/env bash
-[ "$1" = where ] && [ -d "$TEST_DIR/data/installs/$2/$3" ]
+[ "$1" = where ] && [ -d "$TEST_DIR/data/installs/$2/$3" ] && echo "$TEST_DIR/data/installs/$2/$3"
 FAKE
 chmod +x "$TEST_DIR/bin/asdf"
 printf '# comment\npython 3.14.9\ngolang system\n' > "$TEST_DIR/.tool-versions"
 verify() { PATH="$TEST_DIR/bin:$PATH" HOME="$TEST_DIR/home" INPUTS_TOOL_VERSIONS_FILES="$TEST_DIR/.tool-versions" bash "$HERE/verify-tools.sh"; }
 out=$(verify) && { echo 'FAIL: missing python 3.14.9 not detected' >&2; exit 1; }
 [ "$out" = 'python 3.14.9' ]
-mkdir -p "$TEST_DIR/data/installs/python/3.14.9"
+mkdir -p "$TEST_DIR/data/installs/python/3.14.9/bin"
+py="$TEST_DIR/data/installs/python/3.14.9/bin/python"
+
+# The ssl probe runs the fixture interpreter: ok passes, broken fails, purge removes it.
+printf '#!/bin/sh\nexit 0\n' > "$py"; chmod +x "$py"
 verify > /dev/null
-echo 'PASS: verify-tools reports missing pinned versions and accepts a complete toolchain'
+PURGE_BROKEN=1 verify > /dev/null
+[ -x "$py" ]
+printf '#!/bin/sh\nexit 1\n' > "$py"
+out=$(verify) && { echo 'FAIL: python without ssl not detected' >&2; exit 1; }
+[ "$out" = 'python 3.14.9 (no ssl module)' ]
+[ -x "$py" ]
+out=$(PURGE_BROKEN=1 verify) && { echo 'FAIL: python without ssl not detected (purge)' >&2; exit 1; }
+[ ! -e "$TEST_DIR/data/installs/python/3.14.9" ]
+echo 'PASS: verify-tools reports missing versions and Python without ssl, and purges only on request'
