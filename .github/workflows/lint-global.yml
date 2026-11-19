@@ -484,6 +484,15 @@ jobs:
                   echo "pre_commit=${pinned}" | tee -a "$GITHUB_OUTPUT"
               id: tools
 
+            # Before asdf: a restored asdf cache can hold a go shim that shadows the runner Go.
+            - name: Find the runner Go
+              id: runner-go
+              run: |
+                  set -euo pipefail
+                  if go_bin="$(command -v go)"; then
+                    echo "dir=$(dirname "$go_bin")" | tee -a "$GITHUB_OUTPUT"
+                  fi
+
             - name: Install asdf tools
               uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
 
@@ -504,6 +513,8 @@ jobs:
             # modules. The newest go/toolchain directive of the caller's go.mod files then selects
             # the toolchain, which Go downloads itself, but only when it is newer than the runner Go.
             - name: Select the Go for the caller's go.mod
+              env:
+                  RUNNER_GO_DIR: ${{ steps.runner-go.outputs.dir }}
               run: |
                   set -euo pipefail
                   pinned="$(awk '$1 == "golang" { print $2; exit }' .tool-versions 2>/dev/null || true)"
@@ -523,6 +534,11 @@ jobs:
                     fi
                     echo "${goroot}/bin" | tee -a "$GITHUB_PATH"
                   else
+                    # Put the runner Go before any asdf go shim, for this step and the next ones.
+                    if [ -n "$RUNNER_GO_DIR" ]; then
+                      export PATH="${RUNNER_GO_DIR}:${PATH}"
+                      echo "$RUNNER_GO_DIR" | tee -a "$GITHUB_PATH"
+                    fi
                     # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
                       | xargs -0 -r awk '$1 == "go" || $1 == "toolchain" { sub(/^go/, "", $2); print $2 }' \
