@@ -25,6 +25,8 @@
   separateMajorMinor: true,
   recreateWhen: 'always', // as we group updates, we want the PRs to be recreated https://docs.renovatebot.com/configuration-options/#recreatewhen
   postUpdateOptions: ['gomodTidyAll'], // tidy updated go modules and local replace dependents so post-upgrade tidy steps don't fight Renovate https://docs.renovatebot.com/configuration-options/#postupdateoptions
+  // Commits pushed by this bot to Renovate branches (pre-commit, go mod tidy) would otherwise make Renovate stop rebasing the PR https://docs.renovatebot.com/configuration-options/#gitignoredauthors
+  gitIgnoredAuthors: ['158277198+smx-misc[bot]@users.noreply.github.com'],
   prBodyNotes: [
     '{{#if isMajor}}:warning: THIS IS A MAJOR VERSION UPDATE :warning:{{/if}}',
     'Before merging, *always* check with the release notes if any other changes need to be done.',
