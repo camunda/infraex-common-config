@@ -470,9 +470,9 @@ jobs:
 
             # Tools come from the caller's .tool-versions, as in the job lint, so both jobs run
             # the same pre-commit and Go. The caller must pin pre-commit. The hook list runs
-            # golangci-lint-full with the Go on PATH (`golang: system`), which leaves GOTOOLCHAIN
-            # alone: when go.mod requires a newer Go than the one on PATH, Go downloads that
-            # toolchain itself.
+            # golangci-lint-full with the Go on PATH (`golang: system`). The next steps set
+            # GOTOOLCHAIN only when .tool-versions has no golang pin and the caller's go.mod needs
+            # a newer Go than the runner Go.
             - name: Require a pre-commit pin in .tool-versions
               run: |
                   set -euo pipefail
