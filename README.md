@@ -408,6 +408,7 @@ a pending request.
 name: Copilot review
 
 on:
+    # no checkout in this file; it calls the pinned shared review workflow
     pull_request_target: # zizmor: ignore[dangerous-triggers]
         types: [opened, ready_for_review, labeled]
 
@@ -480,6 +481,7 @@ label and the `crev/escalation` status, and it never approves.
 name: crev review
 
 on:
+    # The guard job of crev-review-global.yml rejects commenters below triage
     issue_comment: # zizmor: ignore[dangerous-triggers]
         types: [created]
 
@@ -495,21 +497,20 @@ jobs:
             packages: read # pull the crev image from GHCR
             pull-requests: write # post the review
             statuses: write # crev/escalation status
-        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@main # zizmor: ignore[unpinned-uses]
+        uses: camunda/infraex-common-config/.github/workflows/crev-review-global.yml@ecfc5f760287533aa47f5a79b9d6e36508c76cc2 # 3.0.8
         with:
             model: deepseek/deepseek-v4.1-flash
             verifier-model: z-ai/glm-5.3
 ```
 
-- The caller ignores two zizmor audits inline. `dangerous-triggers`: anyone can post the
+- The caller ignores the zizmor audit `dangerous-triggers` inline: anyone can post the
   comment, but `guard` admits only a commenter with `triage` or a higher role and only a
   branch of the same repository. The `review` job checks out the pull request head, and the
   crev agents can run its code with the OpenRouter key and the read-only token in their
   environment. Only people with write access to the repository can put that code there.
-  `unpinned-uses`: the caller follows `main`, so a change to this workflow reaches every
-  repository at once. Renovate skips the file.
-- infraex-terraform writes this caller to every SMX repository. The `secrets` job logs in to
-  Vault as `github-actions-smx-ci` and reads `OPENROUTER_API_KEY` from
+- infraex-terraform creates this caller in each SMX repository with a release pin. Renovate in
+  the repository updates the pin. The `secrets` job logs in to Vault as `github-actions-smx-ci`
+  and reads `OPENROUTER_API_KEY` from
   `secret/data/products/smx/ci/openrouter`. The role lists the SMX repositories, so a caller
   needs no Vault secrets. Passed `VAULT_*` secrets and `vault-secret-path` override the defaults.
 - When the crev container package (`ghcr.io/camunda/crev`) is not public, add the repository

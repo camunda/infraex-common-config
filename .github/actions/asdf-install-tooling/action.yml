@@ -136,7 +136,8 @@ runs:
         # (exit 126). An exact hit that fails this check falls through to the normal install.
         - name: Verify restored tools match .tool-versions
           id: verify-restored
-          if: ${{ inputs.cache == 'true' && steps.cache-asdf-check.outputs.cache-hit == 'true' }}
+          # Any restored entry, not only an exact hit: a prefix match can hold a Python without ssl too.
+          if: ${{ inputs.cache == 'true' && steps.cache-asdf-check.outputs.cache-matched-key != '' }}
           shell: bash
           run: |
               if missing=$("${ACTION_PATH}/verify-tools.sh"); then
@@ -148,6 +149,7 @@ runs:
           env:
               ACTION_PATH: ${{ github.action_path }}
               INPUTS_TOOL_VERSIONS_FILES: ${{ inputs.tool_versions_files }}
+              PURGE_BROKEN: '1'
 
         # Some ASDF packages require Python to be compiled with lzma support
         # including e.g. azure cli, keep it aligned with https://github.com/camunda/keycloak/blob/main/.github/workflows/build-images.yml#L299-L308
