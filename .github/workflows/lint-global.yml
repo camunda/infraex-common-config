@@ -539,9 +539,11 @@ jobs:
                       export PATH="${RUNNER_GO_DIR}:${PATH}"
                       echo "$RUNNER_GO_DIR" | tee -a "$GITHUB_PATH"
                     fi
+                    # Same directories as the baseline exclude; `toolchain default` names no version.
                     # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
                     version="$(git ls-files -z -- go.mod '*/go.mod' \
-                      | xargs -0 -r awk '$1 == "go" || $1 == "toolchain" { sub(/^go/, "", $2); print $2 }' \
+                      ':(exclude,glob)**/testdata/**' ':(exclude,glob)**/fixtures/**' ':(exclude,glob)**/vendor/**' \
+                      | xargs -0 -r awk '($1 == "go" || $1 == "toolchain") && $2 != "default" { sub(/^go/, "", $2); print $2 }' \
                       | sort -V | tail -n 1)"
                     if [ -n "$version" ]; then
                       case "$version" in
