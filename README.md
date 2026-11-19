@@ -232,7 +232,9 @@ actionlint does not know this GitHub-hosted runner label
 
 To change a rule, open a pull request in this repository that changes `baseline/`. The job
 `baseline` of that pull request runs the changed hook list on this repository. Renovate updates
-each `rev`, image and Go version in `baseline/.pre-commit-config.yaml`.
+each `rev` and image in `baseline/.pre-commit-config.yaml`. The job `baseline` installs pre-commit
+and Go from the caller's `.tool-versions`. The caller must pin `pre-commit` there, or the job fails.
+Without a `golang` pin, the job uses the newest `go.mod` version as the Go toolchain.
 
 ## CI trust boundary
 
