@@ -9,4 +9,7 @@ CloudWatchLogGroup:
     exclude:
         tags:
             # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+            # Any log group with this tag leaves the audit, in every region.
+            # The StackSet-map-autotag-backfill-* log groups have no such tag:
+            # permanent_resources_allowlist.yml matches them by name.
             managed-by: ^stackset/map-autotag-backfill$
