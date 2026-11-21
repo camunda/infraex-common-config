@@ -71,7 +71,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@4c6acfc0aa82fc1f65efec8279623162589c82dd # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@85947e0f4c4c475ca2a258503763210919bb35de # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -103,7 +103,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@d1967bd5edabe99334bbfd594e7552c99813f11b # 3.0.12
 
             - name: Import Secrets
               id: secrets
@@ -119,7 +119,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@4c6acfc0aa82fc1f65efec8279623162589c82dd # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@85947e0f4c4c475ca2a258503763210919bb35de # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -596,7 +596,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@d1967bd5edabe99334bbfd594e7552c99813f11b # 3.0.12
 
             - name: Import Secrets
               id: secrets
@@ -612,7 +612,7 @@ jobs:
                       secret/data/products/infrastructure-experience/ci/common SLACK_BOT_TOKEN;
 
             - name: Configure AWS CLI
-              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@4c6acfc0aa82fc1f65efec8279623162589c82dd # main
+              uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@85947e0f4c4c475ca2a258503763210919bb35de # main
               with:
                   vault-addr: ${{ secrets.VAULT_ADDR }}
                   vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
@@ -862,7 +862,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@d1967bd5edabe99334bbfd594e7552c99813f11b # 3.0.12
 
             - name: Import Secrets
               id: secrets
