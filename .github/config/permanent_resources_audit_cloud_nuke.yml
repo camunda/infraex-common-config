@@ -1,0 +1,12 @@
+---
+# cloud-nuke config of the dry run in permanent_resources_audit.yml.
+# Use it for an approved resource that a tag identifies better than its name.
+# cloud-nuke does not list a resource that an exclude rule matches, so the
+# audit neither allowlists nor reports it. Name patterns stay in
+# permanent_resources_allowlist.yml.
+# cloud-nuke lowercases the tag value before it matches the regex.
+CloudWatchLogGroup:
+    exclude:
+        tags:
+            # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+            managed-by: ^stackset/map-autotag-backfill$

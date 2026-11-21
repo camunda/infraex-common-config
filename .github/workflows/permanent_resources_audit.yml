@@ -19,6 +19,7 @@ on:
         paths:
             - .github/workflows/permanent_resources_audit.yml
             - .github/config/permanent_resources_allowlist.yml
+            - .github/config/permanent_resources_audit_cloud_nuke.yml
 
 env:
     AWS_PROFILE: infraex
@@ -203,6 +204,7 @@ jobs:
                     --region $REGION \
                     --force \
                     --older-than 0h \
+                    --config .github/config/permanent_resources_audit_cloud_nuke.yml \
                     --exclude-resource-type ec2-dhcp-option \
                     --exclude-resource-type s3 \
                     --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
