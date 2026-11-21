@@ -6,7 +6,7 @@ default_language_version:
 exclude: (^|/)(testdata|fixtures|vendor)/
 repos:
     - repo: https://github.com/camunda/infraex-common-config
-      rev: 3.0.5
+      rev: 3.0.12
       hooks:
           - id: action-pin-spacing
 
@@ -40,7 +40,7 @@ repos:
                 exit "$status"'
 
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.17.4
+      rev: v0.17.6
       hooks:
           - id: ruff-check
             args: [--isolated]
@@ -59,7 +59,7 @@ repos:
             name: terraform fmt
             language: docker_image
             # renovate: datasource=docker depName=hashicorp/terraform
-            entry: hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a
+            entry: hashicorp/terraform:1.17.2@sha256:6e9c1e647c31a960dc9b59e13272f9111d90010c10b717f77ffb324767660475
             args: [fmt, -check, -diff]
             files: \.(tf|tfvars|tftest\.hcl|tfmock\.hcl|tfquery\.hcl)$
 
