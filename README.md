@@ -158,6 +158,10 @@ S3 uses a single, account-wide global namespace and every bucket is pinned to on
 
 This avoids a blind spot: auditing S3 per-region would silently skip any bucket whose home region is excluded from the per-region matrix (e.g. `us-east-1`, see `AWS_EXCLUDED_REGIONS`). Approved buckets are listed under `aws.global.s3` in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml), regardless of region.
 
+###### Resources excluded by tag
+
+An approved resource that a tag identifies better than its name has an exclude rule in [`.github/config/permanent_resources_audit_cloud_nuke.yml`](.github/config/permanent_resources_audit_cloud_nuke.yml), which the audit passes to cloud-nuke with `--config`. cloud-nuke then does not list the resource at all, so it is neither allowlisted nor counted. Any resource with the matching tag leaves the audit, in every permanent region. The report of each region names these rules. Name patterns stay in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml).
+
 ###### ELBv2 target groups (quota headroom)
 
 cloud-nuke does not report ELBv2 target groups. Target groups created for Kubernetes Services of type `LoadBalancer` (OpenShift router, ingress-nginx, Contour, Submariner, ...) are left behind when their load balancer or cluster is deleted, and they silently accumulate until they reach the regional **Target Groups per Region** quota (default 3000). Hitting the cap breaks new ingress load balancer creation with a `TooManyTargetGroups` error.

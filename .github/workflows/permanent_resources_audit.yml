@@ -19,6 +19,7 @@ on:
         paths:
             - .github/workflows/permanent_resources_audit.yml
             - .github/config/permanent_resources_allowlist.yml
+            - .github/config/permanent_resources_audit_cloud_nuke.yml
 
 env:
     AWS_PROFILE: infraex
@@ -194,18 +195,44 @@ jobs:
                       echo ""
                   } > audit_report.txt
 
+                  # Resources that match an exclude rule of this config are not
+                  # listed by cloud-nuke, so the report names the rules.
+                  CLOUD_NUKE_CONFIG=".github/config/permanent_resources_audit_cloud_nuke.yml"
+                  {
+                      echo "### Excluded by $CLOUD_NUKE_CONFIG (not listed, not counted):"
+                      yq -r 'to_entries[] | "\(.key) exclude: \(.value.exclude | @json)"' "$CLOUD_NUKE_CONFIG"
+                      echo ""
+                  } >> audit_report.txt
+
                   # Run cloud-nuke in dry-run mode and capture output.
                   # S3 is excluded here: it is a single global namespace and is
                   # audited once by the aws-s3-global-audit job. Auditing it
                   # per-region would miss buckets whose home region is excluded
                   # from this matrix (see AWS_EXCLUDED_REGIONS).
+                  # The step shell has no pipefail: take the exit code of cloud-nuke,
+                  # not of tee, so that a config or session error fails the audit
+                  # instead of reporting 0 resources.
+                  set +e
                   ./cloud-nuke_linux_amd64 aws --dry-run \
                     --region $REGION \
                     --force \
                     --older-than 0h \
+                    --config "$CLOUD_NUKE_CONFIG" \
                     --exclude-resource-type ec2-dhcp-option \
                     --exclude-resource-type s3 \
-                    --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt || true
+                    --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt
+                  CLOUD_NUKE_RC=${PIPESTATUS[0]}
+                  set -e
+                  if [[ "$CLOUD_NUKE_RC" -ne 0 ]]; then
+                      echo "::error::cloud-nuke failed in $REGION (exit $CLOUD_NUKE_RC), the audit listed no resources"
+                      exit 1
+                  fi
+                  # cloud-nuke prints "Found Resources" when the scan completes, also
+                  # when it finds nothing ("No resources found.").
+                  if ! grep -q 'Found Resources' < <(sed 's/\x1b\[[0-9;]*m//g' cloud_nuke_output.txt); then
+                      echo "::error::cloud-nuke output in $REGION has no \"Found Resources\" section, the scan did not complete"
+                      exit 1
+                  fi
 
                   # Identify default VPC and its associated resources to filter them out
                   DEFAULT_VPC_ID=$(aws ec2 describe-vpcs \
@@ -259,7 +286,8 @@ jobs:
                       # Extract resource type and identifier from the table line
                       resource_info=$(echo "$line" | tr -d '|' | tr -s ' ' | sed 's/^ //;s/ $//')
                       echo "$resource_info"
-                  done | grep -vE '^(Query|Target|Exclude|List) ' > extracted_resources.txt
+                  # grep exits 1 when no resource line is left (a clean region).
+                  done | grep -vE '^(Query|Target|Exclude|List) ' > extracted_resources.txt || true
 
                   # Debug: show extracted resources count
                   echo "DEBUG: Extracted $(wc -l < extracted_resources.txt) resources"

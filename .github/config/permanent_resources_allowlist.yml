@@ -33,6 +33,8 @@ aws:
         cloudwatch-loggroup:
             - /aws/lambda/medicAbsenceFormToJsonData
             # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+            # /aws/lambda/map-autotag-backfill is excluded by its tag in
+            # permanent_resources_audit_cloud_nuke.yml.
             - /aws/lambda/StackSet-map-autotag-backfill-*
         # IAM roles
         iam_role:
