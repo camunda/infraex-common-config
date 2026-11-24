@@ -338,7 +338,7 @@ jobs:
 
                   # Ignore a single guardduty detector per region (AWS enables one by default).
                   # If there are multiple detectors, they indicate manual creation and should be flagged for review.
-                  GUARDDUTY_COUNT=$(grep -c '^guardduty ' unallowlisted_resources.txt 2>/dev/null || echo 0)
+                  GUARDDUTY_COUNT=$(grep -c '^guardduty ' unallowlisted_resources.txt 2>/dev/null || true)
                   if [[ "$GUARDDUTY_COUNT" -eq 1 ]]; then
                       echo "Ignoring single default GuardDuty detector"
                       grep '^guardduty ' unallowlisted_resources.txt >> allowlisted_resources.txt
