@@ -1,0 +1,9 @@
+---
+# Approved resource groups of the Azure audit in permanent_resources_audit.yml.
+# Patterns are bash extended regular expressions: anchor them and escape `.`.
+# A region absent from this file has no approved resource group.
+
+westeurope:
+    resource_groups:
+        - ^rg-infraex-global-permanent$
+        - ^NetworkWatcherRG$

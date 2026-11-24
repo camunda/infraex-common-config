@@ -18,7 +18,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/permanent_resources_audit.yml
-            - .github/config/permanent_resources_allowlist.yml
+            - .github/config/permanent_resources_azure_allowlist.yml
             - .github/config/permanent_resources_audit_cloud_nuke.yml
 
 env:
@@ -156,31 +156,6 @@ jobs:
                     https://github.com/gruntwork-io/cloud-nuke/releases/download/${{ env.CLOUD_NUKE_VERSION }}/cloud-nuke_linux_amd64
                   chmod +x cloud-nuke_linux_amd64
 
-            - name: Load allowlist for region
-              if: steps.region-check.outputs.region_disabled != 'true'
-              id: allowlist
-              run: |
-                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
-                  REGION="${{ matrix.region }}"
-
-                  # Check if region has allowlist configuration
-                  HAS_ALLOWLIST=$(yq -r ".aws.\"$REGION\" // \"null\"" "$ALLOWLIST_FILE")
-
-                  if [[ "$HAS_ALLOWLIST" == "null" ]]; then
-                      echo "Region $REGION is not in allowlist - any resources found are unexpected"
-                      touch allowlist_patterns.txt
-                  else
-                      # Extract allowlisted patterns for this region with resource type prefix
-                      echo "Loading allowlist for AWS region: $REGION"
-
-                      # Create patterns file: "resource_type pattern" format to match against extracted resources
-                      # Output format: "s3 bucket-name" or "cloudformation-stack StackSet-Wiz-*"
-                      yq -r ".aws.\"$REGION\" | to_entries | .[] | .key as \$type | .value[]? | \"\(\$type) \(.)\"" "$ALLOWLIST_FILE" 2>/dev/null | grep -E '^\S+ \S+' | sort -u > allowlist_patterns.txt || touch allowlist_patterns.txt
-
-                      echo "Allowlist patterns loaded:"
-                      cat allowlist_patterns.txt
-                  fi
-
             - name: Run Cloud Nuke in Dry-Run mode
               if: steps.region-check.outputs.region_disabled != 'true'
               id: cloud-nuke-audit
@@ -195,12 +170,19 @@ jobs:
                       echo ""
                   } > audit_report.txt
 
-                  # Resources that match an exclude rule of this config are not
-                  # listed by cloud-nuke, so the report names the rules.
-                  CLOUD_NUKE_CONFIG=".github/config/permanent_resources_audit_cloud_nuke.yml"
+                  # Approved resources match an exclude rule of this config, so
+                  # cloud-nuke does not list them: the report names the rules.
+                  AUDIT_CONFIG=".github/config/permanent_resources_audit_cloud_nuke.yml"
+                  CLOUD_NUKE_CONFIG="region_cloud_nuke.yml"
+                  REGION="$REGION" yq '(.all.config // {}) *+ (.regions[strenv(REGION)].config // {})' "$AUDIT_CONFIG" > "$CLOUD_NUKE_CONFIG"
+                  EXCLUDED_TYPES=()
+                  while IFS= read -r type; do
+                      [[ -n "$type" ]] && EXCLUDED_TYPES+=(--exclude-resource-type "$type")
+                  done < <(REGION="$REGION" yq -r '.regions[strenv(REGION)].exclude_resource_types[]?' "$AUDIT_CONFIG")
                   {
-                      echo "### Excluded by $CLOUD_NUKE_CONFIG (not listed, not counted):"
+                      echo "### Excluded by $AUDIT_CONFIG (not listed, not counted):"
                       yq -r 'to_entries[] | "\(.key) exclude: \(.value.exclude | @json)"' "$CLOUD_NUKE_CONFIG"
+                      echo "Resource types: ${EXCLUDED_TYPES[*]:-none}"
                       echo ""
                   } >> audit_report.txt
 
@@ -220,7 +202,8 @@ jobs:
                     --config "$CLOUD_NUKE_CONFIG" \
                     --exclude-resource-type ec2-dhcp-option \
                     --exclude-resource-type s3 \
-                    --exclude-resource-type cloudtrail 2>&1 | tee cloud_nuke_output.txt
+                    --exclude-resource-type cloudtrail \
+                    "${EXCLUDED_TYPES[@]}" 2>&1 | tee cloud_nuke_output.txt
                   CLOUD_NUKE_RC=${PIPESTATUS[0]}
                   set -e
                   if [[ "$CLOUD_NUKE_RC" -ne 0 ]]; then
@@ -269,12 +252,10 @@ jobs:
                       cat default_vpc_resources.txt
                   fi
 
-                  # Filter out allowlisted resources
-                  echo "### Allowlisted resources (approved):" >> audit_report.txt
+                  # Default VPC resources are ignored by ID, the rest is unexpected.
+                  echo "### Ignored default VPC resources:" >> audit_report.txt
                   ALLOWLISTED_COUNT=0
                   UNALLOWLISTED_COUNT=0
-
-                  # Initialize output files
                   true > unallowlisted_resources.txt
                   true > allowlisted_resources.txt
 
@@ -283,51 +264,19 @@ jobs:
                   # We need to strip ANSI codes and extract lines starting with | that contain resource data
                   # Also filter out cloud-nuke info lines (Query/Target/Exclude/List) that appear in the table
                   sed 's/\x1b\[[0-9;]*m//g' cloud_nuke_output.txt | grep '^|' | grep -v -- '---' | grep -v 'Resource Type' | while IFS= read -r line; do
-                      # Extract resource type and identifier from the table line
                       resource_info=$(echo "$line" | tr -d '|' | tr -s ' ' | sed 's/^ //;s/ $//')
                       echo "$resource_info"
                   # grep exits 1 when no resource line is left (a clean region).
                   done | grep -vE '^(Query|Target|Exclude|List) ' > extracted_resources.txt || true
 
-                  # Debug: show extracted resources count
                   echo "DEBUG: Extracted $(wc -l < extracted_resources.txt) resources"
                   head -5 extracted_resources.txt || true
 
                   while IFS= read -r line; do
                       [[ -z "$line" ]] && continue
-                      # Extract type and name from the resource line (format: "type region name")
-                      res_type=$(echo "$line" | awk '{print $1}')
+                      # Format: "type region name"
                       res_name=$(echo "$line" | awk '{print $3}')
-
-
-                      # Skip default VPC resources (identified by their IDs)
                       if grep -qxF "$res_name" default_vpc_resources.txt 2>/dev/null; then
-                          echo "Skipping default VPC resource: $res_type $res_name"
-                          echo "$line" >> allowlisted_resources.txt
-                          ((ALLOWLISTED_COUNT++)) || true
-                          continue
-                      fi
-
-                      is_allowlisted=false
-                      while IFS= read -r pattern; do
-                          # Skip empty patterns
-                          [[ -z "$pattern" ]] && continue
-                          # Pattern format: "type pattern_value"
-                          pattern_type=$(echo "$pattern" | awk '{print $1}')
-                          pattern_value=$(echo "$pattern" | awk '{print $2}')
-
-                          # Check if resource type matches pattern type
-                          if [[ "$res_type" == "$pattern_type" ]]; then
-                              # Convert glob pattern to regex and check against resource name
-                              regex_pattern=${pattern_value//\*/.*}
-                              if echo "$res_name" | grep -qE "^${regex_pattern}$"; then
-                                  is_allowlisted=true
-                                  break
-                              fi
-                          fi
-                      done < allowlist_patterns.txt
-
-                      if $is_allowlisted; then
                           echo "$line" >> allowlisted_resources.txt
                           ((ALLOWLISTED_COUNT++)) || true
                       else
@@ -336,21 +285,10 @@ jobs:
                       fi
                   done < extracted_resources.txt
 
-                  # Ignore a single guardduty detector per region (AWS enables one by default).
-                  # If there are multiple detectors, they indicate manual creation and should be flagged for review.
-                  GUARDDUTY_COUNT=$(grep -c '^guardduty ' unallowlisted_resources.txt 2>/dev/null || true)
-                  if [[ "$GUARDDUTY_COUNT" -eq 1 ]]; then
-                      echo "Ignoring single default GuardDuty detector"
-                      grep '^guardduty ' unallowlisted_resources.txt >> allowlisted_resources.txt
-                      grep -v '^guardduty ' unallowlisted_resources.txt > unallowlisted_resources.tmp && mv unallowlisted_resources.tmp unallowlisted_resources.txt
-                      ((ALLOWLISTED_COUNT++)) || true
-                      UNALLOWLISTED_COUNT=$((UNALLOWLISTED_COUNT > 0 ? UNALLOWLISTED_COUNT - 1 : 0))
-                  fi
-
                   {
                       head -50 allowlisted_resources.txt || echo "None"
                       echo ""
-                      echo "Total allowlisted: $ALLOWLISTED_COUNT"
+                      echo "Total ignored: $ALLOWLISTED_COUNT"
                       echo ""
                       echo "### ⚠️ Non-allowlisted resources (review required):"
                       head -100 unallowlisted_resources.txt || echo "None"
@@ -524,7 +462,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_audit_cloud_nuke.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
@@ -651,7 +589,7 @@ jobs:
             - name: Audit S3 buckets globally
               id: s3-audit
               run: |
-                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
+                  AUDIT_CONFIG=".github/config/permanent_resources_audit_cloud_nuke.yml"
 
                   {
                       echo "## AWS S3 Global Permanent Resources Audit"
@@ -671,8 +609,8 @@ jobs:
                   tr '\t' '\n' < raw_buckets.txt | grep -v '^$' | sort -u > all_buckets.txt || true
                   echo "Found $(wc -l < all_buckets.txt) S3 buckets in the account"
 
-                  # Load global S3 allowlist patterns (supports '*' glob)
-                  yq -r '.aws.global.s3[]?' "$ALLOWLIST_FILE" 2>/dev/null | sort -u > allowlist_patterns.txt || touch allowlist_patterns.txt
+                  # Approved bucket regexes, the cloud-nuke S3 format of the audit config.
+                  yq -r '.global.S3.exclude.names_regex[]?' "$AUDIT_CONFIG" > allowlist_patterns.txt
                   echo "Allowlist patterns loaded:"
                   cat allowlist_patterns.txt
 
@@ -687,12 +625,7 @@ jobs:
                       is_allowlisted=false
                       while IFS= read -r pattern; do
                           [[ -z "$pattern" ]] && continue
-                          # Native shell glob match: '*' is a wildcard while every
-                          # other character (notably '.') is matched literally. This
-                          # avoids regex false positives such as 'camunda.ie' matching
-                          # 'camundaXie'.
-                          # shellcheck disable=SC2053
-                          if [[ "$bucket" == $pattern ]]; then
+                          if [[ "$bucket" =~ $pattern ]]; then
                               is_allowlisted=true
                               break
                           fi
@@ -812,7 +745,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_audit_cloud_nuke.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {
@@ -938,7 +871,7 @@ jobs:
               env:
                   AZURE_REGION: ${{ matrix.region }}
               run: |
-                  ALLOWLIST_FILE=".github/config/permanent_resources_allowlist.yml"
+                  ALLOWLIST_FILE=".github/config/permanent_resources_azure_allowlist.yml"
                   REGION="${{ matrix.region }}"
 
                   {
@@ -948,14 +881,14 @@ jobs:
                   } > audit_report.txt
 
                   # Check if region has allowlist configuration
-                  HAS_ALLOWLIST=$(yq -r ".azure.\"$REGION\" // \"null\"" "$ALLOWLIST_FILE")
+                  HAS_ALLOWLIST=$(yq -r ".\"$REGION\" // \"null\"" "$ALLOWLIST_FILE")
 
                   if [[ "$HAS_ALLOWLIST" == "null" ]]; then
                       echo "Region $REGION is not in allowlist - any resources found are unexpected"
                       touch allowlisted_rgs.txt
                   else
                       # Load allowlisted resource groups for this region
-                      yq -r ".azure.\"$REGION\".resource_groups[]?" "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
+                      yq -r ".\"$REGION\".resource_groups[]?" "$ALLOWLIST_FILE" 2>/dev/null > allowlisted_rgs.txt || touch allowlisted_rgs.txt
                       echo "Allowlisted resource groups for $REGION:"
                       cat allowlisted_rgs.txt
                   fi
@@ -991,8 +924,7 @@ jobs:
                       is_allowlisted=false
                       while IFS= read -r pattern; do
                           [[ -z "$pattern" ]] && continue
-                          regex_pattern=${pattern//\*/.*}
-                          if echo "$rg_name" | grep -qE "^${regex_pattern}$"; then
+                          if [[ "$rg_name" =~ $pattern ]]; then
                               is_allowlisted=true
                               break
                           fi
@@ -1116,7 +1048,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
+                              "text": "${{ env.SLACK_MENTION }} either:\n• Update the <${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/config/permanent_resources_azure_allowlist.yml|allowlist configuration> if these resources are approved\n• Or investigate the origin of these unexpected permanent resources"
                             }
                           },
                           {

@@ -12,7 +12,7 @@ No path needs a review from a specific team: the repository has no `CODEOWNERS` 
   - `.github/workflows/scripts/`: the scripts of the cleanup workflows and the two Renovate checkers of `lint-global.yml`.
   - `.github/workflows/scripts/tests/`: test scripts, stubs and fixtures of those scripts.
 - `.github/actions/`: the composite actions `asdf-install-tooling`, `report-failure-on-slack` and `report-warning-on-slack`. Each `README.md` there is written by the pre-commit hook `update-action-readmes-docker`.
-- `.github/config/`: `cloud_nuke_exclusions.yml` of the AWS cleanup and `permanent_resources_allowlist.yml` of the audit.
+- `.github/config/`: `cloud_nuke_exclusions.yml` of the AWS cleanup, `permanent_resources_audit_cloud_nuke.yml` (AWS) and `permanent_resources_azure_allowlist.yml` (Azure) of the audit.
 - `.github/renovate.json5`: the Renovate config of this repository. It extends `default.json5`.
 - `.github/zizmor.yml`: the configuration of the `zizmor` hook in `.pre-commit-config.yaml`.
 - `baseline/`: the hook list and the linter configurations that the job `baseline` of `lint-global.yml` runs on each caller. See [Baseline](README.md#baseline).

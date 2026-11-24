@@ -1,15 +1,102 @@
 ---
-# cloud-nuke config of the dry run in permanent_resources_audit.yml.
-# Use it for an approved resource that a tag identifies better than its name.
-# cloud-nuke does not list a resource that an exclude rule matches, so the
-# audit neither allowlists nor reports it. Name patterns stay in
-# permanent_resources_allowlist.yml.
-# cloud-nuke lowercases the tag value before it matches the regex.
-CloudWatchLogGroup:
-    exclude:
-        tags:
-            # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
-            # Any log group with this tag leaves the audit, in every region.
-            # The StackSet-map-autotag-backfill-* log groups have no such tag:
-            # permanent_resources_allowlist.yml matches them by name.
-            managed-by: ^stackset/map-autotag-backfill$
+# Approved permanent resources of permanent_resources_audit.yml.
+#
+# `all.config` and `regions.<region>.config` are cloud-nuke configs
+# (https://github.com/gruntwork-io/cloud-nuke#config-file). For each region,
+# the audit merges `all.config` with `regions.<region>.config` and passes the
+# result to the cloud-nuke dry run with `--config`. cloud-nuke does not list a
+# resource that an exclude rule matches, so the audit does not count it. The
+# report of each region prints the merged config.
+# `regions.<region>.exclude_resource_types` become `--exclude-resource-type`.
+# A region absent from `regions` gets `all.config` only: every other resource
+# found there is unexpected.
+#
+# Patterns are Go regular expressions: anchor them and escape `.`.
+# cloud-nuke lowercases a tag value before it matches the regex.
+# GuardDuty and SecurityHub take no name or tag rule in cloud-nuke. A region
+# has at most one detector and one hub, so exclude the resource type instead.
+
+all:
+    config:
+        CloudWatchLogGroup:
+            exclude:
+                tags:
+                    # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+                    # Any log group with this tag leaves the audit, in every region.
+                    managed-by: ^stackset/map-autotag-backfill$
+
+# S3 uses a single global namespace, so the aws-s3-global-audit job audits
+# buckets once for the whole account (not per region) with these regexes. List
+# every approved bucket here, regardless of the region it lives in.
+#
+# Keep in sync with the canonical keeplist consumed by aws_global_cleanup.sh:
+# https://github.com/camunda/infraex-terraform/blob/main/aws/s3-buckets.yml
+# A bucket listed here but absent from that file is still deleted by the
+# weekly global cleanup, so the audit would keep reporting it as missing.
+global:
+    S3:
+        exclude:
+            names_regex:
+                - ^general-purpose-bucket-that-will-not-be-deleted$
+                - ^tests-eks-tf-state-eu-central-1$
+                - ^tests-c8-multi-region-es-eu-central-1$
+                - ^tests-rosa-tf-state-eu-central-1$
+                - ^tests-ra-aws-rosa-hcp-tf-state-eu-central-1$
+                - ^tf-state-multi-reg$
+                - ^camunda\.ie$
+
+regions:
+    eu-central-1:
+        exclude_resource_types:
+            - guard-duty
+            - security-hub
+        config:
+            LambdaFunction:
+                exclude:
+                    names_regex:
+                        - ^medicAbsenceFormToJsonData$
+                        # MAP auto-tagging backfill - managed by infra IT sec (deployed via StackSet)
+                        - ^StackSet-map-autotag-backfill-
+            CloudWatchLogGroup:
+                exclude:
+                    names_regex:
+                        - ^/aws/lambda/medicAbsenceFormToJsonData$
+                        # MAP auto-tagging backfill: these log groups have no managed-by tag.
+                        - ^/aws/lambda/StackSet-map-autotag-backfill-
+            IAMRoles:
+                # cloud-nuke already skips the AWSServiceRoleFor* roles.
+                exclude:
+                    names_regex:
+                        - ^VigieAccessRole$
+            VPC:
+                # cloud-nuke matches the Name tag of the VPC.
+                exclude:
+                    names_regex:
+                        - ^infraex-permanent-vpc$
+            KMSCustomerKeys:
+                # cloud-nuke matches the aliases of the key, not its ID.
+                exclude:
+                    names_regex:
+                        - ^wizKey$
+            CloudFormationStack:
+                exclude:
+                    names_regex:
+                        - ^StackSet-expel-
+                        - ^StackSet-Wiz-
+                        - ^StackSet-VigieAccessRole-
+                        # MAP auto-tagging backfill - managed by infra IT sec
+                        - ^StackSet-map-autotag-backfill-
+
+    eu-west-1:
+        exclude_resource_types:
+            - guard-duty
+        config:
+            KMSCustomerKeys:
+                exclude:
+                    names_regex:
+                        - ^wizKey$
+            CloudFormationStack:
+                exclude:
+                    names_regex:
+                        - ^StackSet-expel-
+                        - ^StackSet-Wiz-

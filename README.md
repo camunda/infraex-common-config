@@ -156,11 +156,13 @@ This provides visibility into the permanent infrastructure without affecting any
 
 S3 uses a single, account-wide global namespace and every bucket is pinned to one home region. The per-region audit therefore **excludes S3** and a dedicated `aws-s3-global-audit` job lists all buckets once (`aws s3api list-buckets`) and compares them against the allowlist.
 
-This avoids a blind spot: auditing S3 per-region would silently skip any bucket whose home region is excluded from the per-region matrix (e.g. `us-east-1`, see `AWS_EXCLUDED_REGIONS`). Approved buckets are listed under `aws.global.s3` in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml), regardless of region.
+This avoids a blind spot: auditing S3 per-region would silently skip any bucket whose home region is excluded from the per-region matrix (e.g. `us-east-1`, see `AWS_EXCLUDED_REGIONS`). Approved buckets are regexes under `global.S3.exclude.names_regex` in [`.github/config/permanent_resources_audit_cloud_nuke.yml`](.github/config/permanent_resources_audit_cloud_nuke.yml), regardless of region.
 
-###### Resources excluded by tag
+###### Approved resources
 
-An approved resource that a tag identifies better than its name has an exclude rule in [`.github/config/permanent_resources_audit_cloud_nuke.yml`](.github/config/permanent_resources_audit_cloud_nuke.yml), which the audit passes to cloud-nuke with `--config`. cloud-nuke then does not list the resource at all, so it is neither allowlisted nor counted. Any resource with the matching tag leaves the audit, in every permanent region. The report of each region names these rules. Name patterns stay in [`.github/config/permanent_resources_allowlist.yml`](.github/config/permanent_resources_allowlist.yml).
+Approved AWS resources are cloud-nuke exclude rules (`names_regex`, `tags`) in [`.github/config/permanent_resources_audit_cloud_nuke.yml`](.github/config/permanent_resources_audit_cloud_nuke.yml). For each region, the audit merges `all.config` with `regions.<region>.config`, passes the result to cloud-nuke with `--config`, and turns `regions.<region>.exclude_resource_types` into `--exclude-resource-type` (GuardDuty and SecurityHub take no name rule). cloud-nuke does not list an excluded resource, so the audit does not count it; the report of each region prints the rules instead. The default VPC and its resources are ignored by ID.
+
+Approved Azure resource groups are regexes in [`.github/config/permanent_resources_azure_allowlist.yml`](.github/config/permanent_resources_azure_allowlist.yml).
 
 ###### ELBv2 target groups (quota headroom)
 
