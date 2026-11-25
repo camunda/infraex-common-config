@@ -364,15 +364,13 @@ jobs:
         secrets: inherit
 ```
 
-To limit notifications to pull requests with at least one scope label, add these job inputs:
+To limit notifications to pull requests with at least one component label, add a job condition:
 
 ```yaml
-with:
-    scope_labels: '["component:infraex","component:self-managed"]'
+if: contains(github.event.pull_request.labels.*.name, 'component:infraex') || contains(github.event.pull_request.labels.*.name, 'component:self-managed')
 ```
 
-The default `scope_labels` value is `[]`, which accepts every pull request. The workflow accepts
-`slack_channel_id`, `slack_mention`, `vault_secret_path` and `vault_slack_token_key` inputs.
+The workflow accepts `slack_channel_id`, `vault_secret_path` and `vault_slack_token_key` inputs.
 Callers outside InfraEx must set `vault_secret_path` to their own team's secret. The Vault role
 must be able to read the Slack token. The Slack bot needs `chat:write` and access to the channel.
 Pin the reusable workflow to a commit SHA. Never check out the pull request head in this job.
