@@ -1,0 +1,138 @@
+---
+name: Notify Slack of Urgent Review
+description: |
+    Send an urgent pull request review request to Slack using a token from Vault.
+
+    ## Example workflow
+
+    ```yaml
+    name: Urgent review notification
+
+    on:
+        pull_request_target:
+            types: [labeled]
+
+    permissions: {}
+
+    jobs:
+        notify:
+            if: github.event.label.name == 'review:urgent' && !github.event.pull_request.draft
+            runs-on: ubuntu-latest
+            permissions:
+                id-token: write
+            concurrency:
+                group: review-urgent-${{ github.event.pull_request.number }}
+                cancel-in-progress: true
+            steps:
+                - uses: camunda/infraex-common-config/.github/actions/notify-review-on-slack@<sha>
+                  with:
+                      vault_addr: ${{ secrets.VAULT_ADDR }}
+                      vault_jwt_path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
+                      vault_jwt_role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
+                      vault_jwt_audience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
+                      slack_channel_id: <channel-id>
+                      slack_mention: '<!subteam^ID>'
+    ```
+
+    `pull_request_target` gives the job access to secrets. Never check out the pull request head in this job.
+    Do not put embargoed CVE details in the pull request title while it carries `review:urgent`.
+    Pin the action to a commit SHA as shown above, not the generated `@main` example below.
+    The Vault role must be able to read the Slack token secret, and the Slack bot needs `chat:write` and access to the channel.
+
+inputs:
+    vault_addr:
+        description: The address of the Vault instance.
+        required: true
+    vault_jwt_path:
+        description: |
+            The Vault auth backend path for GitHub OIDC (JWT) authentication.
+            The calling job needs the `id-token: write` permission.
+        required: true
+    vault_jwt_role:
+        description: The Vault role for GitHub OIDC (JWT) authentication.
+        required: true
+    vault_jwt_audience:
+        description: The GitHub OIDC audience for Vault (JWT) authentication.
+        required: true
+    vault_secret_path:
+        description: |
+            The Vault path holding the Slack bot token. Callers outside InfraEx must point it
+            at their own team's secret, never at the InfraEx one.
+        required: false
+        default: secret/data/products/infrastructure-experience/ci/common
+    vault_slack_token_key:
+        description: The key of the Slack bot token in the Vault secret.
+        required: false
+        default: SLACK_BOT_TOKEN
+    slack_channel_id:
+        description: The Slack channel ID where the notification will be sent.
+        required: true
+    slack_mention:
+        description: An optional Slack mention, such as a subteam mention.
+        required: false
+        default: ''
+runs:
+    using: composite
+    steps:
+        - name: Check the caller grants id-token
+          shell: bash
+          run: |
+              if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                  echo "::error::The calling job must grant 'permissions: id-token: write'. Without it the Vault login fails and no Slack message is sent."
+                  exit 1
+              fi
+
+        - name: Prepare notification
+          id: payload
+          shell: bash
+          env:
+              CHANNEL: ${{ inputs.slack_channel_id }}
+              MENTION: ${{ inputs.slack_mention }}
+              PR_URL: ${{ github.event.pull_request.html_url }}
+              PR_NUMBER: ${{ github.event.pull_request.number }}
+              PR_TITLE: ${{ github.event.pull_request.title }}
+              PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+              REPO: ${{ github.event.repository.name }}
+              ACTOR: ${{ github.actor }}
+          run: |
+              set -euo pipefail
+              if [[ -z "$CHANNEL" || -z "$PR_URL" || -z "$PR_NUMBER" || -z "$PR_AUTHOR" ]]; then
+                  echo '::error::A Slack channel and pull request event are required.'
+                  exit 1
+              fi
+
+              payload=$(jq -cn '
+                  def escape: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+                  {
+                      channel: env.CHANNEL,
+                      unfurl_links: false,
+                      unfurl_media: false,
+                      text: (":rotating_light: Urgent review requested"
+                          + (if env.MENTION != "" then " " + env.MENTION else "" end)
+                          + "\n<" + (env.PR_URL | escape) + "|" + (env.REPO | escape)
+                          + "#" + env.PR_NUMBER + " " + (env.PR_TITLE | escape) + ">"
+                          + "\nAuthor: " + (env.PR_AUTHOR | escape)
+                          + "\nLabel applied by: " + (env.ACTOR | escape))
+                  }
+              ')
+              printf 'payload=%s\n' "$payload" >> "$GITHUB_OUTPUT"
+
+        - name: Import Secrets
+          id: secrets
+          uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+          with:
+              url: ${{ inputs.vault_addr }}
+              method: jwt
+              path: ${{ inputs.vault_jwt_path }}
+              role: ${{ inputs.vault_jwt_role }}
+              jwtGithubAudience: ${{ inputs.vault_jwt_audience }}
+              exportEnv: false
+              secrets: |
+                  ${{ inputs.vault_secret_path }} ${{ inputs.vault_slack_token_key }} | SLACK_BOT_TOKEN;
+
+        - name: Notify Slack
+          uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+          with:
+              method: chat.postMessage
+              token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+              payload: ${{ steps.payload.outputs.payload }}

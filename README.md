@@ -328,7 +328,7 @@ does not remove that path. Where it applies, scope the Vault role away from the 
 
 ## Vault login for callers
 
-The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`) and the workflows
+The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`, `notify-review-on-slack`) and the workflows
 `commit-patch-global`, `release-global` (with `app-token`), `lint-global` and
 `copilot-review-global` log in to Vault with GitHub OIDC. To migrate a caller, in this order:
 
