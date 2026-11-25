@@ -361,7 +361,12 @@ jobs:
         permissions:
             id-token: write
         uses: camunda/infraex-common-config/.github/workflows/notify-urgent-review-global.yml@<sha>
-        secrets: inherit
+        # Pass only the Vault secrets. `secrets: inherit` gives every repository secret to a pull_request_target job.
+        secrets:
+            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
 ```
 
 To limit notifications to pull requests with at least one component label, add a job condition:
