@@ -1,0 +1,136 @@
+---
+name: notify-urgent-review-global
+
+# Notify Slack when a ready pull request receives the urgent review label.
+on:
+    workflow_call:
+        inputs:
+            slack_channel_id:
+                description: Slack channel ID for urgent review requests.
+                default: C0CM1P9AB8U # team-smx-reviews
+                type: string
+            scope_labels:
+                description: JSON array of labels. A non-empty array requires at least one match.
+                default: '[]'
+                type: string
+            vault_secret_path:
+                description: Vault path holding the Slack bot token. Callers outside InfraEx must use their own secret.
+                default: secret/data/products/infrastructure-experience/ci/common
+                type: string
+            vault_slack_token_key:
+                description: Key of the Slack bot token in the Vault secret.
+                default: SLACK_BOT_TOKEN
+                type: string
+            slack_mention:
+                description: Optional Slack mention, such as a subteam mention.
+                default: ''
+                type: string
+        secrets:
+            VAULT_ADDR:
+                description: Vault server URL.
+                required: false
+            VAULT_JWT_PATH:
+                description: Vault JWT auth path. Falls back to the VAULT_JWT_PATH variable.
+                required: false
+            VAULT_JWT_ROLE:
+                description: Vault JWT role. Falls back to the VAULT_JWT_ROLE variable.
+                required: false
+            VAULT_JWT_AUDIENCE:
+                description: Vault JWT audience. Falls back to the VAULT_JWT_AUDIENCE variable.
+                required: false
+
+permissions: {}
+
+jobs:
+    notify:
+        name: Notify Slack of urgent review
+        if: github.event.action == 'labeled' && github.event.label.name == 'review:urgent' && !github.event.pull_request.draft
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            id-token: write
+        concurrency:
+            group: review-urgent-${{ github.repository }}-${{ github.event.pull_request.number }}
+            cancel-in-progress: true
+        steps:
+            - name: Check scope labels
+              id: scope
+              env:
+                  SCOPE_LABELS: ${{ inputs.scope_labels }}
+              run: |
+                  set -euo pipefail
+                  matched=$(jq -r --argjson scope "$SCOPE_LABELS" '
+                      if ($scope | type) != "array" or any($scope[]; type != "string") then
+                          error("scope_labels must be a JSON array of strings")
+                      else
+                          ($scope | length) == 0 or
+                          any(.pull_request.labels[]?.name; . as $label | any($scope[]; . == $label))
+                      end
+                  ' "$GITHUB_EVENT_PATH")
+                  echo "matched=$matched" >> "$GITHUB_OUTPUT"
+
+            # This job receives secrets on pull_request_target. Never check out PR code here.
+            - name: Check the caller grants id-token
+              if: steps.scope.outputs.matched == 'true'
+              run: |
+                  if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                      echo "::error::The calling job must grant 'permissions: id-token: write'. Without it the Vault login fails and no Slack message is sent."
+                      exit 1
+                  fi
+
+            - name: Prepare notification
+              id: payload
+              if: steps.scope.outputs.matched == 'true'
+              env:
+                  CHANNEL: ${{ inputs.slack_channel_id }}
+                  MENTION: ${{ inputs.slack_mention }}
+                  PR_URL: ${{ github.event.pull_request.html_url }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+                  PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+                  REPO: ${{ github.event.repository.name }}
+                  ACTOR: ${{ github.actor }}
+              run: |
+                  set -euo pipefail
+                  if [[ -z "$CHANNEL" || -z "$PR_URL" || -z "$PR_NUMBER" || -z "$PR_AUTHOR" ]]; then
+                      echo '::error::A Slack channel and pull request event are required.'
+                      exit 1
+                  fi
+
+                  payload=$(jq -cn '
+                      def escape: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+                      {
+                          channel: env.CHANNEL,
+                          unfurl_links: false,
+                          unfurl_media: false,
+                          text: (":rotating_light: Urgent review requested"
+                              + (if env.MENTION != "" then " " + env.MENTION else "" end)
+                              + "\n<" + (env.PR_URL | escape) + "|" + (env.REPO | escape)
+                              + "#" + env.PR_NUMBER + " " + (env.PR_TITLE | escape) + ">"
+                              + "\nAuthor: " + (env.PR_AUTHOR | escape)
+                              + "\nLabel applied by: " + (env.ACTOR | escape))
+                      }
+                  ')
+                  printf 'payload=%s\n' "$payload" >> "$GITHUB_OUTPUT"
+
+            - name: Import Secrets
+              id: secrets
+              if: steps.scope.outputs.matched == 'true'
+              uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
+              with:
+                  url: ${{ secrets.VAULT_ADDR }}
+                  method: jwt
+                  path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
+                  role: ${{ secrets.VAULT_JWT_ROLE || vars.VAULT_JWT_ROLE }}
+                  jwtGithubAudience: ${{ secrets.VAULT_JWT_AUDIENCE || vars.VAULT_JWT_AUDIENCE }}
+                  exportEnv: false
+                  secrets: |
+                      ${{ inputs.vault_secret_path }} ${{ inputs.vault_slack_token_key }} | SLACK_BOT_TOKEN;
+
+            - name: Notify Slack
+              if: steps.scope.outputs.matched == 'true'
+              uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+              with:
+                  method: chat.postMessage
+                  token: ${{ steps.secrets.outputs.SLACK_BOT_TOKEN }}
+                  payload: ${{ steps.payload.outputs.payload }}
