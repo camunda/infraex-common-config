@@ -329,8 +329,9 @@ does not remove that path. Where it applies, scope the Vault role away from the 
 ## Vault login for callers
 
 The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`) and the workflows
-`commit-patch-global`, `release-global` (with `app-token`), `lint-global` and
-`copilot-review-global` log in to Vault with GitHub OIDC. To migrate a caller, in this order:
+`commit-patch-global`, `release-global` (with `app-token`), `lint-global`,
+`copilot-review-global` and `notify-urgent-review-global` log in to Vault with GitHub OIDC.
+To migrate a caller, in this order:
 
 1. **Grant `id-token: write` to the calling job.** Without it, `commit-patch-global` stops at
    startup, and the Slack actions and `release-global` fail with an explicit error. A notifier job
@@ -342,6 +343,43 @@ The Slack actions (`report-failure-on-slack`, `report-warning-on-slack`) and the
    variable of the same name, so a caller that defines them as variables passes nothing. The Slack
    actions take them as inputs: pass `${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}`.
 4. Outside InfraEx, also set the secret path and key inputs to your own secret.
+
+## Urgent review notifications
+
+[`notify-urgent-review-global.yml`](.github/workflows/notify-urgent-review-global.yml) sends a
+Slack message when a ready pull request receives the `review:urgent` label. The default channel
+is `#team-smx-reviews`. The message includes the pull request title, link, author and actor.
+
+```yaml
+name: Urgent review notification
+on:
+    pull_request_target:
+        types: [labeled]
+permissions: {}
+jobs:
+    notify:
+        permissions:
+            id-token: write
+        uses: camunda/infraex-common-config/.github/workflows/notify-urgent-review-global.yml@<sha>
+        # Pass only the Vault secrets. `secrets: inherit` gives every repository secret to a pull_request_target job.
+        secrets:
+            VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+            VAULT_JWT_PATH: ${{ secrets.VAULT_JWT_PATH }}
+            VAULT_JWT_ROLE: ${{ secrets.VAULT_JWT_ROLE }}
+            VAULT_JWT_AUDIENCE: ${{ secrets.VAULT_JWT_AUDIENCE }}
+```
+
+To limit notifications to pull requests with at least one component label, add a job condition:
+
+```yaml
+if: contains(github.event.pull_request.labels.*.name, 'component:infraex') || contains(github.event.pull_request.labels.*.name, 'component:self-managed')
+```
+
+The workflow accepts `slack_channel_id`, `vault_secret_path` and `vault_slack_token_key` inputs.
+Callers outside InfraEx must set `vault_secret_path` to their own team's secret. The Vault role
+must be able to read the Slack token. The Slack bot needs `chat:write` and access to the channel.
+Pin the reusable workflow to a commit SHA. Never check out the pull request head in this job.
+Do not put embargoed CVE details in the pull request title while it carries `review:urgent`.
 
 ## Release
 
