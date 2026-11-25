@@ -1,7 +1,5 @@
 ---
 default_language_version:
-    # The Go on PATH (the caller's .tool-versions pin, or the runner image Go). lint-global.yml sets
-    # GOTOOLCHAIN only when there is no golang pin and go.mod needs a newer Go than the runner Go.
     golang: system
 exclude: (^|/)(testdata|fixtures|vendor)/
 repos:

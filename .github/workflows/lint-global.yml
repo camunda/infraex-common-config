@@ -468,11 +468,6 @@ jobs:
                   path: .infraex-common-config
                   persist-credentials: false
 
-            # Tools come from the caller's .tool-versions, as in the job lint, so both jobs run
-            # the same pre-commit and Go. The caller must pin pre-commit. The hook list runs
-            # golangci-lint-full with the Go on PATH (`golang: system`). The next steps set
-            # GOTOOLCHAIN only when .tool-versions has no golang pin and the caller's go.mod needs
-            # a newer Go than the runner Go.
             - name: Require a pre-commit pin in .tool-versions
               run: |
                   set -euo pipefail
@@ -484,17 +479,10 @@ jobs:
                   echo "pre_commit=${pinned}" | tee -a "$GITHUB_OUTPUT"
               id: tools
 
-            # Before asdf: a restored asdf cache can hold a go shim that shadows the runner Go.
-            - name: Find the runner Go
-              id: runner-go
-              run: |
-                  set -euo pipefail
-                  if go_bin="$(command -v go)"; then
-                    echo "dir=$(dirname "$go_bin")" | tee -a "$GITHUB_OUTPUT"
-                  fi
-
-            - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@37bcb8168f0990c0c1786f55a350206289519c2d # 3.0.2
+            - name: Install pre-commit
+              env:
+                  PRE_COMMIT_VERSION: ${{ steps.tools.outputs.pre_commit }}
+              run: pipx install "pre-commit==${PRE_COMMIT_VERSION}"
 
             - name: Check pre-commit matches the caller's .tool-versions
               env:
@@ -503,64 +491,35 @@ jobs:
                   set -euo pipefail
                   actual="$(pre-commit --version 2>/dev/null | awk '{ print $2 }' || true)"
                   if [ "$actual" != "$EXPECTED" ]; then
-                    echo "::error::pre-commit '${actual}' is on PATH but .tool-versions pins ${EXPECTED}. The asdf install did not take effect."
+                    echo "::error::pre-commit '${actual}' is on PATH but .tool-versions pins ${EXPECTED}. The pipx install did not take effect."
                     exit 1
                   fi
                   echo "pre-commit ${actual} matches .tool-versions"
 
-            # A caller that pins golang gets that Go. Without a golang pin, the runner image Go can
-            # be older than the caller's go.mod, and golangci-lint built with it refuses the newer
-            # modules. The newest go/toolchain directive of the caller's go.mod files then selects
-            # the toolchain, which Go downloads itself, but only when it is newer than the runner Go.
             - name: Select the Go for the caller's go.mod
-              env:
-                  RUNNER_GO_DIR: ${{ steps.runner-go.outputs.dir }}
               run: |
                   set -euo pipefail
-                  pinned="$(awk '$1 == "golang" { print $2; exit }' .tool-versions 2>/dev/null || true)"
-                  if [ -n "$pinned" ]; then
-                    if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-                      echo "::error::Unexpected golang version '${pinned}' in .tool-versions."
+                  # Same directories as the baseline exclude; `toolchain default` names no version.
+                  # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
+                  version="$(git ls-files -z -- go.mod '*/go.mod' \
+                    ':(exclude,glob)**/testdata/**' ':(exclude,glob)**/fixtures/**' ':(exclude,glob)**/vendor/**' \
+                    | xargs -0 -r awk '($1 == "go" || $1 == "toolchain") && $2 != "default" { sub(/^go/, "", $2); print $2 }' \
+                    | sort -V | tail -n 1)"
+                  if [ -n "$version" ]; then
+                    case "$version" in
+                      *.*.*) ;;
+                      *) version="${version}.0" ;;
+                    esac
+                    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      echo "::error::Unexpected Go version '${version}' in go.mod."
                       exit 1
                     fi
-                    # The real Go binary, not the asdf shim. pre-commit builds golangci-lint in
-                    # its clone of the hook repository, where the shim finds no .tool-versions,
-                    # and the shim sets its own GOBIN, so the built binary would not reach the
-                    # hook environment.
-                    goroot="$(ASDF_GOLANG_VERSION="$pinned" asdf where golang)/go"
-                    if [ ! -x "${goroot}/bin/go" ]; then
-                      echo "::error::asdf did not install golang ${pinned} at ${goroot}."
-                      exit 1
-                    fi
-                    echo "${goroot}/bin" | tee -a "$GITHUB_PATH"
-                  else
-                    # Put the runner Go before any asdf go shim, for this step and the next ones.
-                    if [ -n "$RUNNER_GO_DIR" ]; then
-                      export PATH="${RUNNER_GO_DIR}:${PATH}"
-                      echo "$RUNNER_GO_DIR" | tee -a "$GITHUB_PATH"
-                    fi
-                    # Same directories as the baseline exclude; `toolchain default` names no version.
-                    # shellcheck disable=SC2016 # '*/go.mod' is a git pathspec, not a shell glob
-                    version="$(git ls-files -z -- go.mod '*/go.mod' \
-                      ':(exclude,glob)**/testdata/**' ':(exclude,glob)**/fixtures/**' ':(exclude,glob)**/vendor/**' \
-                      | xargs -0 -r awk '($1 == "go" || $1 == "toolchain") && $2 != "default" { sub(/^go/, "", $2); print $2 }' \
-                      | sort -V | tail -n 1)"
-                    if [ -n "$version" ]; then
-                      case "$version" in
-                        *.*.*) ;;
-                        *) version="${version}.0" ;;
-                      esac
-                      if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                        echo "::error::Unexpected Go version '${version}' in go.mod."
-                        exit 1
-                      fi
-                      # A fixed older toolchain would break golangci-lint, which needs the runner Go or newer.
-                      runner="$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null | sed 's/^go//' || true)"
-                      if [ -z "$runner" ] || [ "$(printf '%s\n%s\n' "$runner" "$version" | sort -V | tail -n 1)" != "$runner" ]; then
-                        echo "GOTOOLCHAIN=go${version}" | tee -a "$GITHUB_ENV"
-                      else
-                        echo "go.mod needs Go ${version}. The runner Go ${runner} is not older, so GOTOOLCHAIN stays unset."
-                      fi
+                    # A fixed older toolchain would break golangci-lint, which needs the runner Go or newer.
+                    runner="$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null | sed 's/^go//' || true)"
+                    if [ -z "$runner" ] || [ "$(printf '%s\n%s\n' "$runner" "$version" | sort -V | tail -n 1)" != "$runner" ]; then
+                      echo "GOTOOLCHAIN=go${version}" | tee -a "$GITHUB_ENV"
+                    else
+                      echo "go.mod needs Go ${version}. The runner Go ${runner} is not older, so GOTOOLCHAIN stays unset."
                     fi
                   fi
                   if command -v go >/dev/null 2>&1; then go version; else echo "No Go on PATH"; fi
