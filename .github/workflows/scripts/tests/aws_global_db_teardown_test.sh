@@ -59,15 +59,15 @@ for created in "$young" None fail; do
 done
 
 out=$(run true "$old" "" None); rc=$?
-[ "$rc" -eq 0 ] && grep -q tagged <<<"$out" && ! grep -q deleted <<<"$out"
+[ "$rc" -eq 0 ] && grep -qx tagged <<<"$out" && ! grep -q deleted <<<"$out"
 check "an empty global database without a first-seen tag is tagged and kept" $?
 
 out=$(run true "$old" "" "$young"); rc=$?
-[ "$rc" -eq 0 ] && grep -q "Skipping global database" <<<"$out" && ! grep -qE 'tagged|deleted' <<<"$out"
+[ "$rc" -eq 0 ] && grep -q "Skipping global database" <<<"$out" && ! grep -qx tagged <<<"$out" && ! grep -q deleted <<<"$out"
 check "an empty global database first seen less than the cleanup age ago is kept" $?
 
 out=$(run true "$old" "" 2020-01-01T00:00:00Z); rc=$?
-[ "$rc" -eq 0 ] && grep -q deleted <<<"$out" && ! grep -q tagged <<<"$out"
+[ "$rc" -eq 0 ] && grep -q deleted <<<"$out" && ! grep -qx tagged <<<"$out"
 check "an empty global database first seen longer than the cleanup age ago is deleted" $?
 
 echo "$PASS passed, $FAIL failed"
