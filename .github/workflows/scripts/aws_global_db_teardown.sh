@@ -218,6 +218,10 @@ for global_arn in $global_cluster_arns; do
         continue
     fi
 
+    if ! execute_or_simulate "aws rds remove-tags-from-resource --region $api_region --resource-name $global_arn --tag-keys $FIRST_SEEN_TAG"; then
+        echo "Warning: could not remove $FIRST_SEEN_TAG from global database $global_cluster_id"
+    fi
+
     if [ "$active_member" != true ]; then
         echo "Skipping global database $global_cluster_id (no member older than its cleanup age in an active region today: $ACTIVE_REGIONS)"
         continue

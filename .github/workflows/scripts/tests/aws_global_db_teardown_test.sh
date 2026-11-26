@@ -22,6 +22,7 @@ case "\$*" in
   *describe-db-clusters*) [ "$2" = fail ] && exit 1; echo "$2" ;;
   *list-tags-for-resource*) echo "${4:-None}" ;;
   *add-tags-to-resource*) echo tagged >&2 ;;
+  *remove-tags-from-resource*) echo untagged >&2 ;;
   *remove-from-global-cluster*) touch "$stub/detached"; exit 0 ;;
   *delete-global-cluster*) echo deleted >&2; exit 0 ;;
   *"length(GlobalClusters[0].GlobalClusterMembers[?"*|*"length(GlobalClusters[0].GlobalClusterMembers)"*)
@@ -56,6 +57,10 @@ for created in "$young" None fail; do
   [ "$rc" -eq 0 ] && grep -q "Skipping global database" <<<"$out" && ! grep -qE 'remove-from-global-cluster|deleted' <<<"$out"
   check "a global database is kept when the creation time of its members is '$created'" $?
 done
+
+out=$(run true "$young"); rc=$?
+[ "$rc" -eq 0 ] && grep -qx untagged <<<"$out"
+check "a global database with members loses its first-seen tag" $?
 
 out=$(AGES="eu-west-2=12h eu-west-3=30m" run true "$old"); rc=$?
 [ "$rc" -ne 0 ] && grep -q "::error title=Unsupported cleanup age" <<<"$out" && ! grep -qE 'remove-from-global-cluster|deleted' <<<"$out"
