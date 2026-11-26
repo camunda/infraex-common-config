@@ -98,7 +98,9 @@ Run by the owner of the Elasticsearch cluster, from a machine that can reach it 
 ES_URL=https://<elasticsearch>:<port> ES_ADMIN_API_KEY=... KEY_FILE=./planner-es.key ./bootstrap/es-bootstrap.sh
 ```
 
-It creates the policy `ci-planner-retention` (`es/ilm-ci-planner-retention.json`), the first backing index of each of
+It creates the policy `ci-planner-retention` (`es/ilm-ci-planner-retention.json`), one index template per index
+(`ci-planner-<name>-*`, priority 500, with the settings and strict mappings of `es/*.mapping.json`: a rollover builds the
+next backing index from templates only, so without them it would have no policy and dynamic mappings), the first backing index of each of
 `ci-planner-decisions`, `-outcomes`, `-escapes`, `-weights` with its write alias (strict mappings, `es/*.mapping.json`;
 `REPLICAS=0` on a one-node cluster), and an API key limited to `ci-planner-*` (read, write, view_index_metadata) written
 to `KEY_FILE` and never printed. Existing aliases are left alone, so it can be re-run.
@@ -121,7 +123,7 @@ All six files go in **one** `POST /v2/deployments` (atomic: all or none), from t
    for `main`; environment secrets `CAMUNDA_DEPLOYER_CLIENT_ID`, `CAMUNDA_DEPLOYER_CLIENT_SECRET`; environment variables
    `PLANNER_DEPLOY_ALLOWED_BASE_URL` (`https://<host>/v2`) and `PLANNER_DEPLOY_ALLOWED_TOKEN_URL`.
 2. Run the workflow from `main` with the cluster's base and token URL (and audience, scope or tenant if the cluster
-   needs them), `dry-run: true` first. The `check` job refuses another ref and any file that differs from its generator;
+   needs them; with multi-tenancy the deployer client must also be assigned to that tenant), `dry-run: true` first. The `check` job refuses another ref and any file that differs from its generator;
    a dry run checks the URLs against the environment and gets no deployer secret.
 3. Run it again with `dry-run: false`. The job summary lists each process and decision requirements graph with its
    version and key; the run fails unless all three processes, all three graphs and the called decisions

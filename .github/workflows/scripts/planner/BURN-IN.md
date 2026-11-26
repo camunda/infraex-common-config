@@ -91,6 +91,9 @@ jq -s '{prs: length, violations: [.[].violations[]] | length,
 - `violations` must be 0.
 - `would_skip_failed` lists suites the plan would have skipped that then failed: each one is a would-be escape. Look at
   the failure: a real regression from that PR means a rule is missing; infrastructure noise does not count.
+- The collector attributes escapes to plans that said `skip` whether or not the skip was enforced, so during the burn-in
+  `ci-planner-escapes` and the weekly weights learn from would-be escapes, not from real ones (no suite was skipped).
+  Read the weights of this period as "what gating would have cost", and review them before gating.
 - `fail_open` is how often Camunda could not answer (route timeout, outage); the plans still skipped nothing.
 - `rotation` shows which consumer suites the rotation picked and how evenly.
 

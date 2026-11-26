@@ -62,6 +62,19 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         urls = [[a for a in c["args"] if a.startswith("https://")][0] for c in calls]
         self.assertEqual(urls[0], "https://es.example.test:9200/_ilm/policy/ci-planner-retention")
+        templates = {u.rsplit("/", 1)[1]: json.loads(c["body"]) for c, u in zip(calls, urls) if "/_index_template/" in u}
+        self.assertEqual(sorted(templates), ["ci-planner-decisions", "ci-planner-escapes", "ci-planner-outcomes", "ci-planner-weights"],
+                         "a template for every index, also for an existing alias (rollover builds the next index from it)")
+        t = templates["ci-planner-outcomes"]
+        self.assertEqual(t["index_patterns"], ["ci-planner-outcomes-*"])
+        self.assertEqual(t["template"]["settings"]["index.lifecycle.name"], "ci-planner-retention")
+        self.assertEqual(t["template"]["settings"]["index.lifecycle.rollover_alias"], "ci-planner-outcomes")
+        self.assertEqual(t["template"]["settings"]["number_of_replicas"], 0)
+        self.assertEqual(t["template"]["mappings"]["dynamic"], "strict")
+        self.assertNotIn("aliases", t["template"], "the write alias belongs to -000001 only")
+        first_template = min(i for i, u in enumerate(urls) if "/_index_template/ci-planner-decisions" in u)
+        first_index = min(i for i, u in enumerate(urls) if u.endswith("ci-planner-decisions-000001"))
+        self.assertLess(first_template, first_index, "the template exists before the first index")
         created = [u.rsplit("/", 1)[1] for c, u in zip(calls, urls) if "PUT" in c["args"] and u.endswith("-000001")]
         self.assertEqual(created, ["ci-planner-decisions-000001", "ci-planner-outcomes-000001", "ci-planner-escapes-000001"],
                          "an existing alias is left alone")

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Planner memory in Elasticsearch: the retention policy, the four indices behind their write aliases and,
+# Planner memory in Elasticsearch: the retention policy, one index template per index (so the indices a rollover
+# creates keep the policy and the strict mappings), the four indices behind their write aliases and,
 # optionally, the API key the connectors runtime uses (read and write on ci-planner-* only).
 #
 # Run by the owner of the Elasticsearch cluster, from a machine that can reach it; never from GitHub.
-# Idempotent: an existing alias is left as it is, the policy is updated in place, a new key is only made
+# Idempotent: an existing alias is left as it is, the policy and the templates are updated in place, a new key is only made
 # when KEY_FILE is set.
 #
 #   ES_URL            https://<elasticsearch>:<port>  (required)
 #   ES_ADMIN_API_KEY  an API key allowed to manage ILM, indices and API keys (required, read from the environment)
-#   REPLICAS          number_of_replicas for the first indices (default: the mapping's value, 1)
+#   REPLICAS          number_of_replicas for the templates and the first indices (default: the mapping's value, 1)
 #   KEY_FILE          if set, create the connector API key and write its encoded value to this file (mode 0600).
 #                     The key is never printed: hand it to the connectors runtime as SECRET_PLANNER_ES_APIKEY.
 set -euo pipefail
@@ -31,6 +32,14 @@ es -X PUT "${ES_URL}/_ilm/policy/ci-planner-retention" --data-binary @"${DIR}/il
 
 for i in decisions outcomes escapes weights; do
   alias="ci-planner-${i}"
+  # A rollover builds the next backing index (-000002, ...) from index templates only: without this template it
+  # would get no ILM policy (never rolled over or deleted) and dynamic instead of strict mappings.
+  echo "${alias}: index template ${alias} for ${alias}-*"
+  jq --arg a "${alias}" --arg r "${REPLICAS:-}" \
+    '(if $r == "" then . else .settings.number_of_replicas = ($r | tonumber) end)
+     | {index_patterns: [$a + "-*"], priority: 500, template: {settings: .settings, mappings: .mappings},
+        _meta: {description: "test-selection planner, written by es-bootstrap.sh"}}' \
+    "${DIR}/${alias}.mapping.json" | es -X PUT "${ES_URL}/_index_template/${alias}" --data-binary @- > /dev/null
   code="$(curl -sS -o /dev/null -w '%{http_code}' -H @"${hdr}" -I "${ES_URL}/_alias/${alias}")"
   if [ "${code}" = 200 ]; then
     echo "${alias}: alias exists, left as it is"
