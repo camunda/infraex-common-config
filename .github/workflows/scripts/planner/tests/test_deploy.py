@@ -5,12 +5,14 @@ import email.parser
 import email.policy
 import json
 import os
+import http.server
 import shutil
 import tempfile
+import threading
 import unittest
 
 from .. import deploy
-from ..camunda import Client
+from ..camunda import Client, _urlopen
 
 CAMUNDA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camunda")
 ENV = {"CAMUNDA_BASE_URL": "https://oc.example.test/v2", "CAMUNDA_TOKEN_URL": "https://idp.example.test/token",
@@ -122,6 +124,45 @@ class DeployTest(unittest.TestCase):
             self.assertEqual(http.calls, [])
         finally:
             shutil.rmtree(tmp)
+
+
+class RedirectTest(unittest.TestCase):
+    """A 30x from the cluster or the identity provider is an answer: the bearer token never follows it elsewhere."""
+
+    def serve(self, handler):
+        srv = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        return "http://127.0.0.1:%d" % srv.server_port
+
+    def test_redirect_is_not_followed(self):
+        seen = []
+
+        class Elsewhere(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.headers.get("Authorization"))
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        elsewhere = self.serve(Elsewhere)
+
+        class Cluster(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(302)
+                self.send_header("Location", elsewhere + "/steal")
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        status, _ = _urlopen("POST", self.serve(Cluster) + "/v2/deployments", {"Authorization": "Bearer t0ken"}, b"x", 5.0)
+        self.assertEqual(status, 302)
+        self.assertEqual(seen, [])
 
 
 if __name__ == "__main__":

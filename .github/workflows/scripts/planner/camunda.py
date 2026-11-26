@@ -23,10 +23,20 @@ class CamundaError(RuntimeError):
     pass
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Redirects are answered, not followed: urllib would resend the bearer token to wherever a 30x points."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def _urlopen(method: str, url: str, headers: dict, body: bytes | None, timeout: float):
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (https URL from configuration)
+        with _OPENER.open(req, timeout=timeout) as r:  # noqa: S310 (https URL from configuration)
             return r.status, r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")
