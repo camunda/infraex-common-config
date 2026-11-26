@@ -30,6 +30,8 @@ DRY_RUN=${DRY_RUN:-false}
 # regions are wiped). Defaults to all cleanup regions.
 ACTIVE_REGIONS="${ACTIVE_REGIONS:-$CLEANUP_REGIONS}"
 
+: "${CLEANUP_OLDER_THAN_BY_REGION:?must be set (the workflow derives it from the cleanup matrix)}"
+
 # Seconds between membership polls. Overridden by the offline tests.
 POLL_SECONDS="${GLOBAL_DB_POLL_SECONDS:-10}"
 
@@ -57,6 +59,36 @@ delete_global_cluster() {
         execute_or_simulate "aws rds delete-global-cluster --region $region --global-cluster-identifier $id"
     elif ! delete_err=$(aws rds delete-global-cluster --region "$region" --global-cluster-identifier "$id" 2>&1); then
         echo "Warning: delete-global-cluster for $id did not succeed: ${delete_err}"
+    fi
+}
+
+member_old_enough() {
+    local arn="$1" region="$2" entry hours="" created
+    for entry in $CLEANUP_OLDER_THAN_BY_REGION; do
+        if [ "${entry%%=*}" = "$region" ]; then
+            hours="${entry#*=}"
+            hours="${hours%h}"
+        fi
+    done
+    if ! [[ "$hours" =~ ^[0-9]+$ ]]; then
+        echo "Warning: no cleanup age in hours for $region in CLEANUP_OLDER_THAN_BY_REGION; keeping $arn"
+        return 1
+    fi
+    if [ "$hours" -eq 0 ]; then
+        return 0
+    fi
+    if ! created=$(aws rds describe-db-clusters --region "$region" --db-cluster-identifier "$arn" \
+        --query 'DBClusters[0].ClusterCreateTime' --output text 2>&1); then
+        echo "Warning: could not read the creation time of $arn; keeping it: ${created}"
+        return 1
+    fi
+    if ! python3 -c '
+import datetime, sys
+created = datetime.datetime.fromisoformat(sys.argv[1])
+sys.exit(datetime.datetime.now(datetime.timezone.utc) - created < datetime.timedelta(hours=int(sys.argv[2])))
+' "$created" "$hours"; then
+        echo "Keeping $arn (created: $created; cleanup age in $region: ${hours}h)"
+        return 1
     fi
 }
 
@@ -140,7 +172,7 @@ for global_cluster_id in $global_cluster_ids; do
         fi
 
         # Only tear down on a run where at least one member region is being cleaned.
-        if grep -qwF "$member_region" <<< "$ACTIVE_REGIONS"; then
+        if grep -qwF "$member_region" <<< "$ACTIVE_REGIONS" && member_old_enough "$member_arn" "$member_region"; then
             active_member=true
         fi
 
@@ -157,7 +189,7 @@ for global_cluster_id in $global_cluster_ids; do
     fi
 
     if [ "$active_member" != true ]; then
-        echo "Skipping global database $global_cluster_id (no member in an active region today: $ACTIVE_REGIONS)"
+        echo "Skipping global database $global_cluster_id (no member older than its cleanup age in an active region today: $ACTIVE_REGIONS)"
         continue
     fi
 
