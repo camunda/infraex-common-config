@@ -41,6 +41,7 @@ POLL_SECONDS="${GLOBAL_DB_POLL_SECONDS:-10}"
 # (e.g. an Aurora replica stuck in `creating`) blocks cloud-nuke every night,
 # so it must fail the job and reach notify-on-failure instead of a green run.
 unresolved=()
+untagged=false
 
 # Function to execute a command or simulate it if DRY_RUN is true
 execute_or_simulate() {
@@ -165,7 +166,10 @@ for global_cluster_id in $global_cluster_ids; do
         fi
         if [ -z "$first_seen" ] || [ "$first_seen" = "None" ]; then
             echo "Global database $global_cluster_id has no members; tagging it with $FIRST_SEEN_TAG for a later run"
-            execute_or_simulate "aws rds add-tags-to-resource --region $api_region --resource-name $global_arn --tags Key=$FIRST_SEEN_TAG,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+            if ! execute_or_simulate "aws rds add-tags-to-resource --region $api_region --resource-name $global_arn --tags Key=$FIRST_SEEN_TAG,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; then
+                echo "::error title=Aurora Global Database not tagged::$global_cluster_id has no members and could not be tagged with $FIRST_SEEN_TAG, so no run deletes it."
+                untagged=true
+            fi
             continue
         fi
         if ! older_than "$first_seen" "$largest_hours"; then
@@ -315,5 +319,9 @@ if [ "${#unresolved[@]}" -gt 0 ]; then
     for id in "${unresolved[@]}"; do
         echo "::error title=Aurora Global Database not torn down::$id still has members after the detach. cloud-nuke cannot delete its clusters until they leave. A member stuck in a transitional state (e.g. creating) needs AWS support."
     done
+    exit 1
+fi
+
+if [ "$untagged" = true ]; then
     exit 1
 fi

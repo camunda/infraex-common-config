@@ -76,7 +76,7 @@ jobs:
                       ACTIVE_REGIONS="$CLEANUP_REGIONS"
                   elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       ACTIVE_REGIONS="$DISPATCH_REGION"
-                      CLEANUP_OLDER_THAN_BY_REGION="$DISPATCH_REGION=$DISPATCH_OLDER_THAN"
+                      CLEANUP_OLDER_THAN_BY_REGION="$CLEANUP_OLDER_THAN_BY_REGION $DISPATCH_REGION=$DISPATCH_OLDER_THAN"
                   else
                       current_day=$(date +%A)
                       ACTIVE_REGIONS=$(yq "[.jobs.aws-cleanup.strategy.matrix.config[] | select(.day == \"All\" or .day == \"$current_day\") | .region] | join(\" \")" "$WF")
