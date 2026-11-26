@@ -31,6 +31,8 @@ DRY_RUN=${DRY_RUN:-false}
 ACTIVE_REGIONS="${ACTIVE_REGIONS:-$CLEANUP_REGIONS}"
 
 : "${CLEANUP_OLDER_THAN_BY_REGION:?must be set (the workflow derives it from the cleanup matrix)}"
+largest_hours=$(tr ' ' '\n' <<< "$CLEANUP_OLDER_THAN_BY_REGION" | sed -n 's/^[^=]*=\([0-9][0-9]*\)h$/\1/p' | sort -n | tail -n 1)
+FIRST_SEEN_TAG="cloud-nuke-first-seen"
 
 # Seconds between membership polls. Overridden by the offline tests.
 POLL_SECONDS="${GLOBAL_DB_POLL_SECONDS:-10}"
@@ -62,6 +64,14 @@ delete_global_cluster() {
     fi
 }
 
+older_than() {
+    python3 -c '
+import datetime, sys
+since = datetime.datetime.fromisoformat(sys.argv[1])
+sys.exit(datetime.datetime.now(datetime.timezone.utc) - since < datetime.timedelta(hours=int(sys.argv[2])))
+' "$1" "$2" 2>/dev/null
+}
+
 member_old_enough() {
     local arn="$1" region="$2" entry hours="" created
     for entry in $CLEANUP_OLDER_THAN_BY_REGION; do
@@ -71,7 +81,7 @@ member_old_enough() {
         fi
     done
     if ! [[ "$hours" =~ ^[0-9]+$ ]]; then
-        echo "Warning: no cleanup age in hours for $region in CLEANUP_OLDER_THAN_BY_REGION; keeping $arn"
+        echo "Warning: no cleanup age in hours for $region in CLEANUP_OLDER_THAN_BY_REGION; not counting $arn as old"
         return 1
     fi
     if [ "$hours" -eq 0 ]; then
@@ -79,15 +89,11 @@ member_old_enough() {
     fi
     if ! created=$(aws rds describe-db-clusters --region "$region" --db-cluster-identifier "$arn" \
         --query 'DBClusters[0].ClusterCreateTime' --output text 2>&1); then
-        echo "Warning: could not read the creation time of $arn; keeping it: ${created}"
+        echo "Warning: could not read the creation time of $arn; not counting it as old: ${created}"
         return 1
     fi
-    if ! python3 -c '
-import datetime, sys
-created = datetime.datetime.fromisoformat(sys.argv[1])
-sys.exit(datetime.datetime.now(datetime.timezone.utc) - created < datetime.timedelta(hours=int(sys.argv[2])))
-' "$created" "$hours"; then
-        echo "Keeping $arn (created: $created; cleanup age in $region: ${hours}h)"
+    if ! older_than "$created" "$hours"; then
+        echo "Not counting $arn as old (created: $created; cleanup age in $region: ${hours}h)"
         return 1
     fi
 }
@@ -144,9 +150,29 @@ for global_cluster_id in $global_cluster_ids; do
     fi
 
     # An empty member list (or the literal "None" when GlobalClusters[0] is null)
-    # means there is nothing to detach, so the global database can go.
+    # means there is nothing to detach.
     if [ -z "$members" ] || [ "$members" = "None" ]; then
-        echo "Global database $global_cluster_id has no members, deleting it"
+        if ! global_arn=$(aws rds describe-global-clusters --region "$api_region" \
+            --global-cluster-identifier "$global_cluster_id" \
+            --query 'GlobalClusters[0].GlobalClusterArn' --output text 2>&1); then
+            echo "Warning: could not describe empty global database $global_cluster_id; skipping it this run: ${global_arn}"
+            continue
+        fi
+        if ! first_seen=$(aws rds list-tags-for-resource --region "$api_region" --resource-name "$global_arn" \
+            --query "TagList[?Key=='$FIRST_SEEN_TAG'].Value | [0]" --output text 2>&1); then
+            echo "Warning: could not read the tags of empty global database $global_cluster_id; skipping it this run: ${first_seen}"
+            continue
+        fi
+        if [ -z "$first_seen" ] || [ "$first_seen" = "None" ]; then
+            echo "Global database $global_cluster_id has no members; tagging it with $FIRST_SEEN_TAG for a later run"
+            execute_or_simulate "aws rds add-tags-to-resource --region $api_region --resource-name $global_arn --tags Key=$FIRST_SEEN_TAG,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+            continue
+        fi
+        if ! older_than "$first_seen" "$largest_hours"; then
+            echo "Skipping global database $global_cluster_id (no members; $FIRST_SEEN_TAG $first_seen is younger than ${largest_hours}h)"
+            continue
+        fi
+        echo "Global database $global_cluster_id has no members ($FIRST_SEEN_TAG: $first_seen), deleting it"
         delete_global_cluster "$global_cluster_id" "$api_region"
         continue
     fi
