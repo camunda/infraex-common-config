@@ -6,6 +6,6 @@
 entries:
     - id: kf-example-capacity
       class: blocked # blocked | known_failure
-      pattern: '(?i)insufficient capacity|quota exceeded'
-      suites: ['aws_*_tests.yml']
+      pattern: (?i)insufficient capacity|quota exceeded
+      suites: [aws_*_tests.yml]
       expires: 2027-03-01
