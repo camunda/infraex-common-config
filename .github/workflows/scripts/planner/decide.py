@@ -29,7 +29,7 @@ def run(a) -> dict:
     labels = json.loads(a.labels) if a.labels else []
     if not isinstance(labels, list):
         labels = []
-    mode = "gate" if not a.mode else (a.mode if a.mode in ("report", "gate") else "report")  # unset = gate, unknown = safe
+    mode = a.mode if a.mode in ("report", "gate") else "report"  # unset or unknown = report (skips nothing)
     inp = rules.Inputs(
         repo=repo, slug=a.slug, pr=int(a.pr), head_sha=a.head_sha, base_sha=a.base_sha, merge_base=mb, event=a.event,
         actor=a.actor or "", head_repo_is_fork=str(a.fork).lower() == "true", labels=[str(x) for x in labels][:100], mode=mode,
@@ -57,7 +57,7 @@ def facts_run(a) -> dict:
     changed = gitutil.changed_files(repo, a.base_sha, a.head_sha)
     labels = json.loads(a.labels) if a.labels else []
     labels = [str(x) for x in labels][:100] if isinstance(labels, list) else []
-    mode = "gate" if not a.mode else (a.mode if a.mode in ("report", "gate") else "report")
+    mode = a.mode if a.mode in ("report", "gate") else "report"
     gate_suites = None
     if a.gate_suites == "none":
         gate_suites = []

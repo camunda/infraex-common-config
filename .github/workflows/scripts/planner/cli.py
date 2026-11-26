@@ -40,7 +40,14 @@ def _camunda_plan(a) -> int:
     from . import camunda, checkrun
     with open(a.facts) as fh:
         facts = json.load(fh)
-    plan = camunda.decide(facts, None, str(a.advisor).lower() == "true", a.run_ref, float(a.await_seconds))
+    wait = camunda.await_seconds(a.await_seconds)
+    try:
+        asked = float(a.await_seconds)
+    except ValueError:
+        asked = None
+    if asked != wait:
+        print("::warning::await-seconds %r is not a number from 1 to 60, using %g" % (str(a.await_seconds)[:20], wait))
+    plan = camunda.decide(facts, None, str(a.advisor).lower() == "true", a.run_ref, wait)
     with open(a.out, "w") as fh:
         json.dump(plan, fh, indent=1, sort_keys=True)
     print("plan: source=%s reason=%s decision=%s" % (plan["source"], plan["reason"], plan["decision_id"]))
@@ -112,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--pr", default="")
     g.add_argument("--head-sha", default="")
     g.add_argument("--suite", required=True)
+    g.add_argument("--mode", default="report", help="gate lets an enforced skip through; anything else never skips")
     g.add_argument("--timeout", default="240")
     g.add_argument("--interval", default="10")
     g.set_defaults(fn=lambda a: __import__("planner.gate", fromlist=["run"]).run(a))

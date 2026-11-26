@@ -21,15 +21,16 @@ name: planner
 #
 #   publish  holds the write permissions (check run, status, comment) and no Camunda secret.
 #
-# `mode` is `gate` (default when empty) or `report`: see .github/workflows/scripts/planner/README.md.
+# `mode` is `report` (default, also when empty: nothing is skipped) or `gate`: see .github/workflows/scripts/planner/README.md.
+# A `report` plan never enforces a skip, whatever the process answers, and planner-gate has its own `mode` input.
 
 on:
     workflow_call:
         inputs:
             mode:
-                description: '`gate` (default when empty) or `report`. Any other value is treated as `report`.'
+                description: '`report` (default, also when empty) or `gate`. Any other value is treated as `report`.'
                 type: string
-                default: gate
+                default: report
             config-path:
                 description: Planner configuration in the calling repository, read from the base commit.
                 type: string

@@ -88,6 +88,24 @@ class Client:
             raise CamundaError("create process instance answered with invalid JSON")
 
 
+AWAIT_DEFAULT, AWAIT_MIN, AWAIT_MAX = 30.0, 1.0, 60.0
+
+
+def await_seconds(text) -> float:
+    """The `await-seconds` input: a number of seconds, clamped to 1-60; anything else is the default 30.
+
+    Every proxy between GitHub and the cluster (ingress, load balancer) must allow a request a few seconds longer
+    than this, or the plan fails open at the proxy's limit instead (a Contour ingress cuts at 15 s by default).
+    """
+    try:
+        v = float(str(text).strip())
+    except ValueError:
+        return AWAIT_DEFAULT
+    if v != v:  # NaN
+        return AWAIT_DEFAULT
+    return min(AWAIT_MAX, max(AWAIT_MIN, v))
+
+
 def fail_open(facts: dict, reason: str) -> dict:
     """The plan used when Camunda cannot answer: nothing is skipped, the suites run as the path filters decide."""
     return {"schema": schema.PLAN_SCHEMA, "source": "fail-open", "reason": reason[:300], "decision_id": None, "repo": facts["repo"],
@@ -102,12 +120,16 @@ def plan_from_result(facts: dict, variables: dict) -> dict:
     if not isinstance(merged, dict) or not isinstance(merged.get("final"), dict):
         raise CamundaError("the process answered without a plan")
     final = merged["final"]
+    # The process may only narrow what the workflow asked for: a plan is `gate` only when the facts requested gate.
+    # In report mode nothing is enforced, whatever the process answered.
+    mode = "gate" if final.get("mode") == "gate" and facts.get("requested_mode") == "gate" else "report"
     decision = {}
     for d in final.get("decision") or []:
-        decision[d["suite"]] = {"action": d["action"], "enforced": bool(d["enforced"]), "layer": d["layer"], "reasons": [str(r)[:300] for r in d["reasons"]][:20]}
+        decision[d["suite"]] = {"action": d["action"], "enforced": mode == "gate" and bool(d["enforced"]), "layer": d["layer"],
+                                "reasons": [str(r)[:300] for r in d["reasons"]][:20]}
     rot = final.get("rotation")
     plan = {"schema": schema.PLAN_SCHEMA, "source": "camunda", "reason": "decided by the Camunda process", "decision_id": variables.get("decisionId"),
-            "repo": facts["repo"], "pr": facts["pr"], "head_sha": facts["head_sha"], "mode": final.get("mode", "report"), "generated_at": now_iso(),
+            "repo": facts["repo"], "pr": facts["pr"], "head_sha": facts["head_sha"], "mode": mode, "generated_at": now_iso(),
             "decision": decision, "rotation_picked": rot.get("picked") if isinstance(rot, dict) else None,
             "modules": facts["impacted"]["modules"][:200], "consumers": facts["impacted"]["consumers"],
             "rules_fired": [{"rule": str(r["rule"]), "subject": str(r["subject"])[:300], "reason": str(r["reason"])[:500]} for r in final.get("rulesFired") or []][:100],

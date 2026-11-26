@@ -67,8 +67,10 @@ else is recorded as `enforced: false`.
 
 ## Modes and switches (all optional)
 
-- `PLANNER_MODE` (repository variable): empty or `gate` = suites skip themselves; `report` =
-  record and comment only (use it as a burn-in); any other value = `report`.
+- `PLANNER_MODE` (repository variable): `report` (default, also when empty or unknown) = record and
+  comment only, nothing is skipped (the burn-in); `gate` = suites skip themselves. Both the planner
+  caller and each `planner-gate` step read it: a skip needs `gate` in the plan (which the process can
+  only set when the facts asked for it) **and** in the gate step's own `mode` input.
 - `PLANNER_GATE_SUITES`: comma separated override of the gateable suites, `none` disables gating.
 - `advisor: 'true'` turns on the AI Agent step (default off; it can only add suites).
 - Fail open everywhere: no plan within the gate timeout (240 s) means the suite runs as before.

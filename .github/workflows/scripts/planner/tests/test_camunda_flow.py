@@ -21,7 +21,7 @@ def sample_facts(fx=None, head=None):
     from ..decide import facts_run
     fx = fx or fx_mod.make_repo()
     head = head or fx_mod.commit_change(fx, "p", {"aws/modules/aurora/variables.tf": lambda o: o.replace('"17.9"', '"17.10"')})
-    ns = dargs(fx, head, slug="o/r", mode="")
+    ns = dargs(fx, head, slug="o/r", mode="gate")
     return facts_run(ns), fx, head
 
 
@@ -108,6 +108,10 @@ class CamundaClientTest(unittest.TestCase):
         with self.assertRaises(camunda.CamundaError):
             camunda.Client.from_env({"CAMUNDA_BASE_URL": "http://plain", "CAMUNDA_TOKEN_URL": "https://x", "CAMUNDA_CLIENT_ID": "a", "CAMUNDA_CLIENT_SECRET": "b"})
 
+    def test_await_seconds_is_clamped(self):
+        for text, want in (("30", 30.0), (" 12 ", 12.0), ("0", 1.0), ("600", 60.0), ("", 30.0), ("abc", 30.0), ("nan", 30.0), ("7.5", 7.5)):
+            self.assertEqual(camunda.await_seconds(text), want, text)
+
     def test_invalid_facts_are_never_sent(self):
         bad = json.loads(json.dumps(self.facts))
         bad["suites"]["../../x"] = bad["suites"][next(iter(bad["suites"]))]
@@ -158,11 +162,32 @@ class GateAndPublishTest(unittest.TestCase):
         plan = checkrun.newest(Gh(fake), "o/r", self.head)
         self.assertIsNotNone(plan)
         name = "aws_modules_eks_rds_os_create_destruct_tests.yml"
-        self.assertTrue(gate.decide_skip(plan, name)[0])
-        self.assertFalse(gate.decide_skip(plan, "aws_modules_eks_rds_os_tests.yml")[0])
-        self.assertFalse(gate.decide_skip(plan, "unknown.yml")[0])
-        self.assertFalse(gate.decide_skip(None, name)[0])
-        self.assertFalse(gate.decide_skip(dict(plan, mode="report"), name)[0])
+        self.assertTrue(gate.decide_skip(plan, name, "gate")[0])
+        self.assertFalse(gate.decide_skip(plan, "aws_modules_eks_rds_os_tests.yml", "gate")[0])
+        self.assertFalse(gate.decide_skip(plan, "unknown.yml", "gate")[0])
+        self.assertFalse(gate.decide_skip(None, name, "gate")[0])
+        self.assertFalse(gate.decide_skip(dict(plan, mode="report"), name, "gate")[0])
+        self.assertFalse(gate.decide_skip(plan, name)[0], "the gate step defaults to report")
+
+    def test_report_mode_never_skips(self):
+        """The burn-in guarantee: in report mode no layer can turn a plan into a skip."""
+        name = "aws_modules_eks_rds_os_create_destruct_tests.yml"
+        # the gate step's own mode: a gate plan with an enforced skip still runs
+        for mode in ("report", "", "Gate", "anything"):
+            skip, reason = gate.decide_skip(self.plan, name, mode)
+            self.assertFalse(skip, mode)
+            self.assertIn("report mode", reason)
+            self.assertIn("says skip", reason)
+        # the process cannot upgrade report facts to a gate plan
+        facts = dict(self.facts, requested_mode="report")
+        plan = camunda.plan_from_result(facts, process_variables(facts))
+        self.assertEqual(plan["mode"], "report")
+        self.assertFalse(any(d["enforced"] for d in plan["decision"].values()))
+        self.assertFalse(gate.decide_skip(plan, name, "gate")[0])
+        # empty or unknown requested mode means report in the facts
+        from ..decide import facts_run
+        for m in ("", "burn-in"):
+            self.assertEqual(facts_run(dargs(self.fx, self.head, slug="o/r", mode=m))["requested_mode"], "report")
 
     def test_gate_ignores_plans_not_made_by_github_actions_or_for_another_sha(self):
         fake = FakeGh()
@@ -194,13 +219,15 @@ class GateAndPublishTest(unittest.TestCase):
             fake = FakeGh()
             publish.run(self.pargs(), gh=Gh(fake))
             ns = argparse.Namespace(repo="o/r", event="pull_request", fork="false", pr=str(self.facts["pr"]), head_sha=self.head,
-                                    suite="aws_modules_eks_rds_os_create_destruct_tests.yml", timeout="0", interval="1")
+                                    suite="aws_modules_eks_rds_os_create_destruct_tests.yml", timeout="0", interval="1", mode="gate")
             gate.run(ns, gh=Gh(fake))
-            ns.event = "schedule"
+            ns.mode = "report"
+            gate.run(ns, gh=Gh(fake))
+            ns.mode, ns.event = "gate", "schedule"
             gate.run(ns, gh=Gh(fake))
             ns.event, ns.fork = "pull_request", "true"
             gate.run(ns, gh=Gh(fake))
-            self.assertEqual(open(out).read().split(), ["should_skip=true", "should_skip=false", "should_skip=false"])
+            self.assertEqual(open(out).read().split(), ["should_skip=true", "should_skip=false", "should_skip=false", "should_skip=false"])
         finally:
             os.environ.pop("GITHUB_OUTPUT", None)
 

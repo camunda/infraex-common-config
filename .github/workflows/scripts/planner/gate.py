@@ -33,8 +33,20 @@ def find_plan(gh: Gh, repo: str, head_sha: str, timeout: float, interval: float,
         sleep(interval)
 
 
-def decide_skip(plan: dict | None, suite: str):
-    """(should_skip, reason). Skips only a gated suite the plan marked skip, in gate mode, for a plan Camunda decided."""
+def decide_skip(plan: dict | None, suite: str, mode: str = "report"):
+    """(should_skip, reason). Skips only a gated suite the plan marked skip, in gate mode, for a plan Camunda decided.
+
+    `mode` is the calling suite's own setting: both it and the plan must say `gate`, so report mode can never skip.
+    In report mode the plan is still read, and what it would have done is logged for the burn-in comparison.
+    """
+    if mode != "gate":
+        d = (plan or {}).get("decision", {}).get(suite) if plan and plan.get("source") == "camunda" else None
+        said = "no camunda plan" if d is None else "plan %s says %s" % (plan.get("decision_id"), d.get("action"))
+        return False, "report mode, nothing is skipped (%s)" % said
+    return _plan_skip(plan, suite)
+
+
+def _plan_skip(plan: dict | None, suite: str):
     if plan is None:
         return False, "no plan within the timeout: running as before (fail open)"
     if plan.get("source") != "camunda":
@@ -54,8 +66,9 @@ def run(a, gh: Gh | None = None, sleep=time.sleep, clock=time.monotonic) -> int:
         write_output("should_skip", "false")
         print("planner-gate: not a same-repository pull_request run, nothing to gate")
         return 0
+    mode = a.mode if a.mode in ("report", "gate") else "report"
     plan = find_plan(gh or Gh(), a.repo, a.head_sha, float(a.timeout), float(a.interval), sleep=sleep, clock=clock)
-    skip, reason = decide_skip(plan, a.suite)
+    skip, reason = decide_skip(plan, a.suite, mode)
     print("planner-gate: %s" % reason)
     write_output("should_skip", "true" if skip else "false")
     return 0
