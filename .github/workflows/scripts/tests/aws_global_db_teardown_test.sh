@@ -26,14 +26,13 @@ case "\$*" in
   *delete-global-cluster*) echo deleted >&2; exit 0 ;;
   *"length(GlobalClusters[0].GlobalClusterMembers[?"*|*"length(GlobalClusters[0].GlobalClusterMembers)"*)
     if [ "$1" = true ] && [ -f "$stub/detached" ]; then echo 0; else echo 2; fi ;;
-  *GlobalClusterArn*) echo arn:aws:rds::1:global-cluster:e2e-x-global-db ;;
   *"--global-cluster-identifier"*) printf '${3-$TWO_MEMBERS}' ;;
-  *describe-global-clusters*) echo e2e-x-global-db ;;
+  *describe-global-clusters*) echo arn:aws:rds::1:global-cluster:e2e-x-global-db ;;
 esac
 STUB
   chmod +x "$stub/aws"
   PATH="$stub:$PATH" DRY_RUN=false CLEANUP_REGIONS="eu-west-2 eu-west-3" GLOBAL_DB_POLL_SECONDS=0 \
-    CLEANUP_OLDER_THAN_BY_REGION="eu-west-2=12h eu-west-3=12h" bash "$SCRIPT" 2>&1
+    CLEANUP_OLDER_THAN_BY_REGION="${AGES:-eu-west-2=12h eu-west-3=12h}" bash "$SCRIPT" 2>&1
 }
 
 check() { # check <name> <status of the condition>
@@ -57,6 +56,10 @@ for created in "$young" None fail; do
   [ "$rc" -eq 0 ] && grep -q "Skipping global database" <<<"$out" && ! grep -qE 'remove-from-global-cluster|deleted' <<<"$out"
   check "a global database is kept when the creation time of its members is '$created'" $?
 done
+
+out=$(AGES="eu-west-2=12h eu-west-3=30m" run true "$old"); rc=$?
+[ "$rc" -ne 0 ] && grep -q "::error title=Unsupported cleanup age" <<<"$out" && ! grep -qE 'remove-from-global-cluster|deleted' <<<"$out"
+check "an unsupported cleanup age unit fails the run" $?
 
 out=$(run true "$old" "" None); rc=$?
 [ "$rc" -eq 0 ] && grep -qx tagged <<<"$out" && ! grep -q deleted <<<"$out"
