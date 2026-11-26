@@ -53,6 +53,7 @@ jobs:
             - name: Determine DRY_RUN and matrix-derived regions
               env:
                   DISPATCH_REGION: ${{ github.event.inputs.region }}
+                  DISPATCH_OLDER_THAN: ${{ github.event.inputs.cleanup_older_than }}
               run: |
                   WF=".github/workflows/aws_nightly_cleanup.yml"
 
@@ -61,6 +62,7 @@ jobs:
                   # teardown safety guard can never drift from the matrix.
                   CLEANUP_REGIONS=$(yq '[.jobs.aws-cleanup.strategy.matrix.config[].region] | join(" ")' "$WF")
                   echo "CLEANUP_REGIONS=$CLEANUP_REGIONS" | tee -a "$GITHUB_ENV"
+                  CLEANUP_OLDER_THAN_BY_REGION=$(yq '[.jobs.aws-cleanup.strategy.matrix.config[] | .region + "=" + .cleanup_older_than] | join(" ")' "$WF")
 
                   # Mirror the matrix run conditions for "active regions":
                   # - pull_request: dry-run over all regions (matches the matrix PR override)
@@ -74,11 +76,13 @@ jobs:
                       ACTIVE_REGIONS="$CLEANUP_REGIONS"
                   elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       ACTIVE_REGIONS="$DISPATCH_REGION"
+                      CLEANUP_OLDER_THAN_BY_REGION="$CLEANUP_OLDER_THAN_BY_REGION $DISPATCH_REGION=$DISPATCH_OLDER_THAN"
                   else
                       current_day=$(date +%A)
                       ACTIVE_REGIONS=$(yq "[.jobs.aws-cleanup.strategy.matrix.config[] | select(.day == \"All\" or .day == \"$current_day\") | .region] | join(\" \")" "$WF")
                   fi
                   echo "ACTIVE_REGIONS=$ACTIVE_REGIONS" | tee -a "$GITHUB_ENV"
+                  echo "CLEANUP_OLDER_THAN_BY_REGION=$CLEANUP_OLDER_THAN_BY_REGION" | tee -a "$GITHUB_ENV"
 
             - name: Configure AWS CLI
               uses: camunda/camunda-deployment-references/./.github/actions/aws-configure-cli@4c6acfc0aa82fc1f65efec8279623162589c82dd # main

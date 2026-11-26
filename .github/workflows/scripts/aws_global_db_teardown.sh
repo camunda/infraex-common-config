@@ -30,6 +30,22 @@ DRY_RUN=${DRY_RUN:-false}
 # regions are wiped). Defaults to all cleanup regions.
 ACTIVE_REGIONS="${ACTIVE_REGIONS:-$CLEANUP_REGIONS}"
 
+: "${CLEANUP_OLDER_THAN_BY_REGION:?must be set (the workflow derives it from the cleanup matrix)}"
+declare -A cleanup_hours
+largest_hours=""
+for entry in $CLEANUP_OLDER_THAN_BY_REGION; do
+    if ! [[ "$entry" =~ ^([^=]+)=([0-9]+)h$ ]]; then
+        echo "::error title=Unsupported cleanup age::$entry in CLEANUP_OLDER_THAN_BY_REGION is not <region>=<hours>h"
+        exit 1
+    fi
+    cleanup_hours[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+    if [ "${BASH_REMATCH[2]}" -ge "${largest_hours:-0}" ]; then
+        largest_hours=${BASH_REMATCH[2]}
+    fi
+done
+: "${largest_hours:?CLEANUP_OLDER_THAN_BY_REGION has no <region>=<hours>h entry}"
+FIRST_SEEN_TAG="cloud-nuke-first-seen"
+
 # Seconds between membership polls. Overridden by the offline tests.
 POLL_SECONDS="${GLOBAL_DB_POLL_SECONDS:-10}"
 
@@ -60,6 +76,52 @@ delete_global_cluster() {
     fi
 }
 
+older_than() {
+    [ -n "$1" ] && (( $(date +%s) - $(date -d "$1" +%s) >= $2 * 3600 ))
+}
+
+member_old_enough() {
+    local arn="$1" region="$2" hours="${cleanup_hours[$2]:-}" created
+    if [ -z "$hours" ]; then
+        echo "Warning: no cleanup age for $region in CLEANUP_OLDER_THAN_BY_REGION; not counting $arn as old"
+        return 1
+    fi
+    if [ "$hours" -eq 0 ]; then
+        return 0
+    fi
+    if ! created=$(aws rds describe-db-clusters --region "$region" --db-cluster-identifier "$arn" \
+        --query 'DBClusters[0].ClusterCreateTime' --output text 2>&1); then
+        echo "Warning: could not read the creation time of $arn; not counting it as old: ${created}"
+        return 1
+    fi
+    if ! older_than "$created" "$hours"; then
+        echo "Not counting $arn as old (created: $created; cleanup age in $region: ${hours}h)"
+        return 1
+    fi
+}
+
+handle_empty_global() {
+    local id="$1" arn="$2" first_seen
+    if ! first_seen=$(aws rds list-tags-for-resource --region "$api_region" --resource-name "$arn" \
+        --query "TagList[?Key=='$FIRST_SEEN_TAG'].Value | [0]" --output text 2>&1); then
+        echo "Warning: could not read the tags of empty global database $id; skipping it this run: ${first_seen}"
+        return
+    fi
+    if [ -z "$first_seen" ] || [ "$first_seen" = "None" ]; then
+        echo "Global database $id has no members; tagging it with $FIRST_SEEN_TAG for a later run"
+        if ! execute_or_simulate "aws rds add-tags-to-resource --region $api_region --resource-name $arn --tags Key=$FIRST_SEEN_TAG,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; then
+            unresolved+=("$id has no members and could not be tagged with $FIRST_SEEN_TAG, so no run deletes it.")
+        fi
+        return
+    fi
+    if ! older_than "$first_seen" "$largest_hours"; then
+        echo "Skipping global database $id (no members; $FIRST_SEEN_TAG $first_seen is younger than ${largest_hours}h)"
+        return
+    fi
+    echo "Global database $id has no members ($FIRST_SEEN_TAG: $first_seen), deleting it"
+    delete_global_cluster "$id" "$api_region"
+}
+
 # Region used to issue the global (account-wide) describe/delete calls.
 api_region="${CLEANUP_REGIONS%% *}"
 
@@ -67,19 +129,19 @@ echo "Discovering Aurora Global Databases (cleanup regions: $CLEANUP_REGIONS; ac
 
 # Global clusters are account-global; query each cleanup region and dedupe to be
 # robust against regional endpoint differences.
-global_cluster_ids=""
+global_cluster_arns=""
 discovery_failures=0
 for r in $CLEANUP_REGIONS; do
     # Surface a describe failure (AccessDenied/throttling/region disabled) as a
     # warning and continue to the other regions, instead of silently treating it
     # as "no global clusters".
-    if ids=$(aws rds describe-global-clusters --region "$r" \
-        --query 'GlobalClusters[].GlobalClusterIdentifier' --output text 2>&1); then
-        if [ -n "$ids" ] && [ "$ids" != "None" ]; then
-            global_cluster_ids="$global_cluster_ids $ids"
+    if arns=$(aws rds describe-global-clusters --region "$r" \
+        --query 'GlobalClusters[].GlobalClusterArn' --output text 2>&1); then
+        if [ -n "$arns" ] && [ "$arns" != "None" ]; then
+            global_cluster_arns="$global_cluster_arns $arns"
         fi
     else
-        echo "Warning: could not list global clusters in $r (continuing): ${ids}"
+        echo "Warning: could not list global clusters in $r (continuing): ${arns}"
         discovery_failures=$((discovery_failures + 1))
     fi
 done
@@ -88,9 +150,9 @@ done
 # tab-grouped IDs bypass `sort -u` and get iterated as one malformed token. Use
 # `awk 'NF'` (not `grep -v '^$'`) to drop blank lines: grep exits 1 on no match,
 # which under `set -o pipefail` would abort in the normal "no clusters" case.
-global_cluster_ids=$(echo "$global_cluster_ids" | tr ' \t' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
+global_cluster_arns=$(echo "$global_cluster_arns" | tr ' \t' '\n' | awk 'NF' | sort -u | tr '\n' ' ')
 
-if [ -z "${global_cluster_ids// /}" ]; then
+if [ -z "${global_cluster_arns// /}" ]; then
     if [ "$discovery_failures" -gt 0 ]; then
         # Don't pretend the account is clean when discovery was actually blocked.
         echo "No Aurora Global Databases discovered, but $discovery_failures region(s) failed to list (see warnings above) — teardown may be incomplete."
@@ -100,7 +162,8 @@ if [ -z "${global_cluster_ids// /}" ]; then
     exit 0
 fi
 
-for global_cluster_id in $global_cluster_ids; do
+for global_arn in $global_cluster_arns; do
+    global_cluster_id="${global_arn##*:}"
     # Describe members; on failure surface the error and skip this cluster rather
     # than mistaking it for "no members".
     if ! members=$(aws rds describe-global-clusters --region "$api_region" \
@@ -112,10 +175,9 @@ for global_cluster_id in $global_cluster_ids; do
     fi
 
     # An empty member list (or the literal "None" when GlobalClusters[0] is null)
-    # means there is nothing to detach, so the global database can go.
+    # means there is nothing to detach.
     if [ -z "$members" ] || [ "$members" = "None" ]; then
-        echo "Global database $global_cluster_id has no members, deleting it"
-        delete_global_cluster "$global_cluster_id" "$api_region"
+        handle_empty_global "$global_cluster_id" "$global_arn"
         continue
     fi
 
@@ -140,7 +202,7 @@ for global_cluster_id in $global_cluster_ids; do
         fi
 
         # Only tear down on a run where at least one member region is being cleaned.
-        if grep -qwF "$member_region" <<< "$ACTIVE_REGIONS"; then
+        if grep -qwF "$member_region" <<< "$ACTIVE_REGIONS" && member_old_enough "$member_arn" "$member_region"; then
             active_member=true
         fi
 
@@ -156,8 +218,12 @@ for global_cluster_id in $global_cluster_ids; do
         continue
     fi
 
+    if ! execute_or_simulate "aws rds remove-tags-from-resource --region $api_region --resource-name $global_arn --tag-keys $FIRST_SEEN_TAG"; then
+        echo "Warning: could not remove $FIRST_SEEN_TAG from global database $global_cluster_id"
+    fi
+
     if [ "$active_member" != true ]; then
-        echo "Skipping global database $global_cluster_id (no member in an active region today: $ACTIVE_REGIONS)"
+        echo "Skipping global database $global_cluster_id (no member older than its cleanup age in an active region today: $ACTIVE_REGIONS)"
         continue
     fi
 
@@ -249,13 +315,13 @@ for global_cluster_id in $global_cluster_ids; do
         delete_global_cluster "$global_cluster_id" "$delete_region"
     else
         echo "Warning: global database $global_cluster_id not confirmed empty (remaining=$remaining); leaving it for the next run"
-        unresolved+=("$global_cluster_id")
+        unresolved+=("$global_cluster_id still has members after the detach. cloud-nuke cannot delete its clusters until they leave. A member stuck in a transitional state (e.g. creating) needs AWS support.")
     fi
 done
 
 if [ "${#unresolved[@]}" -gt 0 ]; then
-    for id in "${unresolved[@]}"; do
-        echo "::error title=Aurora Global Database not torn down::$id still has members after the detach. cloud-nuke cannot delete its clusters until they leave. A member stuck in a transitional state (e.g. creating) needs AWS support."
+    for reason in "${unresolved[@]}"; do
+        echo "::error title=Aurora Global Database not torn down::$reason"
     done
     exit 1
 fi
