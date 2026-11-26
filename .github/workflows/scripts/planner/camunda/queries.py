@@ -4,6 +4,9 @@ The bodies are FEEL context literals (JSON syntax plus references to process var
 the REST connector `body` input. `facts` is the validated planner.facts/1 document.
 """
 
+# string(now()) gives "2026-11-26T11:50:34.347@GMT" on the engine, which Elasticsearch cannot parse as a date (found on 8.10.10).
+# Zoned values are cut at "@" and marked Z: right while the cluster runs in UTC, which the Helm chart's default does.
+ISO_NOW = '{s: string(now()), r: if contains(s, "@") then substring before(s, "@") + "Z" else s}.r'
 BREAKER_ESCAPES = 2
 BREAKER_CLEAN_DAYS = 30
 MODEL = "claude-sonnet-5-5"
@@ -87,7 +90,7 @@ STATS_EXPR = """{ob: if get value(statsResponse, "aggregations") = null then [] 
  stats: concatenate(withEsc, escOnly),
  prevId: if hit = null then null else hit.weights_id}"""
 
-WEIGHTS_DOC_EXPR = """{ts: string(now()), repo: normalised.repo, weights_id: "w" + replace(string(now()), "[^0-9]", ""), prev: learnInput.prevId,
+WEIGHTS_DOC_EXPR = """{ts: """ + ISO_NOW + """, repo: normalised.repo, weights_id: "w" + replace(string(now()), "[^0-9]", ""), prev: learnInput.prevId,
  pairs: for l in learned return {pair: l.pair, module: l.module, suite: l.suite, weight: l.weight, risk: l.risk, n_run: l.n_run, fail: l.fail, escape: l.escape}}"""
 
 SYSTEM_PROMPT = ("You are a CI advisor for the Camunda Self-Managed reference architectures. A rules engine already chose which "

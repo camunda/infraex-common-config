@@ -14,14 +14,26 @@ Executable Camunda 8.10 models and the Elasticsearch setup behind the planner. `
 | `es/*.mapping.json`, `es/ilm-*.json` | Index mappings (strict) and the retention policy |
 | `queries.py` | The Elasticsearch requests and FEEL expressions used by the generators |
 
-## Status: not run on an engine
+## Status: run once on a real engine (2026-11-26)
 
-The files are valid XML, parse with `bpmn-moddle` / `dmn-moddle` with the Zeebe extension schema (0 problems),
-and every FEEL expression was evaluated offline with `feelin` on realistic data. **They have not been deployed
-or executed on a Camunda cluster** (no Java, Docker or cluster in the workbench, and the C8 Run download was
-not permitted). Element-template input names of the AI Agent task are not verified against the 8.10 connector.
-Before relying on it, deploy to a test cluster and run `ci-test-planner` with a facts document from
-`python3 -m planner facts`.
+Deployed and run end to end on Camunda 8.10.10 (chart 15.4.3, Kind on one EC2 instance, Keycloak OIDC, a separate
+Elasticsearch 9.5.6 for `ci-planner-*`): see `kind-test/` in the notes of this work and its report. The engine found
+problems that the offline checks (XML parse, `feelin`) did not, all fixed in the generators:
+
+- BPMN: `incoming`/`outgoing` must come before event definitions and loop characteristics; script task expressions must start with `=`.
+- DMN: in a business knowledge model `knowledgeRequirement` comes after `encapsulatedLogic`. Validate with the OMG XSDs (the engine's error is just "Unable to parse model").
+- `string(now())` is `2026-11-26T11:50:34.347@GMT`, which Elasticsearch rejects; the generators cut it at `@` and add `Z` (right for a UTC cluster).
+- REST connector: `resultVariable` stores the whole response; the ES answers are now mapped with `resultExpression = {name: response.body}`.
+  Before that fix the memory read silently returned nothing, and every plan still matched the empty-memory policy.
+- DMN: an ops-layer workflow that changes itself was dropped from the plan (policy.py includes it); a conformance case now covers it.
+- `ci-test-learn` could not be started through the API (timer start only); it has a second, manual start event.
+
+Result on that cluster: 8 facts files gave the same plan as `policy.py` (empty memory), 8 more with seeded memory (3 rotating), the decision
+documents were indexed, the planner client was refused (403) on `ci-test-record`, `ci-test-record` is idempotent, `ci-test-learn` wrote a weights
+document (weight 1.5 for 12 runs and 3 failures, bounded step). Fail-open held for: process not deployed (404), wrong secret (401), not configured, and a process that
+runs 45 s (504 after 15 s: the Contour ingress of the Kind setup cuts requests at 15 s, so the 30 s await is only reachable through an ingress with a longer route timeout).
+
+Not verified: the AI Agent task (its element template is not in the connectors runtime jar; the input names are still unchecked), an LLM call, GitHub.
 
 Offline checks: `npm ci && cd .. && python3 -m unittest planner.tests.test_dmn_conformance planner.tests.test_bpmn_feel planner.tests.test_dmn_memory_learn`.
 

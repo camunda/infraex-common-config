@@ -81,6 +81,7 @@ def make_repo(root: str | None = None) -> dict:
     write(repo, wf + "aws_ecs_dual_region_fargate_failover.yml", workflow("ECS failover", ["aws/containers/ecs-dual-region-fargate/**", "aws/modules/**"]))
     write(repo, wf + "aws_openshift_rosa_hcp_dual_region_tests.yml", workflow("ROSA dual", ["aws/openshift/**", ".tool-versions"], "0 3 * * 2"))
     write(repo, wf + "aws_eks_single_region_daily_cleanup.yml", workflow("Cleanup", ["aws/kubernetes/**"], "0 4 * * *"))
+    write(repo, wf + "internal_global_maintenance.yml", workflow("Maintenance", [".github/workflows/internal_global_maintenance.yml"]))  # layer ops
     write(repo, ".github/actions/shared/action.yml", "name: shared\nruns:\n  using: composite\n  steps: []\n")
     write(repo, ".github/actions/aws-create/action.yml", "name: create\nruns:\n  using: composite\n  steps:\n    - uses: ./.github/actions/shared\n")
     write(repo, wf + "aws_openshift_rosa_hcp_dual_region_tests.yml", workflow("ROSA dual", ["aws/openshift/**", ".tool-versions", ".github/actions/**"], "0 3 * * 2", "      - uses: ./.github/actions/aws-create\n"))

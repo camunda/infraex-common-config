@@ -147,7 +147,7 @@ DECISIONS = [
    layer: get value(facts.suites, s).layer,
    reasons: if list contains(runSet, s) then distinct values(for e in runEntries[item.suite = s] return e.reason) else ["path filter matched, no rule needs this suite"]},
  concatenate(
- for s in runSet[get value(facts.suites, item).path_triggered = false] return {suite: s, action: "run", enforced: false,
+ for s in runSet[get value(facts.suites, item).path_triggered = false or get value(facts.suites, item).layer = "ops"] return {suite: s, action: "run", enforced: false,
    layer: get value(facts.suites, s).layer,
    reasons: concatenate(distinct values(for e in runEntries[item.suite = s] return e.reason), ["not path-triggered: this suite will only start if its paths: filter is widened"])},
  for n in facts.new_workflows return {suite: n, action: "run", enforced: false, layer: "unknown", reasons: ["new workflow, not in the base registry"]}))"""),
@@ -216,13 +216,14 @@ def build(defs_id="ci_test_planner", defs_name="CI test planner", inputs=("facts
     for name, (params, body) in bkms.items():
         out.append('  <businessKnowledgeModel id="bkm_%s" name="%s">' % (name, name))
         out.append('    <variable id="bkm_%s_v" name="%s" />' % (name, name))
-        for d in [d for d in bkms if d != name and d + "(" in body]:
-            out.append('    <knowledgeRequirement id="bkm_%s_k_%s"><requiredKnowledge href="#bkm_%s" /></knowledgeRequirement>' % (name, d, d))
         out.append('    <encapsulatedLogic id="bkm_%s_f">' % name)
         for p in params:
             out.append('      <formalParameter id="bkm_%s_p_%s" name="%s" typeRef="Any" />' % (name, p, p))
         out.append('      <literalExpression id="bkm_%s_e"><text>%s</text></literalExpression>' % (name, x(body)))
         out.append('    </encapsulatedLogic>')
+        # schema order: variable, encapsulatedLogic, then the requirements
+        for d in [d for d in bkms if d != name and d + "(" in body]:
+            out.append('    <knowledgeRequirement id="bkm_%s_k_%s"><requiredKnowledge href="#bkm_%s" /></knowledgeRequirement>' % (name, d, d))
         out.append('  </businessKnowledgeModel>')
     names = {d[0] for d in decisions}
     all_bkm = set(bkms) | ({"signalAction"} if table else set())

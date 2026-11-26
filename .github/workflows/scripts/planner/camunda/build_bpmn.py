@@ -14,6 +14,7 @@ Connector inputs follow the REST connector (io.camunda:http-json:1) as documente
 inputs could not be checked against its element template (the template is not in the docs): see README.
 """
 import os
+import re
 import sys
 from xml.sax.saxutils import escape
 
@@ -98,11 +99,13 @@ class Proc:
                 default = ' default="%s"' % f["id"]
         inc = "".join("<bpmn:incoming>%s</bpmn:incoming>" % f["id"] for f in self.flows if f["b"] == n["id"])
         outg = "".join("<bpmn:outgoing>%s</bpmn:outgoing>" % f["id"] for f in self.flows if f["a"] == n["id"])
+        # BPMN schema order: documentation, extensionElements, incoming, outgoing, then event definitions / loop characteristics
+        m = re.match(r"\s*<bpmn:extensionElements>.*?</bpmn:extensionElements>", n["inner"], re.S)
+        ext, tail = (m.group(0), n["inner"][m.end():]) if m else ("", n["inner"])
         if n["kind"] == "subProcess":
             inner = "\n".join(self._scope_xml(n["id"], len(pad) + 2))
-            return '%s<%s id="%s"%s%s>\n%s%s%s\n%s\n%s</%s>' % (pad, tag, n["id"], name, n["attrs"], pad + "  ", doc, "", inner, pad, tag) if False else \
-                '%s<%s id="%s"%s%s>%s%s%s%s\n%s\n%s</%s>' % (pad, tag, n["id"], name, n["attrs"], doc, inc, outg, n["inner"], inner, pad, tag)
-        return '%s<%s id="%s"%s%s%s>%s%s%s%s</%s>' % (pad, tag, n["id"], name, n["attrs"], default, doc, n["inner"], inc, outg, tag)
+            return '%s<%s id="%s"%s%s>%s%s%s%s%s\n%s\n%s</%s>' % (pad, tag, n["id"], name, n["attrs"], doc, ext, inc, outg, tail, inner, pad, tag)
+        return '%s<%s id="%s"%s%s%s>%s%s%s%s%s</%s>' % (pad, tag, n["id"], name, n["attrs"], default, doc, ext, inc, outg, tail, tag)
 
     def xml(self):
         out = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -163,7 +166,12 @@ def rest(method, url, body=None, result_var=None, result_expr="= response.body",
     io = "".join('<zeebe:input source="%s" target="%s" />' % (q(s), t) for s, t in inputs)
     hdr = []
     if result_var:
-        hdr.append(("resultVariable", result_var))
+        # resultVariable would hold the WHOLE response (status, headers, body); resultExpression maps the answer into variables.
+        # Found on 8.10.10: with only resultVariable the memory queries returned {status, headers, body} and the memory DMN saw nothing.
+        if result_expr == "= response.body":
+            result_expr = "= {%s: response.body}" % result_var
+        else:
+            hdr.append(("resultVariable", result_var))
         hdr.append(("resultExpression", result_expr))
     if error_expr:
         hdr.append(("errorExpression", '= if response.status >= 400 then bpmnError("ES_" + string(response.status), "Elasticsearch answered " + string(response.status)) else null'))
@@ -177,6 +185,7 @@ REST_ATTR = ' zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"'
 
 
 def script(expr, var):
+    expr = expr if expr.startswith("=") else "=" + expr   # the engine requires the leading =
     return '<bpmn:extensionElements><zeebe:script expression="%s" resultVariable="%s" /></bpmn:extensionElements>' % (q(expr), var)
 
 
@@ -204,7 +213,7 @@ def planner():
              "memory is read from Elasticsearch, the AI advisor can only add suites. See camunda/README.md.")
     p.add("start", "startEvent", "PR facts received", 150, 160)
     p.add("normalise", "scriptTask", "Normalise inputs", 230, 120,
-          inner=script('{advisorOn: if is defined(advisorEnabled) then advisorEnabled = true else false, nowIso: string(now()), '
+          inner=script('{advisorOn: if is defined(advisorEnabled) then advisorEnabled = true else false, nowIso: ' + Q.ISO_NOW + ', '
                        'params: {breaker_escapes: %s, breaker_clean_days: %s}}' % (Q.BREAKER_ESCAPES, Q.BREAKER_CLEAN_DAYS), "normalised"),
           doc="advisorEnabled defaults to false until a model provider and its data policy are agreed.")
     # load memory subprocess
@@ -281,9 +290,11 @@ def record_proc():
 def learn_proc():
     p = Proc("ci-test-learn", "CI test planner: weekly learner",
              "Every Monday 06:00: statistics per module and suite from Elasticsearch -> DMN weights (bounded step) -> weights document. "
-             "Rollback: the planner reads the newest weights document, so write the previous one back or delete the newest.")
+             "Start it by hand with a process instance of ci-test-learn (start event Run now). Rollback: the planner reads the newest weights document, so write the previous one back or delete the newest.")
     p.add("start", "startEvent", "Every Monday 06:00", 150, 100,
           inner='<bpmn:timerEventDefinition id="learn_timer"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 6 * * MON</bpmn:timeCycle></bpmn:timerEventDefinition>')
+    # a timer start event cannot be created through the API (found on 8.10.10: "no none start event"), so a manual start sits next to it
+    p.add("manual", "startEvent", "Run now (manual)", 150, 190)
     p.add("configure", "scriptTask", "Configure", 230, 78,
           inner=script('{repo: "camunda/camunda-deployment-references", params: {prior_a: 1, prior_b: 19, escape_factor: 3, weight_slope: 5, weight_min: 1, weight_max: 4, max_step: 0.5}}', "normalised"),
           doc="One repository per learner process in v1. The constants are the defaults of the Python reference learner.")
@@ -301,7 +312,7 @@ def learn_proc():
     p.add("write", "serviceTask", "Write weights (Elasticsearch)", 1280, 78, attrs=REST_ATTR,
           inner=rest("POST", Q.URL_WEIGHTS_DOC, "weightsDoc", "weightsWritten", "= {id: response.body._id}"))
     p.add("end", "endEvent", "Weights written", 1440, 100)
-    for a, b in (("start", "configure"), ("configure", "stats"), ("stats", "esc"), ("esc", "prev"), ("prev", "shape"), ("shape", "learn"),
+    for a, b in (("start", "configure"), ("manual", "configure"), ("configure", "stats"), ("stats", "esc"), ("esc", "prev"), ("prev", "shape"), ("shape", "learn"),
                  ("learn", "doc"), ("doc", "write"), ("write", "end")):
         p.flow(a, b)
     return p

@@ -235,8 +235,6 @@
   </businessKnowledgeModel>
   <businessKnowledgeModel id="bkm_scoreEntries" name="scoreEntries">
     <variable id="bkm_scoreEntries_v" name="scoreEntries" />
-    <knowledgeRequirement id="bkm_scoreEntries_k_suiteAge"><requiredKnowledge href="#bkm_suiteAge" /></knowledgeRequirement>
-    <knowledgeRequirement id="bkm_scoreEntries_k_pairWeight"><requiredKnowledge href="#bkm_pairWeight" /></knowledgeRequirement>
     <encapsulatedLogic id="bkm_scoreEntries_f">
       <formalParameter id="bkm_scoreEntries_p_memory" name="memory" typeRef="Any" />
       <formalParameter id="bkm_scoreEntries_p_mods" name="mods" typeRef="Any" />
@@ -246,6 +244,8 @@
  w: pairWeight(memory, m, c),
  score: eff * w}</text></literalExpression>
     </encapsulatedLogic>
+    <knowledgeRequirement id="bkm_scoreEntries_k_suiteAge"><requiredKnowledge href="#bkm_suiteAge" /></knowledgeRequirement>
+    <knowledgeRequirement id="bkm_scoreEntries_k_pairWeight"><requiredKnowledge href="#bkm_pairWeight" /></knowledgeRequirement>
   </businessKnowledgeModel>
   <decision id="rows" name="rows">
     <variable id="rows_v" name="rows" typeRef="Any" />
@@ -407,7 +407,7 @@
    layer: get value(facts.suites, s).layer,
    reasons: if list contains(runSet, s) then distinct values(for e in runEntries[item.suite = s] return e.reason) else [&quot;path filter matched, no rule needs this suite&quot;]},
  concatenate(
- for s in runSet[get value(facts.suites, item).path_triggered = false] return {suite: s, action: &quot;run&quot;, enforced: false,
+ for s in runSet[get value(facts.suites, item).path_triggered = false or get value(facts.suites, item).layer = &quot;ops&quot;] return {suite: s, action: &quot;run&quot;, enforced: false,
    layer: get value(facts.suites, s).layer,
    reasons: concatenate(distinct values(for e in runEntries[item.suite = s] return e.reason), [&quot;not path-triggered: this suite will only start if its paths: filter is widened&quot;])},
  for n in facts.new_workflows return {suite: n, action: &quot;run&quot;, enforced: false, layer: &quot;unknown&quot;, reasons: [&quot;new workflow, not in the base registry&quot;]}))</text></literalExpression>

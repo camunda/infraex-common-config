@@ -79,6 +79,7 @@ class DmnConformanceTest(unittest.TestCase):
             "action": fx_mod.commit_change(cls.fx, "action", {".github/actions/shared/action.yml": "name: shared2\nruns:\n  using: composite\n  steps: []\n"}),
             "tool": fx_mod.commit_change(cls.fx, "tool", {".tool-versions": "terraform 1.10.0\n"}),
             "judge": fx_mod.commit_change(cls.fx, "judge", {".github/planner-config.json": '{"gate_suites": []}\n', v: sub('"17.9"', '"17.10"')}),
+            "ops": fx_mod.commit_change(cls.fx, "ops", {".github/workflows/internal_global_maintenance.yml": lambda old: old + "# changed\n"}),  # found on a real engine: an ops suite changed itself
             "newwf": fx_mod.commit_change(cls.fx, "newwf", {".github/workflows/aws_new_tests.yml": fx_mod.workflow("New", ["aws/**"])}),
         }
 
