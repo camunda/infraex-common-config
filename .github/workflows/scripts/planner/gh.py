@@ -23,6 +23,14 @@ class Gh:
     def __init__(self, runner=None):
         self.runner = runner or _subprocess_runner
 
+    def text(self, path: str) -> str:
+        """GET of a non-JSON endpoint (job logs), as text."""
+        rc, out, err = self.runner(["api", "-X", "GET", path], None)
+        if rc != 0:
+            m = re.search(r"HTTP (\d{3})", err + out)
+            raise GhError(int(m.group(1)) if m else 0, (err or out).strip())
+        return out
+
     def api(self, method: str, path: str, body=None, paginate: bool = False):
         args = ["api", "-X", method, path]
         stdin = None

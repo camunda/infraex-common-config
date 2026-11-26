@@ -120,6 +120,14 @@ def build_parser() -> argparse.ArgumentParser:
     dm.add_argument("--summary-file", default="")
     dm.set_defaults(fn=lambda a: __import__("planner.deploy", fromlist=["run"]).run(a))
 
+    bi = sub.add_parser("burnin", help="compare a PR's plan with what its suites did; exit 1 if one was skipped against the mode (read-only)")
+    bi.add_argument("--repo", required=True, help="owner/name")
+    bi.add_argument("--pr", required=True)
+    bi.add_argument("--head-sha", default="", help="default: the PR's current head")
+    bi.add_argument("--out", default="", help="write the comparison as JSON")
+    bi.add_argument("--summary-file", default="")
+    bi.set_defaults(fn=lambda a: __import__("planner.burnin", fromlist=["run"]).run(a))
+
     g = sub.add_parser("gate", help="a suite's triage step: output should_skip")
     g.add_argument("--repo", required=True)
     g.add_argument("--event", default="")

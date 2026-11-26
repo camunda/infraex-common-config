@@ -18,6 +18,8 @@ class FakeGh:
         self.check_runs = []
         self.pulls = {}
         self.jobs = {}
+        self.logs = {}
+        self.pull_labels = {}
         self.statuses = []
         self.n = 0
 
@@ -43,7 +45,12 @@ class FakeGh:
             return 0, json.dumps({"check_runs": runs}), ""
         mp = re.match(r"pulls/(\d+)$", relq)
         if mp:
-            return (0, json.dumps({"head": {"sha": self.pulls[int(mp.group(1))]}}), "") if int(mp.group(1)) in self.pulls else err(404, "Not Found")
+            n = int(mp.group(1))
+            return (0, json.dumps({"head": {"sha": self.pulls[n]}, "labels": [{"name": x} for x in self.pull_labels.get(n, [])]}), "") \
+                if n in self.pulls else err(404, "Not Found")
+        ml = re.match(r"actions/jobs/(\d+)/logs", relq)
+        if ml:
+            return (0, self.logs[int(ml.group(1))], "") if int(ml.group(1)) in self.logs else err(410, "Gone")
         mj = re.match(r"actions/runs/(\d+)/jobs", relq)
         if mj:
             return 0, json.dumps({"jobs": self.jobs.get(int(mj.group(1)), [])}), ""
