@@ -112,6 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
     pu.add_argument("--no-status", action="store_true")
     pu.set_defaults(fn=lambda a: __import__("planner.publish", fromlist=["run"]).run(a))
 
+    dm = sub.add_parser("deploy-models", help="deploy the six BPMN/DMN files in one deployment (manual workflow, deployer client)")
+    dm.add_argument("--dir", required=True, help="directory with the generated .bpmn and .dmn files")
+    dm.add_argument("--tenant-id", default="", help="tenant of the deployment (multi-tenancy only)")
+    dm.add_argument("--dry-run", action="store_true", help="check the files and the target, send nothing")
+    dm.add_argument("--out", default="", help="write the deployment summary (ids, versions, keys) as JSON")
+    dm.add_argument("--summary-file", default="")
+    dm.set_defaults(fn=lambda a: __import__("planner.deploy", fromlist=["run"]).run(a))
+
     g = sub.add_parser("gate", help="a suite's triage step: output should_skip")
     g.add_argument("--repo", required=True)
     g.add_argument("--event", default="")

@@ -1,0 +1,117 @@
+---
+name: planner-deploy
+
+# Deploys the test-selection planner's Camunda models (3 BPMN, 3 DMN under
+# .github/workflows/scripts/planner/camunda/) to an Orchestration Cluster, in one atomic
+# `POST /v2/deployments`. Manual only, from `main` only: pull requests never deploy.
+#
+#   check    no secret. Refuses any ref but main and checks that the six files are exactly what
+#            the generators produce.
+#   deploy   the only job with the deployer client, through the GitHub environment
+#            `camunda-planner-deploy` (required reviewers and a `main`-only branch rule are set
+#            there). The client has RESOURCE CREATE, which is effectively remote code execution on
+#            the cluster: it is not the planner's or the collector's client. The cluster URLs are
+#            inputs, and must equal the environment variables PLANNER_DEPLOY_ALLOWED_BASE_URL and
+#            PLANNER_DEPLOY_ALLOWED_TOKEN_URL, so the secret is only sent where the environment allows.
+#
+# `dry-run` (default true) runs both jobs and sends nothing. See planner/camunda/README.md.
+
+on:
+    workflow_dispatch:
+        inputs:
+            camunda-base-url:
+                description: Orchestration Cluster REST API base, https://<host>/v2 (must equal PLANNER_DEPLOY_ALLOWED_BASE_URL)
+                type: string
+                required: true
+            camunda-token-url:
+                description: OAuth token endpoint, client credentials (must equal PLANNER_DEPLOY_ALLOWED_TOKEN_URL)
+                type: string
+                required: true
+            camunda-audience:
+                description: Token audience, if the identity provider needs one
+                type: string
+                default: ''
+            camunda-scope:
+                description: Token scope, if the identity provider needs one
+                type: string
+                default: ''
+            tenant-id:
+                description: Tenant of the deployment, only with multi-tenancy
+                type: string
+                default: ''
+            dry-run:
+                description: Check the models and the target, send nothing
+                type: boolean
+                default: true
+
+permissions:
+    contents: read
+
+concurrency:
+    group: planner-deploy
+    cancel-in-progress: false
+
+jobs:
+    check:
+        name: check
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Refuse a ref other than main
+              env:
+                  REF: ${{ github.ref }}
+              run: |
+                  if [ "${REF}" != "refs/heads/main" ]; then
+                    echo "::error::the planner models are deployed from main only (this run: ${REF})"
+                    exit 1
+                  fi
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            - name: The models are what the generators produce
+              run: |
+                  set -euo pipefail
+                  cd .github/workflows/scripts/planner/camunda
+                  gen="$(mktemp -d)"
+                  python3 build_dmn.py "${gen}"
+                  python3 build_bpmn.py "${gen}"
+                  for f in ci-test-planner.bpmn ci-test-record.bpmn ci-test-learn.bpmn ci-test-planner.dmn ci-test-memory.dmn ci-test-learn.dmn; do
+                    cmp -s "${f}" "${gen}/${f}" || { echo "::error::${f} differs from its generator output"; exit 1; }
+                  done
+
+    deploy:
+        name: deploy
+        needs: check
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        environment: camunda-planner-deploy
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+
+            - name: Deploy the six resources in one deployment
+              env:
+                  CAMUNDA_BASE_URL: ${{ inputs.camunda-base-url }}
+                  CAMUNDA_TOKEN_URL: ${{ inputs.camunda-token-url }}
+                  CAMUNDA_AUDIENCE: ${{ inputs.camunda-audience }}
+                  CAMUNDA_SCOPE: ${{ inputs.camunda-scope }}
+                  CAMUNDA_CLIENT_ID: ${{ secrets.CAMUNDA_DEPLOYER_CLIENT_ID }}
+                  CAMUNDA_CLIENT_SECRET: ${{ secrets.CAMUNDA_DEPLOYER_CLIENT_SECRET }}
+                  PLANNER_DEPLOY_ALLOWED_BASE_URL: ${{ vars.PLANNER_DEPLOY_ALLOWED_BASE_URL }}
+                  PLANNER_DEPLOY_ALLOWED_TOKEN_URL: ${{ vars.PLANNER_DEPLOY_ALLOWED_TOKEN_URL }}
+                  TENANT_ID: ${{ inputs.tenant-id }}
+                  DRY_RUN: ${{ inputs.dry-run }}
+              run: |
+                  set -euo pipefail
+                  cd .github/workflows/scripts
+                  dry=()
+                  if [ "${DRY_RUN}" != "false" ]; then dry=(--dry-run); fi
+                  python3 -m planner deploy-models --dir planner/camunda --tenant-id "${TENANT_ID}" "${dry[@]}" \
+                    --out "${RUNNER_TEMP}/deployment.json" --summary-file "${GITHUB_STEP_SUMMARY}"

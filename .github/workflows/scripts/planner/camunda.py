@@ -87,6 +87,30 @@ class Client:
         except ValueError:
             raise CamundaError("create process instance answered with invalid JSON")
 
+    def deploy(self, files: list, tenant_id: str = "") -> dict:
+        """POST /deployments with every file in one multipart request (atomic). files: [(name, bytes)]."""
+        from .deploy import multipart
+        ctype, body = multipart(files, tenant_id)
+        status, text = self.http("POST", self.base + "/deployments", {"Authorization": "Bearer " + self.token(), "Content-Type": ctype,
+                                 "Accept": "application/json"}, body, self.timeout)
+        if status != 200:
+            raise CamundaError("deployment answered %d (%s)" % (status, _problem(text)))
+        try:
+            return json.loads(text)
+        except ValueError:
+            raise CamundaError("deployment answered with invalid JSON")
+
+
+def _problem(text: str) -> str:
+    """Title and detail of an RFC 9457 problem answer, short; the raw start of the text otherwise."""
+    try:
+        p = json.loads(text)
+        if isinstance(p, dict) and (p.get("title") or p.get("detail")):
+            return ("%s: %s" % (p.get("title", ""), p.get("detail", "")))[:300].replace("\n", " ")
+    except ValueError:
+        pass
+    return text[:120].replace("\n", " ")
+
 
 AWAIT_DEFAULT, AWAIT_MIN, AWAIT_MAX = 30.0, 1.0, 60.0
 
