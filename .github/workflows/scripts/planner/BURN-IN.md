@@ -21,7 +21,7 @@ Done once, by the people who own the cluster and the repositories (the checklist
 notes; nothing here creates them):
 
 - [ ] Elasticsearch: `camunda/bootstrap/es-bootstrap.sh` (policy, indices, aliases, connector API key).
-- [ ] Connectors runtime: `SECRET_PLANNER_ES_URL`, `SECRET_PLANNER_ES_APIKEY` (`camunda/bootstrap/connectors-secrets.values.yaml`).
+- [ ] Connectors runtime: `SECRET_PLANNER_ES_URL`, `SECRET_PLANNER_ES_APIKEY` (`camunda/README.md`, Helm example).
 - [ ] Clients planner, recorder, deployer in the identity provider; `camunda/bootstrap/authorizations.sh`.
 - [ ] Route timeout above `await-seconds + 5`, or `PLANNER_AWAIT_SECONDS` below the existing limit (`camunda/README.md`).
 - [ ] Engine clock zone UTC.

@@ -70,9 +70,25 @@ The deployer permission is effectively remote code execution on the cluster (a d
 describes): it never goes to the planner or the collector, never to a pull request workflow, and the deploy workflow only
 sends it to the URLs the environment allows. Test once that each client gets 403 on the other process.
 
-Connector secrets, on the connectors runtime only (never in GitHub): `PLANNER_ES_URL`, `PLANNER_ES_APIKEY` (exposed as
-the environment variables `SECRET_PLANNER_ES_URL`, `SECRET_PLANNER_ES_APIKEY`; Helm example in
-`bootstrap/connectors-secrets.values.yaml`). `PLANNER_LLM_API_KEY` only if the AI advisor is ever turned on (it is off).
+Connector secrets, on the connectors runtime only (never in GitHub): `PLANNER_ES_URL`, `PLANNER_ES_APIKEY`, read by the
+BPMN as `{{secrets.PLANNER_ES_URL}}` and `{{secrets.PLANNER_ES_APIKEY}}`. The runtime exposes environment variables with
+the prefix `SECRET_` as connector secrets. `PLANNER_LLM_API_KEY` only if the AI advisor is ever turned on (it is off).
+With the Helm chart (as on the 8.10 test cluster), from a Kubernetes secret holding the URL and the key from `es-bootstrap.sh`:
+
+```
+kubectl create secret generic planner-es-credentials -n <namespace> \
+  --from-literal=url=https://<elasticsearch>:<port> --from-file=apikey=<KEY_FILE>
+```
+
+```yaml
+# `connectors.env` replaces the chart's list: merge these two entries into the env list the release already has
+connectors:
+    env:
+        - name: SECRET_PLANNER_ES_URL
+          valueFrom: {secretKeyRef: {name: planner-es-credentials, key: url}}
+        - name: SECRET_PLANNER_ES_APIKEY
+          valueFrom: {secretKeyRef: {name: planner-es-credentials, key: apikey}}
+```
 
 ## Elasticsearch and retention
 
