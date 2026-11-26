@@ -39,6 +39,12 @@ env:
     AWS_EXCLUDED_REGIONS: '["eu-west-2", "eu-west-3", "eu-central-2", "eu-north-1", "eu-south-1", "us-east-1", "us-east-2"]'
     AZURE_EXCLUDED_REGIONS: '["swedencentral", "spaincentral"]'
 
+    # The AWS audits skip resources younger than this. CI tests create S3
+    # buckets that the weekly global cleanup deletes on Saturday at 05:00 UTC,
+    # 41 hours before the scheduled audit. A leak outlives the cleanup, so the
+    # next audit still reports it.
+    AUDIT_MIN_AGE_HOURS: 48
+
     # ELBv2 target group quota headroom audit thresholds. cloud-nuke does not
     # report target groups, so orphaned ones accumulate silently until they hit
     # the regional "Target Groups per Region" quota (default 3000) and break new
@@ -55,6 +61,11 @@ concurrency:
 
 jobs:
     triage:
+        # A bot PR, such as a Renovate version bump, does not run the live audit.
+        # The AWS and Azure nightly cleanups run the same cloud-nuke version and
+        # actions on that PR, and the scheduled audit runs it each Sunday. Push a
+        # commit to the branch to run the audit on such a PR.
+        if: github.event_name != 'pull_request' || !endsWith(github.actor, '[bot]')
         runs-on: ubuntu-latest
         outputs:
             run_aws: ${{ github.event.inputs.provider == 'all' || github.event.inputs.provider == 'aws' || github.event.inputs.provider == null }}
@@ -180,6 +191,7 @@ jobs:
                       [[ -n "$type" ]] && EXCLUDED_TYPES+=(--exclude-resource-type "$type")
                   done < <(REGION="$REGION" yq -r '.regions[strenv(REGION)].exclude_resource_types[]?' "$AUDIT_CONFIG")
                   {
+                      echo "Resources younger than ${AUDIT_MIN_AGE_HOURS}h are not listed."
                       echo "### Excluded by $AUDIT_CONFIG (not listed, not counted):"
                       yq -r 'to_entries[] | "\(.key) exclude: \(.value.exclude | @json)"' "$CLOUD_NUKE_CONFIG"
                       echo "Resource types: ${EXCLUDED_TYPES[*]:-none}"
@@ -198,7 +210,7 @@ jobs:
                   ./cloud-nuke_linux_amd64 aws --dry-run \
                     --region $REGION \
                     --force \
-                    --older-than 0h \
+                    --older-than "${AUDIT_MIN_AGE_HOURS}h" \
                     --config "$CLOUD_NUKE_CONFIG" \
                     --exclude-resource-type ec2-dhcp-option \
                     --exclude-resource-type s3 \
@@ -602,12 +614,25 @@ jobs:
                   # Keep the AWS call on its own line (no '|| true') so a CLI or
                   # credentials error fails the job instead of being masked into an
                   # empty list, which would be a silent blind spot.
-                  aws s3api list-buckets --query "Buckets[].Name" --output text > raw_buckets.txt
-                  # An account with zero buckets yields empty output (valid): the
-                  # trailing '|| true' only absorbs grep's exit 1 when there are no
-                  # non-empty lines to keep.
-                  tr '\t' '\n' < raw_buckets.txt | grep -v '^$' | sort -u > all_buckets.txt || true
-                  echo "Found $(wc -l < all_buckets.txt) S3 buckets in the account"
+                  aws s3api list-buckets --query "Buckets[].[Name,CreationDate]" --output text > raw_buckets.txt
+                  # Skip the buckets younger than AUDIT_MIN_AGE_HOURS: CI tests use
+                  # them and the weekly global cleanup deletes them. An account with
+                  # zero buckets yields empty output (valid).
+                  MIN_CREATED=$(( $(date -u +%s) - AUDIT_MIN_AGE_HOURS * 3600 ))
+                  true > all_buckets.txt
+                  true > young_buckets.txt
+                  while IFS=$'\t' read -r bucket created; do
+                      [[ -z "$bucket" ]] && continue
+                      # A date that does not parse fails the step.
+                      created_at=$(date -u -d "$created" +%s)
+                      if (( created_at > MIN_CREATED )); then
+                          echo "$bucket ($created)" >> young_buckets.txt
+                      else
+                          echo "$bucket" >> all_buckets.txt
+                      fi
+                  done < raw_buckets.txt
+                  sort -u -o all_buckets.txt all_buckets.txt
+                  echo "Found $(wc -l < all_buckets.txt) S3 buckets in the account, and $(wc -l < young_buckets.txt) younger than ${AUDIT_MIN_AGE_HOURS}h"
 
                   # Approved bucket regexes, the cloud-nuke S3 format of the audit config.
                   yq -r '.global.S3.exclude.names_regex[]?' "$AUDIT_CONFIG" > allowlist_patterns.txt
@@ -656,6 +681,9 @@ jobs:
                       head -100 unallowlisted_buckets.txt || echo "None"
                       echo ""
                       echo "Total non-allowlisted: $UNALLOWLISTED_COUNT"
+                      echo ""
+                      echo "### Skipped, younger than ${AUDIT_MIN_AGE_HOURS}h:"
+                      if [[ -s young_buckets.txt ]]; then cat young_buckets.txt; else echo "None"; fi
                   } >> audit_report.txt
 
                   cat audit_report.txt

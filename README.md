@@ -149,6 +149,9 @@ A weekly audit runs every **Sunday at 22:00 UTC** to identify all resources in p
 - Runs cleanup tools in **dry-run mode** (no resources are deleted)
 - Posts a summary of discovered resources to Slack channel `#internal` (C05S0M7KG6A)
 - Helps track resource growth and identify potential orphaned resources
+- Skips AWS resources younger than `AUDIT_MIN_AGE_HOURS` (48h), such as the S3 buckets of CI tests that the weekly global cleanup deletes on Saturday. 48h fits the Sunday run: a manual run from Tuesday to Friday still reports the CI buckets created since the last cleanup.
+
+A PR that changes the workflow or its configuration runs the audit too, unless a bot such as Renovate opened or updated it.
 
 This provides visibility into the permanent infrastructure without affecting any resources.
 
