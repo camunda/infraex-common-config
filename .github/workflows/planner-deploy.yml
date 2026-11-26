@@ -102,8 +102,9 @@ jobs:
                   CAMUNDA_TOKEN_URL: ${{ inputs.camunda-token-url }}
                   CAMUNDA_AUDIENCE: ${{ inputs.camunda-audience }}
                   CAMUNDA_SCOPE: ${{ inputs.camunda-scope }}
-                  CAMUNDA_CLIENT_ID: ${{ secrets.CAMUNDA_DEPLOYER_CLIENT_ID }}
-                  CAMUNDA_CLIENT_SECRET: ${{ secrets.CAMUNDA_DEPLOYER_CLIENT_SECRET }}
+                  # a dry run needs no secret, so it gets none
+                  CAMUNDA_CLIENT_ID: ${{ !inputs.dry-run && secrets.CAMUNDA_DEPLOYER_CLIENT_ID || '' }}
+                  CAMUNDA_CLIENT_SECRET: ${{ !inputs.dry-run && secrets.CAMUNDA_DEPLOYER_CLIENT_SECRET || '' }}
                   PLANNER_DEPLOY_ALLOWED_BASE_URL: ${{ vars.PLANNER_DEPLOY_ALLOWED_BASE_URL }}
                   PLANNER_DEPLOY_ALLOWED_TOKEN_URL: ${{ vars.PLANNER_DEPLOY_ALLOWED_TOKEN_URL }}
                   TENANT_ID: ${{ inputs.tenant-id }}

@@ -121,7 +121,8 @@ All six files go in **one** `POST /v2/deployments` (atomic: all or none), from t
    for `main`; environment secrets `CAMUNDA_DEPLOYER_CLIENT_ID`, `CAMUNDA_DEPLOYER_CLIENT_SECRET`; environment variables
    `PLANNER_DEPLOY_ALLOWED_BASE_URL` (`https://<host>/v2`) and `PLANNER_DEPLOY_ALLOWED_TOKEN_URL`.
 2. Run the workflow from `main` with the cluster's base and token URL (and audience, scope or tenant if the cluster
-   needs them), `dry-run: true` first. The `check` job refuses another ref and any file that differs from its generator.
+   needs them), `dry-run: true` first. The `check` job refuses another ref and any file that differs from its generator;
+   a dry run checks the URLs against the environment and gets no deployer secret.
 3. Run it again with `dry-run: false`. The job summary lists each process and decision requirements graph with its
    version and key; the run fails unless all three processes, all three graphs and the called decisions
    (`plan`, `memory`, `learned`) are in the answer.
