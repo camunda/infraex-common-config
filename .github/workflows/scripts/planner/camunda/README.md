@@ -33,43 +33,59 @@ documents were indexed, the planner client was refused (403) on `ci-test-record`
 document (weight 1.5 for 12 runs and 3 failures, bounded step). Fail-open held for: process not deployed (404), wrong secret (401), not configured, and a process that
 runs 45 s (504 after 15 s: the Contour ingress of the Kind setup cuts requests at 15 s, so the 30 s await is only reachable through an ingress with a longer route timeout).
 
-Not verified: the AI Agent task (its element template is not in the connectors runtime jar; the input names are still unchecked), an LLM call, GitHub.
+Not verified: the AI Agent task (its element template is not in the connectors runtime jar; the input names are still unchecked), an LLM call, GitHub
+(the burn-in in `../BURN-IN.md` is the first GitHub end-to-end run), the `planner-deploy.yml` workflow against a real cluster.
 
 Offline checks: `npm ci && cd .. && python3 -m unittest planner.tests.test_dmn_conformance planner.tests.test_bpmn_feel planner.tests.test_dmn_memory_learn`.
 
-## Deploy
+## Cluster requirements
 
-```
-# one deployment with every resource (process, decisions)
-curl -sS -X POST "$CAMUNDA_BASE_URL/deployments" -H "Authorization: Bearer $TOKEN" \
-  -F resources=@ci-test-planner.bpmn -F resources=@ci-test-record.bpmn -F resources=@ci-test-learn.bpmn \
-  -F resources=@ci-test-planner.dmn -F resources=@ci-test-memory.dmn -F resources=@ci-test-learn.dmn
-```
+- **Camunda 8.10 Orchestration Cluster** over HTTPS with OIDC client credentials, and a connectors runtime that can
+  reach the planner's Elasticsearch. Which cluster, and who owns it, is decided by the humans running it.
+- **Request timeout above the await.** The planner waits for the process (`await-seconds`, 30 s by default, at most 60).
+  Every proxy between GitHub and the cluster (ingress controller, load balancer, gateway) must allow a request a few
+  seconds longer, otherwise the plan fails open at the proxy's limit (the Kind test's Contour ingress cut at 15 s: a 504).
+  Either raise the route timeout to at least `await-seconds + 5` (for example NGINX `nginx.ingress.kubernetes.io/proxy-read-timeout`,
+  Contour `projectcontour.io/response-timeout`, AWS ALB idle timeout; check the controller's documentation) or set the
+  repository variable `PLANNER_AWAIT_SECONDS` deliberately below the existing limit (for example 12 behind a 15 s route).
+  The process itself answered in 0.2 to 0.5 s on the test cluster.
+- **UTC.** The timestamps the process writes (`string(now())`, cut at `@` and marked `Z`) are only right when the engine's
+  clock zone is UTC. Do not set `TZ` or `-Duser.timezone` to another zone on the Orchestration Cluster. The burn-in
+  procedure checks it (`../BURN-IN.md`, step 3).
+- **Authorizations enabled**, so each client can only do its one thing (next section).
 
-`CAMUNDA_BASE_URL` is the Orchestration Cluster REST API base (`https://<host>/v2`; deployments use the same base).
-Redeploy on every change of a generated file; process instances keep the version they started with.
+## Clients, secrets, permissions
 
-## Client, secrets, permissions
+Three OAuth clients, created in the identity provider by the cluster owner, one permission each
+(`bootstrap/authorizations.sh` creates the authorizations through `POST /v2/authorizations`; the same can be declared
+with Identity as Code, `camunda.security.initialization.authorizations`):
 
-- **Cluster:** an existing 8.10 Orchestration Cluster reachable over HTTPS. Who owns it is an open decision.
-- **GitHub caller (planner workflow):** OAuth client credentials in `CAMUNDA_CLIENT_ID`/`CAMUNDA_CLIENT_SECRET`; the client
-  has `CREATE_PROCESS_INSTANCE` on process `ci-test-planner` only. The URLs are workflow inputs, not secrets.
-- **Collector:** a second client with `CREATE_PROCESS_INSTANCE` on `ci-test-record` only.
-- **Connector secrets (cluster side):** `PLANNER_ES_URL`, `PLANNER_ES_APIKEY` (an Elasticsearch API key limited to
-  `ci-planner-*`: read and write), `PLANNER_LLM_API_KEY` (only if the advisor is on). Connector secrets are
-  configured on the connector runtime and never reach GitHub.
-- Elasticsearch is reachable from the connector runtime only, not from GitHub.
+| Client | Permission | Used by | GitHub secrets |
+|---|---|---|---|
+| planner | `CREATE_PROCESS_INSTANCE` on `PROCESS_DEFINITION` `ci-test-planner` | `planner.yml`, decide job | repository secrets `CAMUNDA_CLIENT_ID`, `CAMUNDA_CLIENT_SECRET` of the calling repository |
+| recorder | `CREATE_PROCESS_INSTANCE` on `PROCESS_DEFINITION` `ci-test-record` | `planner-collect.yml` | `CAMUNDA_COLLECTOR_CLIENT_ID`, `CAMUNDA_COLLECTOR_CLIENT_SECRET` of the calling repository |
+| deployer | `CREATE` on `RESOURCE` `*` (the only id the API accepts for it) | `planner-deploy.yml` only | environment secrets `CAMUNDA_DEPLOYER_CLIENT_ID`, `CAMUNDA_DEPLOYER_CLIENT_SECRET` of the environment `camunda-planner-deploy` in this repository |
+
+The deployer permission is effectively remote code execution on the cluster (a deployed process runs whatever it
+describes): it never goes to the planner or the collector, never to a pull request workflow, and the deploy workflow only
+sends it to the URLs the environment allows. Test once that each client gets 403 on the other process.
+
+Connector secrets, on the connectors runtime only (never in GitHub): `PLANNER_ES_URL`, `PLANNER_ES_APIKEY` (exposed as
+the environment variables `SECRET_PLANNER_ES_URL`, `SECRET_PLANNER_ES_APIKEY`; Helm example in
+`bootstrap/connectors-secrets.values.yaml`). `PLANNER_LLM_API_KEY` only if the AI advisor is ever turned on (it is off).
 
 ## Elasticsearch and retention
 
+Run by the owner of the Elasticsearch cluster, from a machine that can reach it (GitHub never talks to Elasticsearch):
+
 ```
-curl -X PUT "$ES/_ilm/policy/ci-planner-retention" -H 'Content-Type: application/json' -d @es/ilm-ci-planner-retention.json
-for i in decisions outcomes escapes weights; do
-  # first backing index, with the write alias the connector uses (the aliases are what the process writes to and reads from)
-  jq --arg a "ci-planner-$i" '. + {aliases: {($a): {is_write_index: true}}}' es/ci-planner-$i.mapping.json \
-    | curl -X PUT "$ES/ci-planner-$i-000001" -H 'Content-Type: application/json' -d @-
-done
+ES_URL=https://<elasticsearch>:<port> ES_ADMIN_API_KEY=... KEY_FILE=./planner-es.key ./bootstrap/es-bootstrap.sh
 ```
+
+It creates the policy `ci-planner-retention` (`es/ilm-ci-planner-retention.json`), the first backing index of each of
+`ci-planner-decisions`, `-outcomes`, `-escapes`, `-weights` with its write alias (strict mappings, `es/*.mapping.json`;
+`REPLICAS=0` on a one-node cluster), and an API key limited to `ci-planner-*` (read, write, view_index_metadata) written
+to `KEY_FILE` and never printed. Existing aliases are left alone, so it can be re-run.
 
 The policy rolls over every 90 days, force-merges after 90 and deletes after 730 days (age counts from rollover, so
 adjust `delete.min_age` to the retention you want plus 90). Writes with a stable `_id` go to the write index through
@@ -79,6 +95,30 @@ by the weekly step limit. Reads search the alias, which covers all backing indic
 Camunda's own history (process and decision instances) is a secondary audit trail whose
 retention is configured separately on the cluster; the 8.10 docs do not agree on its default, so set it
 explicitly and do not rely on it for months of history.
+
+## Deploy
+
+All six files go in **one** `POST /v2/deployments` (atomic: all or none), from the manual workflow
+`.github/workflows/planner-deploy.yml`, never from a pull request:
+
+1. Once, in this repository: environment `camunda-planner-deploy` with required reviewers and a deployment branch rule
+   for `main`; environment secrets `CAMUNDA_DEPLOYER_CLIENT_ID`, `CAMUNDA_DEPLOYER_CLIENT_SECRET`; environment variables
+   `PLANNER_DEPLOY_ALLOWED_BASE_URL` (`https://<host>/v2`) and `PLANNER_DEPLOY_ALLOWED_TOKEN_URL`.
+2. Run the workflow from `main` with the cluster's base and token URL (and audience, scope or tenant if the cluster
+   needs them), `dry-run: true` first. The `check` job refuses another ref and any file that differs from its generator.
+3. Run it again with `dry-run: false`. The job summary lists each process and decision requirements graph with its
+   version and key; the run fails unless all three processes, all three graphs and the called decisions
+   (`plan`, `memory`, `learned`) are in the answer.
+
+Redeploy on every change of a generated file; running instances keep the version they started with, and an unchanged
+resource keeps its version. To run the same thing by hand (an administrator, for a first test):
+
+```
+cd .github/workflows/scripts
+CAMUNDA_BASE_URL=https://<host>/v2 CAMUNDA_TOKEN_URL=... CAMUNDA_CLIENT_ID=... CAMUNDA_CLIENT_SECRET=... \
+PLANNER_DEPLOY_ALLOWED_BASE_URL=https://<host>/v2 PLANNER_DEPLOY_ALLOWED_TOKEN_URL=... \
+python3 -m planner deploy-models --dir planner/camunda [--dry-run]
+```
 
 ## Not covered by these files
 
