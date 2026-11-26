@@ -90,6 +90,29 @@ class BurninTest(unittest.TestCase):
         rc, res = self.run_burnin(fake)
         self.assertEqual((rc, res["violations"]), (1, [RUN]))
 
+    def test_rosa_report_success_after_a_skip_is_not_a_run(self):
+        """ROSA dual region: `Report success` runs and succeeds when triage skipped every working job."""
+        run = {"status": "completed", "conclusion": "success"}
+        skipped = [{"name": n, "conclusion": "skipped"} for n in ("Define Matrix", "Prepare clusters", "Read kube configs from matrix",
+                                                                    "Run integration tests", "Retry Tests in case of failure",
+                                                                    "Cleanup ROSA clusters", "Report failures")]
+        jobs = [{"name": "triage", "conclusion": "success"}] + skipped + [{"name": "Report success", "conclusion": "success"}]
+        self.assertEqual(burnin.execution(run, jobs), "skipped")
+        jobs[1] = {"name": "Define Matrix", "conclusion": "success"}
+        self.assertEqual(burnin.execution(run, jobs), "ran")
+        # a job whose name only starts with the letters is still work
+        self.assertEqual(burnin.execution(run, [{"name": "reporting-suite", "conclusion": "success"}]), "ran")
+        self.assertEqual(burnin.execution(run, [{"name": "report-failure", "conclusion": "success"}]), "skipped")
+
+    def test_rosa_shape_skip_without_gate_answer_is_flagged(self):
+        fake = self.fake("report", {SKIPPED: ("skipped", "success", None)})
+        rid = 100
+        fake.jobs[rid].append({"id": rid * 10 + 2, "name": "Report success", "conclusion": "success"})
+        rc, res = self.run_burnin(fake)
+        self.assertEqual(rc, 1, "a report job that ran does not hide the skip")
+        row = {r["suite"]: r for r in res["rows"]}[SKIPPED]
+        self.assertEqual(row["execution"], "skipped")
+
     def test_gate_answer_parsing(self):
         self.assertEqual(burnin.gate_answer(gate_log("false", "report mode, nothing is skipped (no camunda plan)")),
                          ("false", "report mode, nothing is skipped (no camunda plan)"))

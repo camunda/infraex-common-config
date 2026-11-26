@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--actor", default="")
     d.add_argument("--fork", default="false")
     d.add_argument("--labels", default="[]", help="JSON list of label names")
-    d.add_argument("--mode", default="gate")
+    d.add_argument("--mode", default="report")
     d.add_argument("--base-branch", default="main")
     d.add_argument("--default-branch", default="main")
     d.add_argument("--gate-base-branches", default="main")

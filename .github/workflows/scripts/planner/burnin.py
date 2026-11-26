@@ -3,7 +3,7 @@
 Read-only (`gh` with `actions: read`, `checks: read`, `pull-requests: read`). For the PR's head commit it reads the
 check run `planner plan` and, for every suite in the plan, the newest `pull_request` run of that workflow, its jobs
 and the log of its `triage` job, where planner-gate prints its answer (`planner-gate: <reason>`, `should_skip=`).
-A suite "ran" when a job other than `triage` did not end as skipped.
+A suite "ran" when a job other than `triage` and the `report*` notification jobs did not end as skipped.
 
 The burn-in in `report` mode proves two things with it. Nothing was skipped by the planner: planner-gate answering
 `should_skip=true` while the plan or the gate step is in report mode is a violation, and so is a skipped suite
@@ -34,13 +34,18 @@ def suite_runs(gh: Gh, repo: str, suite: str, head_sha: str):
     return run, (j or {}).get("jobs", [])
 
 
+# Jobs that do not test anything and can run although triage skipped the suite: notification jobs such as the ROSA
+# dual-region `Report success` (`if: !failure() && !cancelled()`, so it succeeds after a skipped chain).
+NOT_WORK = re.compile(r"^(triage|report)([\s_-]|$)", re.I)
+
+
 def execution(run, jobs) -> str:
-    """not-triggered | pending | ran | skipped."""
+    """not-triggered | pending | ran | skipped. "ran" = a job other than triage and report jobs did not end as skipped."""
     if run is None:
         return "not-triggered"
     if run.get("status") != "completed":
         return "pending"
-    work = [j for j in jobs if not str(j.get("name", "")).startswith("triage")]
+    work = [j for j in jobs if not NOT_WORK.match(str(j.get("name", "")))]
     return "ran" if any(j.get("conclusion") != "skipped" for j in work) else "skipped"
 
 

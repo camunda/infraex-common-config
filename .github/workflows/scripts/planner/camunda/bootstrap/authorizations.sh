@@ -5,6 +5,9 @@
 #   deployer  CREATE on RESOURCE *                                 (GitHub planner-deploy workflow only;
 #             effectively remote code execution on the cluster, the API only accepts the id `*` for it)
 #
+# Not idempotent: every run creates the authorizations again (duplicates grant nothing more, but clutter Admin).
+# Run it once per cluster; to check what exists, look at the clients in Admin.
+#
 # The clients themselves are created in the identity provider (Keycloak, Microsoft Entra ID, ...), which is
 # not covered here. Run by a cluster administrator, never from GitHub. The same authorizations can be declared
 # in the Helm values instead (camunda.security.initialization.authorizations, see the README).
