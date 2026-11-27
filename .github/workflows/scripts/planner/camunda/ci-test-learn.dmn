@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/dmn" id="ci_test_learn" name="CI test planner learner" namespace="http://camunda.org/schema/1.0/dmn" exporter="build_dmn.py" exporterVersion="1">
+  <inputData id="in_stats" name="stats"><variable id="in_stats_v" name="stats" typeRef="Any" /></inputData>
+  <inputData id="in_prev" name="prev"><variable id="in_prev_v" name="prev" typeRef="Any" /></inputData>
+  <inputData id="in_params" name="params"><variable id="in_params_v" name="params" typeRef="Any" /></inputData>
+  <decision id="learned" name="learned">
+    <variable id="learned_v" name="learned" typeRef="Any" />
+    <informationRequirement id="learned_r_stats"><requiredInput href="#in_stats" /></informationRequirement>
+    <informationRequirement id="learned_r_prev"><requiredInput href="#in_prev" /></informationRequirement>
+    <informationRequirement id="learned_r_params"><requiredInput href="#in_params" /></informationRequirement>
+    <literalExpression id="learned_e" typeRef="Any"><text>for s in stats return {pair: s.module + &quot;|&quot; + s.suite, module: s.module, suite: s.suite,
+ risk: (s.fail + params.escape_factor * s.escape + params.prior_a) / (s.n_run + s.escape + params.prior_a + params.prior_b),
+ target: min([params.weight_max, max([params.weight_min, 1 + params.weight_slope * risk])]),
+ old: {v: get value(prev, pair), r: if v = null then 1 else v}.r,
+ step: max([0 - params.max_step, min([params.max_step, target - old])]),
+ weight: old + step,
+ n_run: s.n_run, fail: s.fail, escape: s.escape}</text></literalExpression>
+  </decision>
+</definitions>

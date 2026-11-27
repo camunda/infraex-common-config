@@ -1,0 +1,52 @@
+{
+  "settings": {
+    "index.lifecycle.name": "ci-planner-retention",
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index.lifecycle.rollover_alias": "ci-planner-escapes"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "escape_id": {
+        "type": "keyword"
+      },
+      "ts": {
+        "type": "date"
+      },
+      "repo": {
+        "type": "keyword"
+      },
+      "suite": {
+        "type": "keyword"
+      },
+      "module": {
+        "type": "keyword"
+      },
+      "pair": {
+        "type": "keyword"
+      },
+      "share": {
+        "type": "float"
+      },
+      "pr": {
+        "type": "integer"
+      },
+      "decision_id": {
+        "type": "keyword"
+      },
+      "confidence": {
+        "type": "keyword"
+      },
+      "confirmed_by": {
+        "type": "keyword"
+      },
+      "failing_run": {
+        "type": "keyword"
+      },
+      "good_run": {
+        "type": "keyword"
+      }
+    }
+  }
+}

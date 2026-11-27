@@ -1,0 +1,76 @@
+{
+  "settings": {
+    "index.lifecycle.name": "ci-planner-retention",
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index.lifecycle.rollover_alias": "ci-planner-decisions"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "ts": {
+        "type": "date"
+      },
+      "source": {
+        "type": "keyword"
+      },
+      "repo": {
+        "type": "keyword"
+      },
+      "pr": {
+        "type": "integer"
+      },
+      "head_sha": {
+        "type": "keyword"
+      },
+      "base_sha": {
+        "type": "keyword"
+      },
+      "mode": {
+        "type": "keyword"
+      },
+      "planner_version": {
+        "type": "keyword"
+      },
+      "rules_version": {
+        "type": "keyword"
+      },
+      "weights_version": {
+        "type": "keyword"
+      },
+      "modules": {
+        "type": "keyword"
+      },
+      "labels": {
+        "type": "keyword"
+      },
+      "changed_count": {
+        "type": "integer"
+      },
+      "facts_sha256": {
+        "type": "keyword"
+      },
+      "suites_run": {
+        "type": "keyword"
+      },
+      "suites_skip": {
+        "type": "keyword"
+      },
+      "rotation_picked": {
+        "type": "keyword"
+      },
+      "rules_fired": {
+        "type": "object",
+        "enabled": false
+      },
+      "decision": {
+        "type": "object",
+        "enabled": false
+      },
+      "advisor": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

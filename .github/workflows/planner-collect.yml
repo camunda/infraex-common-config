@@ -1,0 +1,95 @@
+---
+name: planner-collect
+
+# Outcome collector of the test-selection planner. Reads finished runs of the suites from the Actions
+# API, classifies each outcome (pass, fail, blocked, known_failure, cancelled; the checked-in catalogue
+# `.github/planner-known-failures.yaml` decides what is blocked or known), attributes confirmed failures
+# of scheduled full runs to the pull requests whose plan skipped that suite (escapes), and sends the
+# documents to the Camunda process `ci-test-record`, which writes them to Elasticsearch. Document ids
+# are stable: a window that overlaps the previous one writes nothing twice. Call it hourly.
+#
+# Holds the Camunda credentials and read-only GitHub permissions. Runs no repository code: the planner
+# source is this workflow's own pinned commit; the repository checkout is only read.
+
+on:
+    workflow_call:
+        inputs:
+            config-path:
+                type: string
+                default: .github/planner-config.json
+            known-failures-path:
+                type: string
+                default: .github/planner-known-failures.yaml
+            since-hours:
+                description: How far back to look. Keep it above the schedule interval; manual backfills can use more.
+                type: string
+                default: '6'
+            default-branch:
+                type: string
+                default: main
+            camunda-base-url:
+                type: string
+                default: ''
+            camunda-token-url:
+                type: string
+                default: ''
+            camunda-audience:
+                type: string
+                default: ''
+            camunda-scope:
+                type: string
+                default: ''
+        secrets:
+            CAMUNDA_CLIENT_ID:
+                description: OAuth client id; needs CREATE_PROCESS_INSTANCE on the process `ci-test-record` only.
+                required: false
+            CAMUNDA_CLIENT_SECRET:
+                required: false
+
+permissions:
+    contents: read
+
+jobs:
+    collect:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            actions: read
+            checks: read
+            contents: read
+            pull-requests: read
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Check out the default branch (read only, full history for merge attribution)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0
+                  path: repo
+                  persist-credentials: false
+
+            - name: Collect outcomes and attribute escapes
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+                  KNOWN_FAILURES: ${{ inputs.known-failures-path }}
+                  SINCE_HOURS: ${{ inputs.since-hours }}
+                  DEFAULT_BRANCH: ${{ inputs.default-branch }}
+                  CAMUNDA_BASE_URL: ${{ inputs.camunda-base-url }}
+                  CAMUNDA_TOKEN_URL: ${{ inputs.camunda-token-url }}
+                  CAMUNDA_AUDIENCE: ${{ inputs.camunda-audience }}
+                  CAMUNDA_SCOPE: ${{ inputs.camunda-scope }}
+                  CAMUNDA_CLIENT_ID: ${{ secrets.CAMUNDA_CLIENT_ID }}
+                  CAMUNDA_CLIENT_SECRET: ${{ secrets.CAMUNDA_CLIENT_SECRET }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner collect --repo "${GITHUB_REPOSITORY}" --git-dir "${GITHUB_WORKSPACE}/repo" \
+                    --config-path "${CONFIG_PATH}" --known-failures "${KNOWN_FAILURES}" --since-hours "${SINCE_HOURS}" \
+                    --default-branch "${DEFAULT_BRANCH}" | tee -a "${GITHUB_STEP_SUMMARY}"

@@ -1,0 +1,53 @@
+{
+  "settings": {
+    "index.lifecycle.name": "ci-planner-retention",
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index.lifecycle.rollover_alias": "ci-planner-weights"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "ts": {
+        "type": "date"
+      },
+      "repo": {
+        "type": "keyword"
+      },
+      "weights_id": {
+        "type": "keyword"
+      },
+      "prev": {
+        "type": "keyword"
+      },
+      "pairs": {
+        "properties": {
+          "pair": {
+            "type": "keyword"
+          },
+          "module": {
+            "type": "keyword"
+          },
+          "suite": {
+            "type": "keyword"
+          },
+          "weight": {
+            "type": "float"
+          },
+          "risk": {
+            "type": "float"
+          },
+          "n_run": {
+            "type": "integer"
+          },
+          "fail": {
+            "type": "integer"
+          },
+          "escape": {
+            "type": "float"
+          }
+        }
+      }
+    }
+  }
+}

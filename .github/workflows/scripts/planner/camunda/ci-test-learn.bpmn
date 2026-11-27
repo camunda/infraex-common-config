@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_ci-test-learn" targetNamespace="http://bpmn.io/schema/bpmn" exporter="build_bpmn.py" exporterVersion="1" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.10.0">
+  <bpmn:process id="ci-test-learn" name="CI test planner: weekly learner" isExecutable="true">
+    <bpmn:documentation>Every Monday 06:00: statistics per module and suite from Elasticsearch -&gt; DMN weights (bounded step) -&gt; weights document. Start it by hand with a process instance of ci-test-learn (start event Run now). Rollback: the planner reads the newest weights document, so write the previous one back or delete the newest.</bpmn:documentation>
+    <bpmn:startEvent id="start" name="Every Monday 06:00"><bpmn:outgoing>f_start_configure</bpmn:outgoing><bpmn:timerEventDefinition id="learn_timer"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 6 * * MON</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:startEvent id="manual" name="Run now (manual)"><bpmn:outgoing>f_manual_configure</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:scriptTask id="configure" name="Configure"><bpmn:documentation>One repository per learner process in v1. The constants are the defaults of the Python reference learner.</bpmn:documentation><bpmn:extensionElements><zeebe:script expression="={repo: &quot;camunda/camunda-deployment-references&quot;, params: {prior_a: 1, prior_b: 19, escape_factor: 3, weight_slope: 5, weight_min: 1, weight_max: 4, max_step: 0.5}}" resultVariable="normalised" /></bpmn:extensionElements><bpmn:incoming>f_start_configure</bpmn:incoming><bpmn:incoming>f_manual_configure</bpmn:incoming><bpmn:outgoing>f_configure_stats</bpmn:outgoing></bpmn:scriptTask>
+    <bpmn:serviceTask id="stats" name="Statistics per module and suite" zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"><bpmn:extensionElements><zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" /><zeebe:ioMapping><zeebe:input source="noAuth" target="authentication.type" /><zeebe:input source="POST" target="method" /><zeebe:input source="{{secrets.PLANNER_ES_URL}}/ci-planner-outcomes/_search?filter_path=aggregations" target="url" /><zeebe:input source="= {&quot;Authorization&quot;: &quot;ApiKey {{secrets.PLANNER_ES_APIKEY}}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}" target="headers" /><zeebe:input source="= {&quot;size&quot;: 0, &quot;query&quot;: {&quot;bool&quot;: {&quot;filter&quot;: [{&quot;term&quot;: {&quot;repo&quot;: normalised.repo}}, {&quot;exists&quot;: {&quot;field&quot;: &quot;decision_id&quot;}}, {&quot;terms&quot;: {&quot;outcome&quot;: [&quot;pass&quot;, &quot;fail&quot;]}}, {&quot;range&quot;: {&quot;completed&quot;: {&quot;gte&quot;: &quot;now-180d&quot;}}}]}}, &quot;aggs&quot;: {&quot;by_module&quot;: {&quot;terms&quot;: {&quot;field&quot;: &quot;modules&quot;, &quot;size&quot;: 500}, &quot;aggs&quot;: {&quot;by_suite&quot;: {&quot;terms&quot;: {&quot;field&quot;: &quot;suite&quot;, &quot;size&quot;: 300}, &quot;aggs&quot;: {&quot;fails&quot;: {&quot;filter&quot;: {&quot;bool&quot;: {&quot;filter&quot;: [{&quot;term&quot;: {&quot;outcome&quot;: &quot;fail&quot;}}, {&quot;term&quot;: {&quot;flake_hint&quot;: false}}]}}}}}}}}}" target="body" /><zeebe:input source="15" target="connectionTimeoutInSeconds" /><zeebe:input source="15" target="readTimeoutInSeconds" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="resultExpression" value="= {statsResponse: response.body}" /><zeebe:header key="errorExpression" value="= if response.status &gt;= 400 then bpmnError(&quot;ES_&quot; + string(response.status), &quot;Elasticsearch answered &quot; + string(response.status)) else null" /><zeebe:header key="retryBackoff" value="PT2S" /></zeebe:taskHeaders></bpmn:extensionElements><bpmn:incoming>f_configure_stats</bpmn:incoming><bpmn:outgoing>f_stats_esc</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="esc" name="Escapes of the last 180 days" zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"><bpmn:extensionElements><zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" /><zeebe:ioMapping><zeebe:input source="noAuth" target="authentication.type" /><zeebe:input source="POST" target="method" /><zeebe:input source="{{secrets.PLANNER_ES_URL}}/ci-planner-escapes/_search?filter_path=aggregations" target="url" /><zeebe:input source="= {&quot;Authorization&quot;: &quot;ApiKey {{secrets.PLANNER_ES_APIKEY}}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}" target="headers" /><zeebe:input source="= {&quot;size&quot;: 0, &quot;query&quot;: {&quot;bool&quot;: {&quot;filter&quot;: [{&quot;term&quot;: {&quot;repo&quot;: normalised.repo}}, {&quot;range&quot;: {&quot;ts&quot;: {&quot;gte&quot;: &quot;now-180d&quot;}}}]}}, &quot;aggs&quot;: {&quot;pairs&quot;: {&quot;terms&quot;: {&quot;field&quot;: &quot;pair&quot;, &quot;size&quot;: 500}, &quot;aggs&quot;: {&quot;mass&quot;: {&quot;sum&quot;: {&quot;field&quot;: &quot;share&quot;}}, &quot;last&quot;: {&quot;max&quot;: {&quot;field&quot;: &quot;ts&quot;, &quot;format&quot;: &quot;strict_date_time_no_millis&quot;}}, &quot;ids&quot;: {&quot;terms&quot;: {&quot;field&quot;: &quot;escape_id&quot;, &quot;size&quot;: 10}}}}}}" target="body" /><zeebe:input source="15" target="connectionTimeoutInSeconds" /><zeebe:input source="15" target="readTimeoutInSeconds" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="resultExpression" value="= {escapesResponse: response.body}" /><zeebe:header key="errorExpression" value="= if response.status &gt;= 400 then bpmnError(&quot;ES_&quot; + string(response.status), &quot;Elasticsearch answered &quot; + string(response.status)) else null" /><zeebe:header key="retryBackoff" value="PT2S" /></zeebe:taskHeaders></bpmn:extensionElements><bpmn:incoming>f_stats_esc</bpmn:incoming><bpmn:outgoing>f_esc_prev</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="prev" name="Newest weights" zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"><bpmn:extensionElements><zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" /><zeebe:ioMapping><zeebe:input source="noAuth" target="authentication.type" /><zeebe:input source="POST" target="method" /><zeebe:input source="{{secrets.PLANNER_ES_URL}}/ci-planner-weights/_search?filter_path=hits.hits._source" target="url" /><zeebe:input source="= {&quot;Authorization&quot;: &quot;ApiKey {{secrets.PLANNER_ES_APIKEY}}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}" target="headers" /><zeebe:input source="= {&quot;size&quot;: 1, &quot;sort&quot;: [{&quot;ts&quot;: &quot;desc&quot;}], &quot;query&quot;: {&quot;term&quot;: {&quot;repo&quot;: normalised.repo}}}" target="body" /><zeebe:input source="15" target="connectionTimeoutInSeconds" /><zeebe:input source="15" target="readTimeoutInSeconds" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="resultExpression" value="= {weightsResponse: response.body}" /><zeebe:header key="errorExpression" value="= if response.status &gt;= 400 then bpmnError(&quot;ES_&quot; + string(response.status), &quot;Elasticsearch answered &quot; + string(response.status)) else null" /><zeebe:header key="retryBackoff" value="PT2S" /></zeebe:taskHeaders></bpmn:extensionElements><bpmn:incoming>f_esc_prev</bpmn:incoming><bpmn:outgoing>f_prev_shape</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:scriptTask id="shape" name="Shape statistics"><bpmn:extensionElements><zeebe:script expression="={ob: if get value(statsResponse, &quot;aggregations&quot;) = null then [] else statsResponse.aggregations.by_module.buckets,&#10; outRows: flatten(for m in ob return for s in m.by_suite.buckets return {module: m.key, suite: s.key, n_run: s.doc_count, fail: s.fails.doc_count, escape: 0}),&#10; eb: if get value(escapesResponse, &quot;aggregations&quot;) = null then [] else escapesResponse.aggregations.pairs.buckets,&#10; escMass: context merge(for b in eb return context put({}, b.key, b.mass.value)),&#10; withEsc: for r in outRows return context merge([r, {escape: {v: get value(escMass, r.module + &quot;|&quot; + r.suite), x: if v = null then 0 else v}.x}]),&#10; known: for r in outRows return r.module + &quot;|&quot; + r.suite,&#10; escOnly: for b in eb[list contains(known, item.key) = false] return {module: substring before(b.key, &quot;|&quot;), suite: substring after(b.key, &quot;|&quot;), n_run: 0, fail: 0, escape: b.mass.value},&#10; hit: if weightsResponse = null or get value(weightsResponse, &quot;hits&quot;) = null or count(weightsResponse.hits.hits) = 0 then null else weightsResponse.hits.hits[1]._source,&#10; prev: if hit = null then {} else context merge(for p in hit.pairs return context put({}, p.pair, p.weight)),&#10; stats: concatenate(withEsc, escOnly),&#10; prevId: if hit = null then null else hit.weights_id}" resultVariable="learnInput" /></bpmn:extensionElements><bpmn:incoming>f_prev_shape</bpmn:incoming><bpmn:outgoing>f_shape_learn</bpmn:outgoing></bpmn:scriptTask>
+    <bpmn:businessRuleTask id="learn" name="Compute weights (DMN)"><bpmn:documentation>ci-test-learn.dmn, decision `learned`. Inputs: stats, prev, params.</bpmn:documentation><bpmn:extensionElements><zeebe:calledDecision decisionId="learned" resultVariable="learned" bindingType="latest" /><zeebe:ioMapping><zeebe:input source="= learnInput.stats" target="stats" /><zeebe:input source="= learnInput.prev" target="prev" /><zeebe:input source="= normalised.params" target="params" /></zeebe:ioMapping></bpmn:extensionElements><bpmn:incoming>f_shape_learn</bpmn:incoming><bpmn:outgoing>f_learn_doc</bpmn:outgoing></bpmn:businessRuleTask>
+    <bpmn:scriptTask id="doc" name="Build weights document"><bpmn:extensionElements><zeebe:script expression="={ts: {s: string(now()), r: if contains(s, &quot;@&quot;) then substring before(s, &quot;@&quot;) + &quot;Z&quot; else s}.r, repo: normalised.repo, weights_id: &quot;w&quot; + replace(string(now()), &quot;[^0-9]&quot;, &quot;&quot;), prev: learnInput.prevId,&#10; pairs: for l in learned return {pair: l.pair, module: l.module, suite: l.suite, weight: l.weight, risk: l.risk, n_run: l.n_run, fail: l.fail, escape: l.escape}}" resultVariable="weightsDoc" /></bpmn:extensionElements><bpmn:incoming>f_learn_doc</bpmn:incoming><bpmn:outgoing>f_doc_write</bpmn:outgoing></bpmn:scriptTask>
+    <bpmn:serviceTask id="write" name="Write weights (Elasticsearch)" zeebe:modelerTemplate="io.camunda.connectors.HttpJson.v2"><bpmn:extensionElements><zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" /><zeebe:ioMapping><zeebe:input source="noAuth" target="authentication.type" /><zeebe:input source="POST" target="method" /><zeebe:input source="{{secrets.PLANNER_ES_URL}}/ci-planner-weights/_doc" target="url" /><zeebe:input source="= {&quot;Authorization&quot;: &quot;ApiKey {{secrets.PLANNER_ES_APIKEY}}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}" target="headers" /><zeebe:input source="= weightsDoc" target="body" /><zeebe:input source="15" target="connectionTimeoutInSeconds" /><zeebe:input source="15" target="readTimeoutInSeconds" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="resultVariable" value="weightsWritten" /><zeebe:header key="resultExpression" value="= {id: response.body._id}" /><zeebe:header key="errorExpression" value="= if response.status &gt;= 400 then bpmnError(&quot;ES_&quot; + string(response.status), &quot;Elasticsearch answered &quot; + string(response.status)) else null" /><zeebe:header key="retryBackoff" value="PT2S" /></zeebe:taskHeaders></bpmn:extensionElements><bpmn:incoming>f_doc_write</bpmn:incoming><bpmn:outgoing>f_write_end</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:endEvent id="end" name="Weights written"><bpmn:incoming>f_write_end</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="f_start_configure" sourceRef="start" targetRef="configure"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_manual_configure" sourceRef="manual" targetRef="configure"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_configure_stats" sourceRef="configure" targetRef="stats"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_stats_esc" sourceRef="stats" targetRef="esc"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_esc_prev" sourceRef="esc" targetRef="prev"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_prev_shape" sourceRef="prev" targetRef="shape"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_shape_learn" sourceRef="shape" targetRef="learn"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_learn_doc" sourceRef="learn" targetRef="doc"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_doc_write" sourceRef="doc" targetRef="write"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_write_end" sourceRef="write" targetRef="end"></bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_ci-test-learn">
+    <bpmndi:BPMNPlane id="Plane_ci-test-learn" bpmnElement="ci-test-learn">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start"><dc:Bounds x="150" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="123" y="140" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="manual_di" bpmnElement="manual"><dc:Bounds x="150" y="190" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="123" y="230" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure_di" bpmnElement="configure"><dc:Bounds x="230" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="stats_di" bpmnElement="stats"><dc:Bounds x="380" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="esc_di" bpmnElement="esc"><dc:Bounds x="530" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="prev_di" bpmnElement="prev"><dc:Bounds x="680" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_di" bpmnElement="shape"><dc:Bounds x="830" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="learn_di" bpmnElement="learn"><dc:Bounds x="980" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="doc_di" bpmnElement="doc"><dc:Bounds x="1130" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write_di" bpmnElement="write"><dc:Bounds x="1280" y="78" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end"><dc:Bounds x="1440" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1413" y="140" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="f_start_configure_di" bpmnElement="f_start_configure">
+        <di:waypoint x="186" y="118" />
+        <di:waypoint x="230" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_manual_configure_di" bpmnElement="f_manual_configure">
+        <di:waypoint x="186" y="208" />
+        <di:waypoint x="208" y="208" />
+        <di:waypoint x="208" y="118" />
+        <di:waypoint x="230" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_configure_stats_di" bpmnElement="f_configure_stats">
+        <di:waypoint x="360" y="118" />
+        <di:waypoint x="380" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_stats_esc_di" bpmnElement="f_stats_esc">
+        <di:waypoint x="510" y="118" />
+        <di:waypoint x="530" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_esc_prev_di" bpmnElement="f_esc_prev">
+        <di:waypoint x="660" y="118" />
+        <di:waypoint x="680" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_prev_shape_di" bpmnElement="f_prev_shape">
+        <di:waypoint x="810" y="118" />
+        <di:waypoint x="830" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_shape_learn_di" bpmnElement="f_shape_learn">
+        <di:waypoint x="960" y="118" />
+        <di:waypoint x="980" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_learn_doc_di" bpmnElement="f_learn_doc">
+        <di:waypoint x="1110" y="118" />
+        <di:waypoint x="1130" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_doc_write_di" bpmnElement="f_doc_write">
+        <di:waypoint x="1260" y="118" />
+        <di:waypoint x="1280" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f_write_end_di" bpmnElement="f_write_end">
+        <di:waypoint x="1410" y="118" />
+        <di:waypoint x="1440" y="118" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

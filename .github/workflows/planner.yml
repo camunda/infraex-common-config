@@ -1,0 +1,254 @@
+---
+name: planner
+
+# Test-selection planner: for one pull request, collects facts about the change, asks a Camunda
+# process (BPMN + DMN decision tables, optionally an AI advisor that can only add suites) which CI
+# suites are needed, and publishes the answer for the suites to read.
+#
+# The decision is fully automatic: no approval step, no required label. Labels (`planner:run-all`,
+# `run_<suite>`, the existing `skip_*`) are optional escape hatches only.
+#
+# Three jobs, split along the CI trust boundary described in the README. None of them runs code
+# from the pull request.
+#
+#   facts    reads the pull request as DATA. Read-only token, no secrets. The planner source is checked
+#            out from this workflow's own commit, never from the PR, and the suite registry and the
+#            configuration are read from the PR's base commit. Output: planner.facts/1 (closed schema).
+#
+#   decide   holds the Camunda credentials and nothing else (`contents: read`). It validates the facts,
+#            starts the process and waits for its answer (30 s by default). On any problem, or when
+#            Camunda is not configured, the plan is `fail-open`: nothing is skipped.
+#
+#   publish  holds the write permissions (check run, status, comment) and no Camunda secret.
+#
+# `mode` is `report` (default, also when empty: nothing is skipped) or `gate`: see .github/workflows/scripts/planner/README.md.
+# A `report` plan never enforces a skip, whatever the process answers, and planner-gate has its own `mode` input.
+
+on:
+    workflow_call:
+        inputs:
+            mode:
+                description: '`report` (default, also when empty) or `gate`. Any other value is treated as `report`.'
+                type: string
+                default: report
+            config-path:
+                description: Planner configuration in the calling repository, read from the base commit.
+                type: string
+                default: .github/planner-config.json
+            gate-suites:
+                description: Comma separated override of the suites that may be skipped. `none` disables gating.
+                type: string
+                default: ''
+            gate-base-branches:
+                description: Comma separated base branches for which gating is allowed. Others run in report mode.
+                type: string
+                default: main
+            default-branch:
+                description: Default branch of the calling repository.
+                type: string
+                default: main
+            advisor:
+                description: '`true` enables the AI advisor step of the process (it can only add suites).'
+                type: string
+                default: 'false'
+            camunda-base-url:
+                description: Orchestration Cluster REST API base, for example https://<host>/v2. Empty means not configured.
+                type: string
+                default: ''
+            camunda-token-url:
+                description: OAuth token endpoint of the cluster (client credentials).
+                type: string
+                default: ''
+            camunda-audience:
+                description: Token audience, if the identity provider needs one.
+                type: string
+                default: ''
+            camunda-scope:
+                description: Token scope, if the identity provider needs one.
+                type: string
+                default: ''
+            await-seconds:
+                description: How long to wait for the process before failing open.
+                type: string
+                default: '30'
+        secrets:
+            CAMUNDA_CLIENT_ID:
+                description: OAuth client id. The client needs CREATE_PROCESS_INSTANCE on the process `ci-test-planner` only.
+                required: false
+            CAMUNDA_CLIENT_SECRET:
+                description: OAuth client secret.
+                required: false
+        outputs:
+            decision-id:
+                description: Id of the recorded decision (empty when the planner failed open).
+                value: ${{ jobs.decide.outputs.decision_id }}
+
+permissions:
+    contents: read
+
+jobs:
+    facts:
+        name: facts
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        # Read-only on purpose: this job reads untrusted pull request content and holds no secret.
+        permissions:
+            contents: read
+            pull-requests: read
+        outputs:
+            artifact_name: ${{ steps.name.outputs.artifact_name }}
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            # The pull request head is checked out as data, never executed. Full history so the
+            # merge base and the base-commit registry can be read.
+            - name: Check out the pull request (data only)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  fetch-depth: 0
+                  path: pr
+                  persist-credentials: false
+
+            - name: Collect the facts
+              env:
+                  MODE: ${{ inputs.mode }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  BASE_REF: ${{ github.event.pull_request.base.ref }}
+                  ACTOR: ${{ github.event.pull_request.user.login }}
+                  IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+                  LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+                  CONFIG_PATH: ${{ inputs.config-path }}
+                  GATE_SUITES: ${{ inputs.gate-suites }}
+                  GATE_BASE_BRANCHES: ${{ inputs.gate-base-branches }}
+                  DEFAULT_BRANCH: ${{ inputs.default-branch }}
+                  PLANNER_VERSION: ${{ job.workflow_sha }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner facts --repo "${GITHUB_WORKSPACE}/pr" --slug "${GITHUB_REPOSITORY}" \
+                    --pr "${PR_NUMBER}" --head-sha "${HEAD_SHA}" --base-sha "${BASE_SHA}" \
+                    --event "${GITHUB_EVENT_NAME}" --actor "${ACTOR}" --fork "${IS_FORK}" --labels "${LABELS}" \
+                    --mode "${MODE}" --base-branch "${BASE_REF}" --default-branch "${DEFAULT_BRANCH}" \
+                    --gate-base-branches "${GATE_BASE_BRANCHES}" --gate-suites "${GATE_SUITES}" \
+                    --config-path "${CONFIG_PATH}" --planner-version "${PLANNER_VERSION}" \
+                    --out "${GITHUB_WORKSPACE}/facts.json" --summary-file "${GITHUB_STEP_SUMMARY}"
+
+            # Artifact names are unique per workflow run, not per job, and this workflow is reusable:
+            # a caller can call it twice in one run. A random suffix keeps the two apart.
+            - name: Name the artifact
+              id: name
+              run: echo "artifact_name=planner-facts-$(openssl rand -hex 8)" | tee -a "${GITHUB_OUTPUT}"
+
+            - name: Upload the facts
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: ${{ steps.name.outputs.artifact_name }}
+                  path: facts.json
+                  retention-days: 3
+                  if-no-files-found: error
+
+    decide:
+        name: decide
+        needs: facts
+        # Fork pull requests get no secrets: the facts job summary is their only output.
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        # The only job with the Camunda credentials. It runs no repository code: pinned actions, the
+        # pinned planner source and schema-validated facts.
+        permissions:
+            contents: read
+        outputs:
+            decision_id: ${{ steps.plan.outputs.decision_id }}
+            artifact_name: ${{ steps.name.outputs.artifact_name }}
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Download the facts
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: ${{ needs.facts.outputs.artifact_name }}
+                  path: facts
+
+            - name: Ask the Camunda process
+              id: plan
+              env:
+                  CAMUNDA_BASE_URL: ${{ inputs.camunda-base-url }}
+                  CAMUNDA_TOKEN_URL: ${{ inputs.camunda-token-url }}
+                  CAMUNDA_AUDIENCE: ${{ inputs.camunda-audience }}
+                  CAMUNDA_SCOPE: ${{ inputs.camunda-scope }}
+                  CAMUNDA_CLIENT_ID: ${{ secrets.CAMUNDA_CLIENT_ID }}
+                  CAMUNDA_CLIENT_SECRET: ${{ secrets.CAMUNDA_CLIENT_SECRET }}
+                  ADVISOR: ${{ inputs.advisor }}
+                  AWAIT_SECONDS: ${{ inputs.await-seconds }}
+                  RUN_REF: ${{ github.run_id }}-${{ github.run_attempt }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner camunda-plan --facts "${GITHUB_WORKSPACE}/facts/facts.json" --out "${GITHUB_WORKSPACE}/plan.json" \
+                    --advisor "${ADVISOR}" --run-ref "${RUN_REF}" --await-seconds "${AWAIT_SECONDS}"
+                  echo "decision_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["decision_id"] or "")' "${GITHUB_WORKSPACE}/plan.json")" >> "${GITHUB_OUTPUT}"
+
+            - name: Name the artifact
+              id: name
+              run: echo "artifact_name=planner-plan-$(openssl rand -hex 8)" | tee -a "${GITHUB_OUTPUT}"
+
+            - name: Upload the plan
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: ${{ steps.name.outputs.artifact_name }}
+                  path: plan.json
+                  retention-days: 3
+                  if-no-files-found: error
+
+    publish:
+        name: publish
+        needs: decide
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        # The write permissions live here, together with no Camunda secret and no repository code.
+        permissions:
+            checks: write
+            pull-requests: write
+            statuses: write
+        steps:
+            - name: Check out the planner source (this workflow's own commit)
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  repository: ${{ job.workflow_repository }}
+                  ref: ${{ job.workflow_sha }}
+                  path: planner-src
+                  persist-credentials: false
+
+            - name: Download the plan
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: ${{ needs.decide.outputs.artifact_name }}
+                  path: plan
+
+            - name: Publish the plan
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  set -euo pipefail
+                  cd planner-src/.github/workflows/scripts
+                  python3 -m planner publish --plan "${GITHUB_WORKSPACE}/plan/plan.json" --repo "${GITHUB_REPOSITORY}" \
+                    --pr "${PR_NUMBER}" --head-sha "${HEAD_SHA}" --summary-file "${GITHUB_STEP_SUMMARY}"

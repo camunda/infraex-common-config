@@ -33,3 +33,7 @@ test-renovate-annotations:
 # Run the Renovate lookup checker against its own fixtures
 test-renovate-lookup:
     ./.github/workflows/scripts/tests/check_renovate_lookup_test.sh
+
+# Run the unit tests of the test-selection planner
+test-planner:
+    cd .github/workflows/scripts && python3 -m unittest discover -s planner/tests -t . -v

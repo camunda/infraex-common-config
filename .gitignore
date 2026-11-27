@@ -182,3 +182,8 @@ Temporary Items
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,linux,intellij,visualstudiocode
+
+# Python bytecode (planner tests)
+__pycache__/
+*.pyc
+node_modules/
