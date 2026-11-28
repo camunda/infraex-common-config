@@ -115,7 +115,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             - name: Import Secrets
               id: secrets
@@ -574,7 +574,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             - name: Import Secrets
               id: secrets
@@ -851,7 +851,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             - name: Import Secrets
               id: secrets

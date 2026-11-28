@@ -48,7 +48,7 @@ jobs:
             # Guarantees the pinned yq (.tool-versions) used by the region
             # derivation below, instead of relying on the runner image.
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/./.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             - name: Determine DRY_RUN and matrix-derived regions
               env:
@@ -253,7 +253,7 @@ jobs:
               id: generate-github-token
               # Only run for the next step
               if: ${{ env.should_run == 'true' && env.AWS_REGION == 'eu-north-1' }}
-              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@20cb58c9ce170db539d649284bae2c35440ababd # main
+              uses: camunda/infra-global-github-actions/generate-github-app-token-from-vault-secrets@b22712f1e7796aef34c9c272bf666350fbabedb0 # main
               with:
                   github-app-id-vault-key: GITHUB_APP_ID
                   github-app-id-vault-path: secret/data/products/infrastructure-experience/ci/common

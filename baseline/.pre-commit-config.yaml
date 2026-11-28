@@ -6,7 +6,7 @@ default_language_version:
 exclude: (^|/)(testdata|fixtures|vendor)/
 repos:
     - repo: https://github.com/camunda/infraex-common-config
-      rev: 3.0.15
+      rev: 3.0.16
       hooks:
           - id: action-pin-spacing
 

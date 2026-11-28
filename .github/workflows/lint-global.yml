@@ -157,7 +157,7 @@ jobs:
             # Setup tool cache
             - name: Install asdf tools
               if: steps.hooks.outputs.found == 'true'
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             # What used to stand here was `apt-get install libsqlite3-dev libbz2-dev
             # liblzma-dev`, on every run, ahead of the step above. It cost 3m45 on 2026-08-19
@@ -494,7 +494,7 @@ jobs:
                   fi
 
             - name: Install asdf tools
-              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/.github/actions/asdf-install-tooling@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
 
             - name: Check pre-commit matches the caller's .tool-versions
               env:
@@ -582,7 +582,7 @@ jobs:
         permissions:
             contents: read
             id-token: write # Vault OIDC/JWT auth
-        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+        uses: camunda/infraex-common-config/.github/workflows/commit-patch-global.yml@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
         with:
             artifact-name: ${{ needs.lint.outputs.artifact_name }}
             patch-file-name: autofix.patch

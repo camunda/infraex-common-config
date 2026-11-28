@@ -83,7 +83,7 @@ jobs:
 
             - name: Notify Slack on failure
               if: failure() && inputs.slack-channel-id != 'none'
-              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@9274797143ce22b38978f8afe0f23ed50230b1e6 # 3.0.15
+              uses: camunda/infraex-common-config/.github/actions/report-failure-on-slack@7a2e0be760ad1d12263a7dea6fd84382c1446a64 # 3.0.16
               with:
                   vault_addr: ${{ secrets.VAULT_ADDR }}
                   vault_jwt_path: ${{ secrets.VAULT_JWT_PATH || vars.VAULT_JWT_PATH }}
