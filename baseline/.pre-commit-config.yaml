@@ -17,7 +17,7 @@ repos:
             args: [-ignore=property "workflow_(sha|repository|ref|file_path)" is not defined, -ignore=label "ubuntu-26\.04" is unknown]
 
     - repo: https://github.com/zizmorcore/zizmor-pre-commit
-      rev: v1.32.0
+      rev: v1.33.1
       hooks:
           - id: zizmor
             args: [--no-progress, --no-config, --min-severity=high]
